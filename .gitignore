@@ -1,0 +1,15 @@
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Claude Code (worktrees temporaires, jamais à commiter)
+.claude/worktrees/
+
+# BMAD local installer answers / generated output
+_bmad/config.user.toml
+_bmad-output/
