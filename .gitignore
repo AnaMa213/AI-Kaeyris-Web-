@@ -9,6 +9,7 @@ Thumbs.db
 
 # Claude Code (worktrees temporaires, jamais à commiter)
 .claude/worktrees/
+.claude/settings.local.json
 
 # BMAD local installer answers / generated output
 _bmad/config.user.toml
