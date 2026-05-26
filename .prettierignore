@@ -1,0 +1,12 @@
+.next
+.claude
+node_modules
+package-lock.json
+public
+_bmad
+_bmad-output
+docs
+README.md
+CLAUDE.md
+AGENTS.md
+LICENSE
