@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { ProfilePicker } from "@/components/auth/ProfilePicker";
@@ -16,6 +16,14 @@ function safeRedirectTarget(from: string | null): string {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const apiClient = useMemo(() => createApiClient(), []);
@@ -65,9 +73,18 @@ export default function LoginPage() {
     },
   });
 
+  const handleSubmit = async (values: LoginInput) => {
+    try {
+      await mutation.mutateAsync(values);
+    } catch {
+      // Errors are surfaced via the mutation.onError handler above. Swallow
+      // the re-throw so react-hook-form's submit promise resolves cleanly.
+    }
+  };
+
   return (
     <ProfilePicker
-      onSubmit={(values) => mutation.mutateAsync(values)}
+      onSubmit={handleSubmit}
       submitting={mutation.isPending}
       errorMessage={errorMessage}
       errorDetail={errorDetail}

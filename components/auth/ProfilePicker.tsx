@@ -114,7 +114,6 @@ export function ProfilePicker({
           onSubmit={form.handleSubmit(onSubmit)}
           className="flex w-full max-w-sm flex-col gap-4"
         >
-          <input type="hidden" {...form.register("profile")} />
           <div className="flex flex-col gap-2">
             <Label htmlFor="login-password">Mot de passe</Label>
             <Input
