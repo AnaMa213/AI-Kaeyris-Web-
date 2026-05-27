@@ -1,2 +1,10 @@
+SPEC="docs/context/api/openapi.json"
+
+if ! git diff --quiet -- "$SPEC"; then
+  echo "error: $SPEC has unstaged changes."
+  echo "Stage or discard it before committing so types/api.ts matches the committed spec."
+  exit 1
+fi
+
 npm run gen:api
 git add types/api.ts
