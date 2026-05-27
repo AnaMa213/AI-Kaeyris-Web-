@@ -8,11 +8,16 @@ import { createApiClient } from "@/lib/api/client";
 import { ApiError, AuthError, NetworkError } from "@/lib/api/errors";
 import type { LoginInput } from "@/lib/schemas/auth";
 
-const RELATIVE_PATH = /^\/[^/]/;
-
 function safeRedirectTarget(from: string | null): string {
-  if (from && RELATIVE_PATH.test(from)) return from;
-  return "/";
+  if (!from || !from.startsWith("/") || from.includes("\\")) return "/";
+
+  try {
+    const target = new URL(from, window.location.origin);
+    if (target.origin !== window.location.origin) return "/";
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return "/";
+  }
 }
 
 export default function LoginPage() {
@@ -56,7 +61,9 @@ function LoginForm() {
         setErrorMessage("Identifiants invalides.");
         setErrorDetail(null);
       } else {
-        setErrorMessage("Connexion impossible. Réessaie dans quelques instants.");
+        setErrorMessage(
+          "Connexion impossible. Réessaie dans quelques instants.",
+        );
         if (error instanceof NetworkError) {
           setErrorDetail("Erreur réseau. Vérifie ta connexion ou la base URL.");
         } else if (error instanceof ApiError) {

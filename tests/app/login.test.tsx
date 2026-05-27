@@ -48,16 +48,27 @@ afterEach(() => {
 
 describe("<LoginPage> happy path", () => {
   test("redirects to / on 200 without ?from", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderLoginPage();
     await user.click(screen.getByText("MJ"));
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.url).toBe("http://localhost:8000/auth/login");
+    expect(request.method).toBe("POST");
+    expect(request.credentials).toBe("include");
+    expect(request.headers.get("content-type")).toBe("application/json");
+    await expect(request.clone().json()).resolves.toEqual({
+      profile: "gm",
+      password: "hunter2",
+    });
   });
 
   test("redirects to ?from= when relative", async () => {
@@ -94,6 +105,20 @@ describe("<LoginPage> open-redirect guard", () => {
 
   test("rejects protocol-relative URL in ?from=", async () => {
     currentSearch = "from=//evil.com";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+    const user = userEvent.setup();
+    renderLoginPage();
+    await user.click(screen.getByText("MJ"));
+    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+  });
+
+  test("rejects backslash-normalized external URL in ?from=", async () => {
+    currentSearch = "from=/%5C%5Cevil.com";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
