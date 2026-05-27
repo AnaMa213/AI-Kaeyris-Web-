@@ -64,4 +64,27 @@ describe("parseProblemDetails", () => {
     expect(problem.status).toBe(400);
     expect(problem.title).toBe("Bad Request");
   });
+
+  test("normalises invalid required fields while preserving extensions", async () => {
+    const response = new Response(
+      JSON.stringify({
+        type: 123,
+        title: false,
+        status: "404",
+        detail: "The backend sent invalid problem fields.",
+      }),
+      {
+        status: 404,
+        statusText: "Not Found",
+        headers: { "content-type": "application/problem+json" },
+      },
+    );
+
+    const problem = await parseProblemDetails(response);
+
+    expect(problem.type).toBe("about:blank");
+    expect(problem.title).toBe("Not Found");
+    expect(problem.status).toBe(404);
+    expect(problem.detail).toBe("The backend sent invalid problem fields.");
+  });
 });

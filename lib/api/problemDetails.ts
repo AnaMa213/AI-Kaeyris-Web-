@@ -46,13 +46,13 @@ export async function parseProblemDetails(
   }
 
   return {
+    ...body,
     type: typeof body.type === "string" ? body.type : "about:blank",
     title:
       typeof body.title === "string"
         ? body.title
         : response.statusText || "Request failed",
     status: typeof body.status === "number" ? body.status : response.status,
-    ...body,
   };
 }
 

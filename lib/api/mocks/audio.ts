@@ -1,21 +1,16 @@
 import type { Middleware } from "openapi-fetch";
+import { ApiError, type ProblemDetails } from "@/lib/api/errors";
 
 const AUDIO_PATH = /^\/services\/jdr\/sessions\/[^/]+\/audio$/;
 const PLACEHOLDER_ASSET = "/mocks/demo-session.m4a";
 
-function missingPlaceholderResponse(): Response {
-  return new Response(
-    JSON.stringify({
-      type: "about:blank",
-      title: "Audio mock placeholder missing",
-      status: 404,
-      detail: `Drop a demo audio file at public${PLACEHOLDER_ASSET}. See public/mocks/README.md.`,
-    }),
-    {
-      status: 404,
-      headers: { "content-type": "application/problem+json" },
-    },
-  );
+function missingPlaceholderProblem(): ProblemDetails {
+  return {
+    type: "about:blank",
+    title: "Audio mock placeholder missing",
+    status: 404,
+    detail: `Drop a demo audio file at public${PLACEHOLDER_ASSET}. See public/mocks/README.md.`,
+  };
 }
 
 export const audioMockMiddleware: Middleware = {
@@ -26,7 +21,7 @@ export const audioMockMiddleware: Middleware = {
 
     const placeholder = await fetch(PLACEHOLDER_ASSET);
     if (placeholder.status === 404) {
-      return missingPlaceholderResponse();
+      throw new ApiError(missingPlaceholderProblem());
     }
 
     const body = await placeholder.arrayBuffer();

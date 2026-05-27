@@ -1,9 +1,31 @@
 import { describe, expect, test, vi, afterEach } from "vitest";
+import createClient from "openapi-fetch";
+import { ApiError } from "@/lib/api/errors";
 import { audioMockMiddleware } from "@/lib/api/mocks/audio";
 import { pjDeleteMockMiddleware } from "@/lib/api/mocks/pjDelete";
+import { createErrorMiddleware } from "@/lib/api/problemDetails";
 import type { Middleware } from "openapi-fetch";
 
 type OnRequest = NonNullable<Middleware["onRequest"]>;
+type TestAudioPaths = {
+  "/services/jdr/sessions/{session_id}/audio": {
+    get: {
+      parameters: {
+        path: {
+          session_id: string;
+        };
+      };
+      requestBody?: never;
+      responses: {
+        200: {
+          content: {
+            "audio/mp4": Blob;
+          };
+        };
+      };
+    };
+  };
+};
 
 const stubMiddlewareCtx = (request: Request) =>
   ({
@@ -16,6 +38,7 @@ const stubMiddlewareCtx = (request: Request) =>
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("audioMockMiddleware", () => {
@@ -43,7 +66,7 @@ describe("audioMockMiddleware", () => {
     expect(result.headers.get("content-type")).toBe("audio/mp4");
   });
 
-  test("returns a 404 Problem Details when the placeholder is missing", async () => {
+  test("throws an ApiError when the placeholder is missing", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
@@ -52,14 +75,36 @@ describe("audioMockMiddleware", () => {
     const request = new Request(
       "http://localhost:8000/services/jdr/sessions/abc-123/audio",
     );
-    const result = (await audioMockMiddleware.onRequest!(
-      stubMiddlewareCtx(request),
-    )) as Response;
 
-    expect(result.status).toBe(404);
-    expect(result.headers.get("content-type")).toBe("application/problem+json");
-    const body = await result.json();
-    expect(body.title).toBe("Audio mock placeholder missing");
+    await expect(
+      audioMockMiddleware.onRequest!(stubMiddlewareCtx(request)),
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      problem: {
+        title: "Audio mock placeholder missing",
+        status: 404,
+      },
+    });
+  });
+
+  test("keeps the missing placeholder error contract when wired into openapi-fetch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
+    );
+
+    const client = createClient<TestAudioPaths>({
+      baseUrl: "http://localhost:8000",
+    });
+    client.use(audioMockMiddleware);
+    client.use(createErrorMiddleware());
+
+    await expect(
+      client.GET("/services/jdr/sessions/{session_id}/audio", {
+        params: { path: { session_id: "abc-123" } },
+        parseAs: "blob",
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 
   test("does not match non-audio routes", async () => {
