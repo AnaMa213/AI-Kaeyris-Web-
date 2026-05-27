@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
@@ -9,6 +11,12 @@ export default function HomePage() {
       <p className="font-sans text-text-chrome-muted text-sm">
         Module Launcher arrives in Story 1.8.
       </p>
+      <Link
+        href="/login"
+        className="text-accent-gold hover:underline font-sans text-sm"
+      >
+        Se connecter
+      </Link>
       <code className="font-mono text-xs">npm run dev</code>
     </main>
   );

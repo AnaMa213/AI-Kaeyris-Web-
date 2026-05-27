@@ -8,6 +8,8 @@ import { pjDeleteMockMiddleware } from "@/lib/api/mocks/pjDelete";
 
 type AudioMockPath = "/services/jdr/sessions/{session_id}/audio";
 type PjDeleteMockPath = "/services/jdr/pjs/{pj_id}";
+type AuthLoginPath = "/auth/login";
+type AuthLogoutPath = "/auth/logout";
 
 type AudioMockGetOperation = {
   parameters: {
@@ -59,7 +61,51 @@ type PjDeleteMockOperation = {
   };
 };
 
-// Temporary overlay until BD-2/BD-3 ship their endpoints in openapi.json.
+type AuthLoginPostOperation = {
+  parameters: {
+    query?: never;
+    header?: never;
+    path?: never;
+    cookie?: never;
+  };
+  requestBody: {
+    content: {
+      "application/json": { profile: "gm" | "player"; password: string };
+    };
+  };
+  responses: {
+    200: {
+      headers: { [name: string]: unknown };
+      content?: never;
+    };
+    401: {
+      headers: { [name: string]: unknown };
+      content: { "application/problem+json": ProblemDetails };
+    };
+    403: {
+      headers: { [name: string]: unknown };
+      content: { "application/problem+json": ProblemDetails };
+    };
+  };
+};
+
+type AuthLogoutPostOperation = {
+  parameters: {
+    query?: never;
+    header?: never;
+    path?: never;
+    cookie?: never;
+  };
+  requestBody?: never;
+  responses: {
+    204: {
+      headers: { [name: string]: unknown };
+      content?: never;
+    };
+  };
+};
+
+// Temporary overlay until BD-1/BD-2/BD-3 ship their endpoints in openapi.json.
 type ApiClientPaths = Omit<paths, AudioMockPath> & {
   [Path in AudioMockPath]: Omit<paths[AudioMockPath], "get"> & {
     get: AudioMockGetOperation;
@@ -76,6 +122,40 @@ type ApiClientPaths = Omit<paths, AudioMockPath> & {
     put?: never;
     post?: never;
     delete: PjDeleteMockOperation;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+} & {
+  [Path in AuthLoginPath]: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: AuthLoginPostOperation;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+} & {
+  [Path in AuthLogoutPath]: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: AuthLogoutPostOperation;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
