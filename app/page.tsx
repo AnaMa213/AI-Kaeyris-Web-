@@ -1,13 +1,15 @@
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-      <h1 className="text-3xl font-semibold tracking-tight">
-        AI-Kaeyris-Web — bootstrap OK
-      </h1>
-      <p className="text-muted-foreground max-w-xl text-sm">
-        Module Launcher arrives in Story 1.8. This placeholder confirms the
-        Next.js 16 + Tailwind v4 + shadcn baseline compiles, runs, and renders.
+    <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
+      <h1 className="font-display text-4xl font-semibold">AI-Kaeyris</h1>
+      <p className="font-serif text-text-chrome-muted max-w-xl text-lg italic">
+        Le récit dort dans le bundle ; les fontes sont chargées et les tokens
+        OKLCH sont en place.
       </p>
+      <p className="font-sans text-text-chrome-muted text-sm">
+        Module Launcher arrives in Story 1.8.
+      </p>
+      <code className="font-mono text-xs">npm run dev</code>
     </main>
   );
 }
