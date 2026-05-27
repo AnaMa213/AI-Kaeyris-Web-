@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 const crimsonPro = Crimson_Pro({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-narrative",
+  variable: "--font-serif-narrative",
   weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
 });
@@ -17,20 +17,20 @@ const crimsonPro = Crimson_Pro({
 const ebGaramond = EB_Garamond({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-display",
+  variable: "--font-serif-display",
   weight: ["500", "600", "700"],
 });
 
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-chrome",
+  variable: "--font-sans-chrome",
 });
 
 const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-mono",
+  variable: "--font-mono-technical",
   weight: ["400", "500"],
 });
 

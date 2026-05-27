@@ -51,10 +51,10 @@
   --color-state-info: var(--state-info);
 
   /* Fonts — next/font/google variables exposed as Tailwind tokens */
-  --font-sans: var(--font-chrome);
-  --font-serif: var(--font-narrative);
-  --font-display: var(--font-display);
-  --font-mono: var(--font-mono);
+  --font-sans: var(--font-sans-chrome);
+  --font-serif: var(--font-serif-narrative);
+  --font-display: var(--font-serif-display);
+  --font-mono: var(--font-mono-technical);
 
   /* Radii (kept from scaffold; useful for shadcn primitives) */
   --radius-sm: calc(var(--radius) * 0.6);
