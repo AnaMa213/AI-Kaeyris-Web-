@@ -6,6 +6,293 @@
     "version": "0.0.1"
   },
   "paths": {
+    "/services/jdr/auth/setup/status": {
+      "get": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Get Setup Status",
+        "operationId": "get_setup_status_services_jdr_auth_setup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/services/jdr/auth/setup": {
+      "post": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Post Setup",
+        "operationId": "post_setup_services_jdr_auth_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/services/jdr/auth/login": {
+      "post": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Post Login",
+        "operationId": "post_login_services_jdr_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/services/jdr/auth/logout": {
+      "post": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Post Logout",
+        "operationId": "post_logout_services_jdr_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "kaeyris-bearer": []
+          }
+        ]
+      }
+    },
+    "/services/jdr/users": {
+      "get": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Get Users",
+        "operationId": "get_users_services_jdr_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "kaeyris-bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Post User",
+        "operationId": "post_user_services_jdr_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "kaeyris-bearer": []
+          }
+        ]
+      }
+    },
+    "/services/jdr/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Patch User",
+        "operationId": "patch_user_services_jdr_users__user_id__patch",
+        "security": [
+          {
+            "kaeyris-bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Delete User Route",
+        "operationId": "delete_user_route_services_jdr_users__user_id__delete",
+        "security": [
+          {
+            "kaeyris-bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/services/jdr/sessions/{session_id}/audio": {
       "post": {
         "tags": [
@@ -2061,6 +2348,35 @@
         "title": "LiveSessionInit",
         "description": "Body that the future ``POST /live/sessions`` will accept.\n\nPublished as a Pydantic model so the OpenAPI schema is complete even\nthough the handler always raises 501."
       },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "profile": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Profile"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "profile",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
       "MappingOut": {
         "properties": {
           "session_id": {
@@ -2437,6 +2753,14 @@
         "title": "PovArtifactOut",
         "description": "Public projection of an ``Artifact(kind='pov:<pj_id>')`` row.\n\n``pj_id`` is exposed at the top level for clients that don't want to\nparse the composite ``kind`` field."
       },
+      "Profile": {
+        "type": "string",
+        "enum": [
+          "gm",
+          "user"
+        ],
+        "title": "Profile"
+      },
       "SessionCreate": {
         "properties": {
           "title": {
@@ -2654,6 +2978,41 @@
         "title": "SessionUpdate",
         "description": "Payload accepted by ``PATCH /services/jdr/sessions/{id}``.\n\nEvery field is optional — the route applies only the keys that are\npresent (PATCH semantics). To clear ``campaign_context``, send\n``\"campaign_context\": null`` explicitly (the route distinguishes\n\"unset\" from \"explicit null\" via Pydantic's ``model_fields_set``)."
       },
+      "SetupRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SetupRequest"
+      },
+      "SetupStatusOut": {
+        "properties": {
+          "required": {
+            "type": "boolean",
+            "title": "Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "required"
+        ],
+        "title": "SetupStatusOut"
+      },
       "SummaryArtifactOut": {
         "properties": {
           "session_id": {
@@ -2770,6 +3129,147 @@
         ],
         "title": "TranscriptionSegmentOut",
         "description": "One diarised utterance in a transcription."
+      },
+      "UserCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "profile",
+          "password"
+        ],
+        "title": "UserCreate"
+      },
+      "UserListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "UserListOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "profile",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserOut"
+      },
+      "UserStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "deleted"
+        ],
+        "title": "UserStatus"
+      },
+      "UserUpdate": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Profile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
       },
       "ValidationError": {
         "properties": {
