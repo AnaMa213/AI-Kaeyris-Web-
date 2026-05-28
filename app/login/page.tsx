@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProfilePicker } from "@/components/auth/ProfilePicker";
 import { SetupWizard } from "@/components/auth/SetupWizard";
+import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError, AuthError, NetworkError } from "@/lib/api/errors";
 import { safeRedirectTarget } from "@/lib/auth/redirect";
@@ -12,7 +13,7 @@ import type { LoginInput, SetupInput } from "@/lib/schemas/auth";
 
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<FantasyLoader />}>
       <LoginForm />
     </Suspense>
   );
@@ -52,6 +53,10 @@ function LoginForm() {
     // successful setup we manually invalidate). No need to ever auto-refetch.
     staleTime: Infinity,
     refetchOnMount: false,
+    // Fail loud once instead of retrying 3× with exponential backoff. A failed
+    // setup/status (e.g. CORS, network) is a deployment-level problem we want
+    // visible immediately, not buried under ~7s of silent retries.
+    retry: false,
   });
 
   const loginMutation = useMutation({
@@ -157,7 +162,29 @@ function LoginForm() {
   };
 
   if (setupStatusQuery.isPending) {
-    return <div aria-busy="true" className="min-h-screen" />;
+    return <FantasyLoader />;
+  }
+
+  if (setupStatusQuery.isError) {
+    return (
+      <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-4 p-8">
+        <div
+          role="alert"
+          className="text-state-error flex max-w-md flex-col gap-2 text-center text-sm"
+        >
+          <p className="font-display text-2xl">Backend injoignable</p>
+          <p>
+            Impossible de déterminer si un compte MJ existe. Vérifie que le
+            backend tourne sur{" "}
+            <code className="font-mono">
+              {process.env.NEXT_PUBLIC_API_BASE_URL ?? "l'URL configurée"}
+            </code>{" "}
+            et que CORS autorise{" "}
+            <code className="font-mono">http://localhost:3000</code>.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   if (setupStatusQuery.data?.required) {
