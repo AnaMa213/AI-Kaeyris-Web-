@@ -6,19 +6,8 @@ import { useMutation } from "@tanstack/react-query";
 import { ProfilePicker } from "@/components/auth/ProfilePicker";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError, AuthError, NetworkError } from "@/lib/api/errors";
+import { safeRedirectTarget } from "@/lib/auth/redirect";
 import type { LoginInput } from "@/lib/schemas/auth";
-
-function safeRedirectTarget(from: string | null): string {
-  if (!from || !from.startsWith("/") || from.includes("\\")) return "/";
-
-  try {
-    const target = new URL(from, window.location.origin);
-    if (target.origin !== window.location.origin) return "/";
-    return `${target.pathname}${target.search}${target.hash}`;
-  } catch {
-    return "/";
-  }
-}
 
 export default function LoginPage() {
   return (
@@ -52,7 +41,10 @@ function LoginForm() {
       }
     },
     onSuccess: () => {
-      const target = safeRedirectTarget(searchParams.get("from"));
+      const target = safeRedirectTarget(
+        searchParams.get("from"),
+        window.location.origin,
+      );
       router.push(target);
     },
     onError: (error: unknown) => {

@@ -38,12 +38,28 @@ describe("userCreateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("rejects a payload missing username", () => {
+  test("rejects a payload missing username with the French error", () => {
     const result = userCreateSchema.safeParse({
       profile: "user",
       password: "secret",
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      expect(fieldErrors.username).toEqual(["Nom d'utilisateur requis."]);
+    }
+  });
+
+  test("rejects a payload missing password with the French error", () => {
+    const result = userCreateSchema.safeParse({
+      username: "alice",
+      profile: "user",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      expect(fieldErrors.password).toEqual(["Mot de passe requis."]);
+    }
   });
 });
 
@@ -71,5 +87,14 @@ describe("userUpdateSchema", () => {
   test("rejects an unknown status value", () => {
     const result = userUpdateSchema.safeParse({ status: "banned" });
     expect(result.success).toBe(false);
+  });
+
+  test("rejects an empty password (cannot blank an existing password)", () => {
+    const result = userUpdateSchema.safeParse({ password: "" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      expect(fieldErrors.password).toEqual(["Mot de passe requis."]);
+    }
   });
 });
