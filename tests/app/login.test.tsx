@@ -139,6 +139,67 @@ describe("<LoginPage> open-redirect guard", () => {
   });
 });
 
+describe("<LoginPage> setup-status branching", () => {
+  const setupStatusResponse = (body: { required: boolean }) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  test("renders <SetupWizard> when setup/status returns required:true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/services/jdr/auth/setup/status")) {
+          return setupStatusResponse({ required: true });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+    renderLoginPage();
+    expect(
+      await screen.findByRole("heading", {
+        name: "Créer le premier compte MJ",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("MJ", { selector: "span" })).not.toBeInTheDocument();
+  });
+
+  test("renders <ProfilePicker> when setup/status returns required:false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/services/jdr/auth/setup/status")) {
+          return setupStatusResponse({ required: false });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+    renderLoginPage();
+    expect(await screen.findByText("Joueur")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Créer le premier compte MJ" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("renders [aria-busy] placeholder while setup/status is pending", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    renderLoginPage();
+    expect(
+      document.querySelector('[aria-busy="true"]'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Créer le premier compte MJ" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Joueur")).not.toBeInTheDocument();
+  });
+});
+
 describe("<LoginPage> error paths", () => {
   // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
   test.skip("401 surfaces inline error and does not redirect", async () => {
