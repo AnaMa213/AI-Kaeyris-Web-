@@ -39,7 +39,9 @@ function LoginForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: LoginInput) => {
-      const { error } = await apiClient.POST("/auth/login", { body: values });
+      const { error } = await apiClient.POST("/services/jdr/auth/login", {
+        body: values,
+      });
       if (error) {
         // Defensive: createErrorMiddleware should throw before we reach this branch.
         throw new ApiError({
