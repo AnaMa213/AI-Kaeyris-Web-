@@ -211,6 +211,34 @@ describe("<LoginPage> setup-status branching", () => {
   });
 });
 
+describe("<LoginPage> expired banner", () => {
+  test("renders the 'Session expirée' banner when ?expired=true", async () => {
+    currentSearch = "expired=true";
+    vi.stubGlobal(
+      "fetch",
+      makeFetchMock(() => new Response(null, { status: 200 })),
+    );
+    renderLoginPage();
+    expect(
+      await screen.findByText("Session expirée, reconnectez-vous."),
+    ).toBeInTheDocument();
+  });
+
+  test("does NOT render the banner when ?expired is absent", async () => {
+    currentSearch = "";
+    vi.stubGlobal(
+      "fetch",
+      makeFetchMock(() => new Response(null, { status: 200 })),
+    );
+    renderLoginPage();
+    // Wait for the ProfilePicker to render so the loading state passes.
+    await screen.findByText("Joueur");
+    expect(
+      screen.queryByText("Session expirée, reconnectez-vous."),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("<LoginPage> error paths", () => {
   test("401 surfaces inline error and does not redirect", async () => {
     vi.stubGlobal(

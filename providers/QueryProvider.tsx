@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { AuthInterceptor } from "@/lib/api/interceptors";
 
 export default function QueryProvider({
   children,
@@ -21,6 +22,9 @@ export default function QueryProvider({
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthInterceptor />
+      {children}
+    </QueryClientProvider>
   );
 }

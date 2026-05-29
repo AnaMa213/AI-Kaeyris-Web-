@@ -161,6 +161,8 @@ function LoginForm() {
     }
   };
 
+  const expired = searchParams.get("expired") === "true";
+
   if (setupStatusQuery.isPending) {
     return <FantasyLoader />;
   }
@@ -187,24 +189,39 @@ function LoginForm() {
     );
   }
 
+  const expiredBanner = expired ? (
+    <div
+      role="status"
+      className="bg-surface-raised text-text-chrome-muted border-border-chrome border-b px-4 py-3 text-center text-sm"
+    >
+      Session expirée, reconnectez-vous.
+    </div>
+  ) : null;
+
   if (setupStatusQuery.data?.required) {
     return (
-      <SetupWizard
-        onSubmit={handleSetupSubmit}
-        submitting={setupMutation.isPending}
-        errorMessage={setupErrorMessage}
-        errorDetail={setupErrorDetail}
-      />
+      <>
+        {expiredBanner}
+        <SetupWizard
+          onSubmit={handleSetupSubmit}
+          submitting={setupMutation.isPending}
+          errorMessage={setupErrorMessage}
+          errorDetail={setupErrorDetail}
+        />
+      </>
     );
   }
 
   return (
-    <ProfilePicker
-      onSubmit={handleLoginSubmit}
-      submitting={loginMutation.isPending}
-      errorMessage={errorMessage}
-      errorDetail={errorDetail}
-      clearPasswordTrigger={clearPasswordTrigger}
-    />
+    <>
+      {expiredBanner}
+      <ProfilePicker
+        onSubmit={handleLoginSubmit}
+        submitting={loginMutation.isPending}
+        errorMessage={errorMessage}
+        errorDetail={errorDetail}
+        clearPasswordTrigger={clearPasswordTrigger}
+      />
+    </>
   );
 }
