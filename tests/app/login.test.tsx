@@ -36,6 +36,42 @@ const renderLoginPage = () => {
   return queryClient;
 };
 
+const setupStatusResponse = (body: { required: boolean }) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+const makeFetchMock = (loginResponse: () => Response) =>
+  vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.endsWith("/services/jdr/auth/setup/status")) {
+      return setupStatusResponse({ required: false });
+    }
+    if (url.endsWith("/services/jdr/auth/login")) {
+      return loginResponse();
+    }
+    return new Response(null, { status: 200 });
+  });
+
+const findLoginCall = (
+  fetchMock: ReturnType<typeof makeFetchMock>,
+): Request => {
+  const call = fetchMock.mock.calls.find((args) => {
+    const request = args[0] as Request;
+    return request.url.endsWith("/services/jdr/auth/login");
+  });
+  if (!call) throw new Error("No login call found in fetch mock");
+  return call[0] as Request;
+};
+
+const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByText("MJ"));
+  await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
+  await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
+  await user.click(screen.getByRole("button", { name: "Se connecter" }));
+};
+
 beforeEach(() => {
   pushMock.mockReset();
   currentSearch = "";
@@ -47,45 +83,35 @@ afterEach(() => {
 });
 
 describe("<LoginPage> happy path", () => {
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  // The loginSchema gained `username` in Story 1.6, but the form hasn't yet,
-  // so submit will not fire fetch (zod refuses without username).
-  test.skip("redirects to / on 200 without ?from", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(null, { status: 200 }));
+  test("redirects to / on 200 without ?from", async () => {
+    const fetchMock = makeFetchMock(() => new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.url).toBe("http://localhost:8000/auth/login");
+    const request = findLoginCall(fetchMock);
+    expect(request.url).toBe("http://localhost:8000/services/jdr/auth/login");
     expect(request.method).toBe("POST");
     expect(request.credentials).toBe("include");
     expect(request.headers.get("content-type")).toBe("application/json");
     await expect(request.clone().json()).resolves.toEqual({
+      username: "alice",
       profile: "gm",
       password: "hunter2",
     });
   });
 
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  test.skip("redirects to ?from= when relative", async () => {
+  test("redirects to ?from= when relative", async () => {
     currentSearch = "from=/jdr/sessions/abc";
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+      makeFetchMock(() => new Response(null, { status: 200 })),
     );
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     await waitFor(() =>
       expect(pushMock).toHaveBeenCalledWith("/jdr/sessions/abc"),
     );
@@ -93,59 +119,44 @@ describe("<LoginPage> happy path", () => {
 });
 
 describe("<LoginPage> open-redirect guard", () => {
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  test.skip("rejects absolute URL in ?from=", async () => {
+  test("rejects absolute URL in ?from=", async () => {
     currentSearch = "from=https://evil.com";
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+      makeFetchMock(() => new Response(null, { status: 200 })),
     );
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
   });
 
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  test.skip("rejects protocol-relative URL in ?from=", async () => {
+  test("rejects protocol-relative URL in ?from=", async () => {
     currentSearch = "from=//evil.com";
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+      makeFetchMock(() => new Response(null, { status: 200 })),
     );
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
   });
 
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  test.skip("rejects backslash-normalized external URL in ?from=", async () => {
+  test("rejects backslash-normalized external URL in ?from=", async () => {
     currentSearch = "from=/%5C%5Cevil.com";
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+      makeFetchMock(() => new Response(null, { status: 200 })),
     );
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
   });
 });
 
 describe("<LoginPage> setup-status branching", () => {
-  const setupStatusResponse = (body: { required: boolean }) =>
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-
   test("renders <SetupWizard> when setup/status returns required:true", async () => {
     vi.stubGlobal(
       "fetch",
@@ -163,7 +174,9 @@ describe("<LoginPage> setup-status branching", () => {
         name: "Créer le premier compte MJ",
       }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("MJ", { selector: "span" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("MJ", { selector: "span" }),
+    ).not.toBeInTheDocument();
   });
 
   test("renders <ProfilePicker> when setup/status returns required:false", async () => {
@@ -190,9 +203,7 @@ describe("<LoginPage> setup-status branching", () => {
       vi.fn(() => new Promise<Response>(() => {})),
     );
     renderLoginPage();
-    expect(
-      document.querySelector('[aria-busy="true"]'),
-    ).toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Créer le premier compte MJ" }),
     ).not.toBeInTheDocument();
@@ -201,29 +212,27 @@ describe("<LoginPage> setup-status branching", () => {
 });
 
 describe("<LoginPage> error paths", () => {
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  test.skip("401 surfaces inline error and does not redirect", async () => {
+  test("401 surfaces inline error and does not redirect", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            type: "about:blank",
-            title: "Invalid credentials",
-            status: 401,
-          }),
-          {
-            status: 401,
-            headers: { "content-type": "application/problem+json" },
-          },
-        ),
+      makeFetchMock(
+        () =>
+          new Response(
+            JSON.stringify({
+              type: "about:blank",
+              title: "Invalid credentials",
+              status: 401,
+            }),
+            {
+              status: 401,
+              headers: { "content-type": "application/problem+json" },
+            },
+          ),
       ),
     );
     const user = userEvent.setup();
     renderLoginPage();
-    await user.click(screen.getByText("MJ"));
-    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
-    await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    await fillAndSubmit(user);
     expect(
       await screen.findByText("Identifiants invalides."),
     ).toBeInTheDocument();

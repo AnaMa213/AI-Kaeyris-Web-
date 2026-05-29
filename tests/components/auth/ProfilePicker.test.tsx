@@ -46,33 +46,48 @@ describe("<ProfilePicker>", () => {
     expect(screen.getByLabelText("Mot de passe")).toBeInTheDocument();
   });
 
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  // The loginSchema gained `username` in Story 1.6, but the form hasn't yet.
-  test.skip("submitting an empty password surfaces the zod validation error", async () => {
+  test("submitting an empty password (with username) surfaces the zod validation error", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderPicker();
     await user.click(screen.getByText("MJ"));
+    await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(await screen.findByText("Mot de passe requis.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Nom d'utilisateur requis."),
+    ).not.toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  // TODO(Story 1.8): re-enable when <ProfilePicker> exposes the username Input.
-  // The loginSchema gained `username` in Story 1.6, but the form hasn't yet.
-  test.skip("submitting a valid password calls onSubmit with profile=gm", async () => {
+  test("submitting an empty username (with password) surfaces the zod validation error", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderPicker();
     await user.click(screen.getByText("MJ"));
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(
+      await screen.findByText("Nom d'utilisateur requis."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Mot de passe requis.")).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test("submitting a valid username + password calls onSubmit with profile=gm", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderPicker();
+    await user.click(screen.getByText("MJ"));
+    await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
+    await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
+    await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0]).toEqual({
+      username: "alice",
       profile: "gm",
       password: "hunter2",
     });
   });
 
-  test("clearPasswordTrigger resets the password field", async () => {
+  test("clearPasswordTrigger resets the password field but preserves username", async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <ProfilePicker
@@ -83,7 +98,11 @@ describe("<ProfilePicker>", () => {
       />,
     );
     await user.click(screen.getByText("MJ"));
+    await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
+    expect(
+      (screen.getByLabelText("Nom d'utilisateur") as HTMLInputElement).value,
+    ).toBe("alice");
     expect(
       (screen.getByLabelText("Mot de passe") as HTMLInputElement).value,
     ).toBe("hunter2");
@@ -99,6 +118,11 @@ describe("<ProfilePicker>", () => {
     expect(
       (screen.getByLabelText("Mot de passe") as HTMLInputElement).value,
     ).toBe("");
+    // Critical: username MUST be preserved — the user should not have to retype
+    // their identity after a bad-password failure.
+    expect(
+      (screen.getByLabelText("Nom d'utilisateur") as HTMLInputElement).value,
+    ).toBe("alice");
   });
 
   test("inline error message renders with role=alert after GM selection", async () => {

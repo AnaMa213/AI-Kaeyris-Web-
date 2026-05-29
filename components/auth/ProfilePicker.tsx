@@ -29,7 +29,7 @@ export function ProfilePicker({
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { profile: "gm", password: "" },
+    defaultValues: { username: "", profile: "gm", password: "" },
   });
 
   useEffect(() => {
@@ -38,10 +38,11 @@ export function ProfilePicker({
     passwordInputRef.current?.focus();
   }, [clearPasswordTrigger, form]);
 
+  const usernameError = form.formState.errors.username?.message;
   const passwordError = form.formState.errors.password?.message;
-  const { ref: passwordRegisterRef, ...passwordRegister } = form.register(
-    "password",
-  );
+  const usernameRegister = form.register("username");
+  const { ref: passwordRegisterRef, ...passwordRegister } =
+    form.register("password");
 
   return (
     <main className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-10 p-8">
@@ -53,12 +54,12 @@ export function ProfilePicker({
           ⚔
         </div>
         <div>
-          <h1 className="font-display text-4xl font-semibold leading-tight">
+          <h1 className="font-display text-4xl leading-tight font-semibold">
             AI-Kaeyris
           </h1>
           <p className="text-text-chrome-muted text-sm">Personal AI Portal</p>
         </div>
-        <p className="font-serif text-text-chrome-muted max-w-md text-lg italic">
+        <p className="text-text-chrome-muted max-w-md font-serif text-lg italic">
           Le codex de vos campagnes.
         </p>
       </header>
@@ -79,9 +80,7 @@ export function ProfilePicker({
             }
           }}
           className={`bg-surface-raised border-border-chrome cursor-pointer transition-colors ${
-            profileSelected
-              ? "border-accent-gold"
-              : "hover:border-accent-gold"
+            profileSelected ? "border-accent-gold" : "hover:border-accent-gold"
           }`}
         >
           <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
@@ -114,6 +113,30 @@ export function ProfilePicker({
           onSubmit={form.handleSubmit(onSubmit)}
           className="flex w-full max-w-sm flex-col gap-4"
         >
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="login-username">Nom d&apos;utilisateur</Label>
+            <Input
+              id="login-username"
+              type="text"
+              autoComplete="username"
+              autoFocus
+              aria-invalid={Boolean(usernameError) || undefined}
+              aria-describedby={
+                usernameError ? "login-username-error" : undefined
+              }
+              {...usernameRegister}
+            />
+            {usernameError && (
+              <p
+                id="login-username-error"
+                role="alert"
+                className="text-state-error text-sm"
+              >
+                {usernameError}
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="login-password">Mot de passe</Label>
             <Input
@@ -151,7 +174,7 @@ export function ProfilePicker({
               {errorDetail && (
                 <details className="text-text-chrome-muted text-xs">
                   <summary>Détails</summary>
-                  <p className="font-mono mt-1 break-words">{errorDetail}</p>
+                  <p className="mt-1 font-mono break-words">{errorDetail}</p>
                 </details>
               )}
             </div>
