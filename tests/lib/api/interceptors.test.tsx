@@ -24,8 +24,10 @@ const makeClient = () =>
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
-const renderWithInterceptor = (children: React.ReactNode) => {
-  const queryClient = makeClient();
+const renderWithInterceptor = (
+  children: React.ReactNode,
+  queryClient = makeClient(),
+) => {
   render(
     <QueryClientProvider client={queryClient}>
       <AuthInterceptor />
@@ -91,6 +93,26 @@ describe("<AuthInterceptor>", () => {
     await waitFor(() =>
       expect(pushMock).toHaveBeenCalledWith("/login?from=%2Fjdr&expired=true"),
     );
+  });
+
+  test("clears the query cache before redirecting on AuthError", async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(["private", "profile"], { username: "alice" });
+    expect(queryClient.getQueryData(["private", "profile"])).toEqual({
+      username: "alice",
+    });
+
+    const authError = new AuthError({
+      type: "about:blank",
+      title: "Unauthorized",
+      status: 401,
+    });
+    renderWithInterceptor(<FailingQueryProbe error={authError} />, queryClient);
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(["private", "profile"])).toBeUndefined(),
+    );
+    expect(pushMock).toHaveBeenCalledWith("/login?from=%2Fjdr&expired=true");
   });
 
   test("does NOT redirect when pathname starts with /login (loop prevention)", async () => {
