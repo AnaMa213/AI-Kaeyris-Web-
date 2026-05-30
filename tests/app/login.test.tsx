@@ -15,12 +15,26 @@ vi.mock("@/lib/core/env", () => ({
 }));
 
 const pushMock = vi.fn();
+const replaceMock = vi.fn();
 let currentSearch = "";
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
   useSearchParams: () => new URLSearchParams(currentSearch),
 }));
+
+const unauthorizedResponse = () =>
+  new Response(
+    JSON.stringify({
+      type: "about:blank",
+      title: "Unauthorized",
+      status: 401,
+    }),
+    {
+      status: 401,
+      headers: { "content-type": "application/problem+json" },
+    },
+  );
 
 const { default: LoginPage } = await import("@/app/login/page");
 
@@ -45,11 +59,21 @@ const setupStatusResponse = (body: { required: boolean }) =>
 const makeFetchMock = (loginResponse: () => Response) =>
   vi.fn(async (input: Request | string) => {
     const url = typeof input === "string" ? input : input.url;
+    const method =
+      typeof input === "string" ? "GET" : (input.method ?? "GET");
     if (url.endsWith("/services/jdr/auth/setup/status")) {
       return setupStatusResponse({ required: false });
     }
     if (url.endsWith("/services/jdr/auth/login")) {
       return loginResponse();
+    }
+    if (
+      url.endsWith("/services/jdr/users") &&
+      method.toUpperCase() === "GET"
+    ) {
+      // LoginGuard session probe: stays "unauthenticated" so the LoginForm
+      // renders and the existing assertions still apply.
+      return unauthorizedResponse();
     }
     return new Response(null, { status: 200 });
   });
@@ -74,6 +98,7 @@ const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
 
 beforeEach(() => {
   pushMock.mockReset();
+  replaceMock.mockReset();
   currentSearch = "";
 });
 
@@ -162,8 +187,16 @@ describe("<LoginPage> setup-status branching", () => {
       "fetch",
       vi.fn(async (input: Request | string) => {
         const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
         if (url.endsWith("/services/jdr/auth/setup/status")) {
           return setupStatusResponse({ required: true });
+        }
+        if (
+          url.endsWith("/services/jdr/users") &&
+          method.toUpperCase() === "GET"
+        ) {
+          return unauthorizedResponse();
         }
         return new Response(null, { status: 200 });
       }),
@@ -184,8 +217,16 @@ describe("<LoginPage> setup-status branching", () => {
       "fetch",
       vi.fn(async (input: Request | string) => {
         const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
         if (url.endsWith("/services/jdr/auth/setup/status")) {
           return setupStatusResponse({ required: false });
+        }
+        if (
+          url.endsWith("/services/jdr/users") &&
+          method.toUpperCase() === "GET"
+        ) {
+          return unauthorizedResponse();
         }
         return new Response(null, { status: 200 });
       }),

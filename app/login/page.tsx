@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProfilePicker } from "@/components/jdr/auth/ProfilePicker";
 import { SetupWizard } from "@/components/jdr/auth/SetupWizard";
+import { LoginGuard } from "@/components/jdr/auth/LoginGuard";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
+import SessionProvider from "@/lib/core/session/SessionProvider";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError, AuthError, NetworkError } from "@/lib/core/api/errors";
 import { safeRedirectTarget } from "@/lib/core/auth/redirect";
@@ -14,7 +16,11 @@ import type { LoginInput, SetupInput } from "@/lib/jdr/schemas/auth";
 export default function LoginPage() {
   return (
     <Suspense fallback={<FantasyLoader />}>
-      <LoginForm />
+      <SessionProvider>
+        <LoginGuard>
+          <LoginForm />
+        </LoginGuard>
+      </SessionProvider>
     </Suspense>
   );
 }
