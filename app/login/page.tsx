@@ -3,13 +3,13 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ProfilePicker } from "@/components/auth/ProfilePicker";
-import { SetupWizard } from "@/components/auth/SetupWizard";
+import { ProfilePicker } from "@/components/jdr/auth/ProfilePicker";
+import { SetupWizard } from "@/components/jdr/auth/SetupWizard";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
-import { createApiClient } from "@/lib/api/client";
-import { ApiError, AuthError, NetworkError } from "@/lib/api/errors";
-import { safeRedirectTarget } from "@/lib/auth/redirect";
-import type { LoginInput, SetupInput } from "@/lib/schemas/auth";
+import { createApiClient } from "@/lib/core/api/client";
+import { ApiError, AuthError, NetworkError } from "@/lib/core/api/errors";
+import { safeRedirectTarget } from "@/lib/core/auth/redirect";
+import type { LoginInput, SetupInput } from "@/lib/jdr/schemas/auth";
 
 export default function LoginPage() {
   return (

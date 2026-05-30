@@ -5,7 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/lib/core/env", () => ({
   env: {
     NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000",
     NEXT_PUBLIC_MOCK_AUDIO: false,
