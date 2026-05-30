@@ -145,6 +145,27 @@ describe("<AuthInterceptor>", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
+  test("does NOT redirect when the failing query is the session probe (['session','me'] is owned by <AuthGuard>)", async () => {
+    function FailingSessionProbe({ error }: { error: unknown }) {
+      useQuery({
+        queryKey: ["session", "me"],
+        queryFn: async () => {
+          throw error;
+        },
+        retry: false,
+      });
+      return null;
+    }
+    const authError = new AuthError({
+      type: "about:blank",
+      title: "Unauthorized",
+      status: 401,
+    });
+    renderWithInterceptor(<FailingSessionProbe error={authError} />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   test("component returns null (no DOM)", () => {
     const queryClient = makeClient();
     const { container } = render(

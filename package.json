@@ -11,6 +11,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "next build && playwright test",
+    "e2e:ui": "playwright test --ui",
     "gen:api": "openapi-typescript docs/context/api/openapi.json --output types/api.ts",
     "check:api-types": "node scripts/check-api-types.mjs",
     "prepare": "husky"

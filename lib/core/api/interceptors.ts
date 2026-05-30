@@ -22,6 +22,10 @@ export function AuthInterceptor() {
 
     const unsubQuery = queryClient.getQueryCache().subscribe((event) => {
       if (event.type === "updated" && event.action.type === "error") {
+        // Session probe errors are handled by <AuthGuard>, which redirects
+        // without the &expired=true marker so an unauthenticated entry
+        // doesn't trigger the misleading "Session expirée" banner.
+        if (event.query.queryKey[0] === "session") return;
         handleError(event.action.error);
       }
     });

@@ -89,7 +89,7 @@ Quand un futur composant Hub apparaîtra (V2 dans un autre repo), il aura son pr
 
 ---
 
-## Tests
+## Tests unitaires / intégration (Vitest + RTL)
 
 **Convention de placement** : `tests/<source-mirror>/<file>.test.tsx`
 - Code à `lib/core/auth/redirect.ts` → test à `tests/lib/core/auth/redirect.test.ts`
@@ -101,13 +101,38 @@ Quand un futur composant Hub apparaîtra (V2 dans un autre repo), il aura son pr
 
 ---
 
+## Tests E2E (Playwright)
+
+**Convention de placement** : `e2e/<feature>/<scenario>.spec.ts`
+- Le titre du `test()` décrit ce qui est garanti, pas l'action (ex. "logout redirects to /login without flashback" pas "click logout button")
+- Helpers partagés : `e2e/helpers/mocks.ts`
+
+**Quand écrire un E2E** :
+- Chorégraphie multi-composants (auth flow, state machine cross-pages, async polling)
+- **PAS** pour un composant isolé — reste sur Vitest + RTL
+
+**Mocks backend** : `page.route()` natif Playwright, **JAMAIS** MSW. Décision architecturale Story 1.15 : `page.route()` est intégré, déterministe par test, et évite la couche service-worker qui peut diverger du vrai apiClient.
+
+**Browsers V1** : chromium uniquement. Cross-browser (Firefox, WebKit) ajouté quand un besoin réel apparaît (rapport user "ça marche pas sur X").
+
+**Lancement** :
+- `npm run e2e` — build + headless run
+- `npm run e2e:ui` — UI mode pour debug local
+- CI : `.github/workflows/e2e.yml` (PR + push main)
+
+**Pas en pré-commit/pré-push** : build + browser boot trop lents pour itération. Le CI fait le job.
+
+---
+
 ## Git
 
 **Commits** : conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`).
 
 **Pré-commit hook** : `npm run gen:api` (régénère `types/api.ts` depuis `docs/context/api/openapi.json` et bloque si l'openapi.json a des changements unstagés).
 
-**Quality gate avant push** : `npm run lint && npx tsc --noEmit && npm test && npm run build && npm run check:api-types`. Tous green.
+**Quality gate avant push (local)** : `npm run lint && npx tsc --noEmit && npm test && npm run build && npm run check:api-types`. Tous green.
+
+**Quality gate avant merge (CI)** : ci-dessus + `npm run e2e`. Le workflow GitHub Actions `e2e.yml` exécute Playwright à chaque PR/push main.
 
 ---
 
