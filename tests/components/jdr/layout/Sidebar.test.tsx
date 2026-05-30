@@ -19,6 +19,14 @@ vi.mock("@/lib/core/auth/useLogout", () => ({
   useLogout: () => ({ mutate: logoutMutate, isPending: false }),
 }));
 
+vi.mock("@/lib/core/session/useCurrentUser", () => ({
+  useCurrentUser: () => ({
+    status: "authenticated",
+    auth: { authId: "kenan", campaignId: "campaign-default" },
+    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
+  }),
+}));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/jdr/sessions",
 }));
@@ -63,7 +71,7 @@ afterEach(() => {
 });
 
 describe("<Sidebar>", () => {
-  test("renders expanded by default with full lockup + nav + footer", () => {
+  test("expanded layout: lockup + collapse button top-right, Settings + logout in footer", () => {
     renderSidebar();
     expect(screen.getByText("AI-Kaeyris")).toBeInTheDocument();
     expect(screen.getByText("JDR Assistant")).toBeInTheDocument();
@@ -71,15 +79,22 @@ describe("<Sidebar>", () => {
       screen.getByRole("navigation", { name: "Navigation JDR" }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: "Replier la barre latérale" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Settings/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: "Se déconnecter" }),
     ).toBeInTheDocument();
   });
 
-  test("uses w-60 (240px) when expanded", () => {
+  test("uses w-60 (240px) and h-full when expanded", () => {
     renderSidebar();
     const aside = screen.getByRole("complementary");
     expect(aside).toHaveAttribute("data-collapsed", "false");
     expect(aside.className).toMatch(/\bw-60\b/);
+    expect(aside.className).toMatch(/\bh-full\b/);
   });
 
   test("uses w-16 (64px) and shows AK monogram when collapsed", () => {
@@ -91,7 +106,7 @@ describe("<Sidebar>", () => {
     expect(screen.getByText("AK")).toBeInTheDocument();
   });
 
-  test("collapse button toggles useUIStore and updates aria-expanded", async () => {
+  test("collapse button toggles useUIStore and is positioned next to the lockup", async () => {
     const user = userEvent.setup();
     renderSidebar();
     const toggle = screen.getByRole("button", {
@@ -100,6 +115,13 @@ describe("<Sidebar>", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     await user.click(toggle);
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  test("Settings in footer is disabled with tooltip hint", () => {
+    renderSidebar();
+    const settingsButton = screen.getByRole("button", { name: /Settings/i });
+    expect(settingsButton).toBeDisabled();
+    expect(settingsButton.getAttribute("title")).toMatch(/plus tard/i);
   });
 
   test("logout button calls useLogout().mutate()", async () => {

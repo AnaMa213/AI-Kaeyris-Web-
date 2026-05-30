@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ScrollText,
-  Settings,
   UserCircle,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 
 type NavItem = {
   label: string;
@@ -17,6 +17,7 @@ type NavItem = {
   icon: LucideIcon;
   disabled?: boolean;
   disabledHint?: string;
+  gmOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -27,15 +28,9 @@ const NAV_ITEMS: NavItem[] = [
     icon: UserCircle,
     disabled: true,
     disabledHint: "Disponible plus tard",
+    gmOnly: true,
   },
-  { label: "Utilisateurs", href: "/jdr/users", icon: Users },
-  {
-    label: "Settings",
-    href: "/jdr/settings",
-    icon: Settings,
-    disabled: true,
-    disabledHint: "Disponible plus tard",
-  },
+  { label: "Utilisateurs", href: "/jdr/users", icon: Users, gmOnly: true },
 ];
 
 interface SidebarNavProps {
@@ -44,10 +39,15 @@ interface SidebarNavProps {
 
 export function SidebarNav({ collapsed = false }: SidebarNavProps) {
   const pathname = usePathname();
+  const user = useCurrentUser();
+  const isGm =
+    user.status === "authenticated" && user.jdr.role === "gm";
+
+  const visibleItems = NAV_ITEMS.filter((item) => !item.gmOnly || isGm);
 
   return (
     <nav aria-label="Navigation JDR" className="flex flex-col gap-1 px-2">
-      {NAV_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
         const baseClasses = cn(

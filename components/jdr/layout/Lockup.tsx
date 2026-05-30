@@ -7,7 +7,7 @@ export function Lockup({ collapsed = false }: LockupProps) {
     return (
       <div
         aria-label="AI-Kaeyris JDR Assistant"
-        className="text-accent-gold font-display flex h-10 w-full items-center justify-center text-lg"
+        className="text-accent-gold font-display flex h-10 items-center justify-center text-lg"
       >
         AK
       </div>
@@ -15,7 +15,7 @@ export function Lockup({ collapsed = false }: LockupProps) {
   }
 
   return (
-    <div className="flex flex-col gap-0.5 px-4 py-3">
+    <div className="flex flex-col gap-0.5">
       <span className="text-accent-gold font-display text-lg leading-tight font-semibold">
         AI-Kaeyris
       </span>
