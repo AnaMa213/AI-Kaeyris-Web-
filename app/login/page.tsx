@@ -79,6 +79,7 @@ function LoginForm() {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["session", "me"] });
       const target = safeRedirectTarget(
         searchParams.get("from"),
         window.location.origin,
@@ -127,6 +128,7 @@ function LoginForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
+      queryClient.invalidateQueries({ queryKey: ["session", "me"] });
       const target = safeRedirectTarget(
         searchParams.get("from"),
         window.location.origin,

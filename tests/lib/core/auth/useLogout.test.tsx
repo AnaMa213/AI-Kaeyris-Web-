@@ -22,6 +22,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { useLogout } = await import("@/lib/core/auth/useLogout");
+const { SESSION_QUERY_KEY } = await import(
+  "@/lib/core/session/queries"
+);
 
 function LogoutProbe() {
   const logout = useLogout();
@@ -55,9 +58,7 @@ afterEach(() => {
 });
 
 describe("useLogout", () => {
-  test("clears the query cache and redirects to /login BEFORE the network call completes", async () => {
-    // Network response that never resolves: forces us to verify the
-    // optimistic redirect happens without waiting for the POST.
+  test("pins the session cache to an unauthenticated placeholder BEFORE the network call", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(() => new Promise(() => undefined)),
@@ -65,16 +66,48 @@ describe("useLogout", () => {
 
     const user = userEvent.setup();
     const queryClient = renderProbe();
-    queryClient.setQueryData(["foo"], "bar");
-    expect(queryClient.getQueryData(["foo"])).toBe("bar");
+    queryClient.setQueryData(SESSION_QUERY_KEY, {
+      user: { id: "kenan", username: "Kenan" },
+      active_campaign: {
+        id: "c1",
+        name: "Default",
+        role: "gm",
+        character_id: "kenan-pc",
+      },
+    });
 
     await user.click(screen.getByRole("button", { name: "Logout" }));
 
     await waitFor(() => {
+      const data = queryClient.getQueryData(SESSION_QUERY_KEY) as {
+        active_campaign: unknown;
+      } | undefined;
+      expect(data?.active_campaign).toBeNull();
       expect(replaceMock).toHaveBeenCalledWith("/login");
-      expect(queryClient.getQueryData(["foo"])).toBeUndefined();
     });
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  test("removes non-session queries from the cache but preserves the session entry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => new Promise(() => undefined)),
+    );
+
+    const user = userEvent.setup();
+    const queryClient = renderProbe();
+    queryClient.setQueryData(["users"], { items: [] });
+    queryClient.setQueryData(["sessions", "library"], { items: [] });
+
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData(["users"])).toBeUndefined();
+      expect(
+        queryClient.getQueryData(["sessions", "library"]),
+      ).toBeUndefined();
+      expect(queryClient.getQueryData(SESSION_QUERY_KEY)).toBeDefined();
+    });
   });
 
   test("POSTs to /services/jdr/auth/logout with credentials: include (fire-and-forget)", async () => {
