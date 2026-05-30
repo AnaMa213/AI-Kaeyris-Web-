@@ -1,17 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { SESSION_QUERY_KEY } from "@/lib/core/session/SessionProvider";
-import type {
-  AuthMeResponse,
-  CurrentUser,
-} from "@/lib/core/session/types";
+import { sessionQueryOptions } from "@/lib/core/session/queries";
+import type { CurrentUser } from "@/lib/core/session/types";
 
 export function useCurrentUser(): CurrentUser {
-  const { data, isLoading, isError } = useQuery<AuthMeResponse>({
-    queryKey: SESSION_QUERY_KEY,
-    enabled: false,
-  });
+  const { data, isLoading, isError } = useQuery(sessionQueryOptions);
 
   if (isLoading) {
     return { status: "loading" };

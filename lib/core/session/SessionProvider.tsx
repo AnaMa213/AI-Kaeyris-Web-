@@ -1,32 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMockSession } from "@/lib/core/config";
-import { mockAuthMe } from "@/lib/core/api/mocks/auth-me";
-import type { AuthMeResponse } from "@/lib/core/session/types";
+import { sessionQueryOptions } from "@/lib/core/session/queries";
 
-export const SESSION_QUERY_KEY = ["session", "me"] as const;
-
-async function fetchAuthMe(): Promise<AuthMeResponse> {
-  if (useMockSession) {
-    return mockAuthMe();
-  }
-  throw new Error(
-    "Real /services/jdr/auth/me wiring lands with BD-4. Toggle useMockSession until then.",
-  );
-}
+export { SESSION_QUERY_KEY } from "@/lib/core/session/queries";
 
 export default function SessionProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  useQuery({
-    queryKey: SESSION_QUERY_KEY,
-    queryFn: fetchAuthMe,
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
+  useQuery(sessionQueryOptions);
 
   return <>{children}</>;
 }

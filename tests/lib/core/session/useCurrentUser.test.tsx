@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook } from "@testing-library/react";
+import { render, renderHook, waitFor } from "@testing-library/react";
 import type { AuthMeResponse } from "@/lib/core/session/types";
 
 vi.mock("@/lib/core/env", () => ({
@@ -14,10 +14,18 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+const mockAuthMeSpy = vi.fn();
+vi.mock("@/lib/core/api/mocks/auth-me", () => ({
+  mockAuthMe: () => mockAuthMeSpy(),
+}));
+
 const { SESSION_QUERY_KEY } = await import(
   "@/lib/core/session/SessionProvider"
 );
 const { useCurrentUser } = await import("@/lib/core/session/useCurrentUser");
+const { default: SessionProvider } = await import(
+  "@/lib/core/session/SessionProvider"
+);
 
 function wrap(client: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
@@ -33,27 +41,34 @@ function makeClient(): QueryClient {
   });
 }
 
+const validResponse: AuthMeResponse = {
+  user: { id: "kenan", username: "Kenan" },
+  active_campaign: {
+    id: "campaign-default",
+    name: "Campagne par défaut",
+    role: "gm",
+    character_id: "kenan-pc",
+  },
+};
+
+beforeEach(() => {
+  mockAuthMeSpy.mockReset();
+});
+
 describe("useCurrentUser()", () => {
-  test("returns 'unauthenticated' when query cache is empty", () => {
+  test("returns 'loading' on first render when cache is empty", () => {
+    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     const { result } = renderHook(() => useCurrentUser(), {
       wrapper: wrap(client),
     });
-    expect(result.current.status).toBe("unauthenticated");
+    expect(result.current.status).toBe("loading");
   });
 
   test("returns 'authenticated' triplet when cache holds a valid auth-me response", () => {
+    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
-    const response: AuthMeResponse = {
-      user: { id: "kenan", username: "Kenan" },
-      active_campaign: {
-        id: "campaign-default",
-        name: "Campagne par défaut",
-        role: "gm",
-        character_id: "kenan-pc",
-      },
-    };
-    client.setQueryData(SESSION_QUERY_KEY, response);
+    client.setQueryData(SESSION_QUERY_KEY, validResponse);
 
     const { result } = renderHook(() => useCurrentUser(), {
       wrapper: wrap(client),
@@ -66,13 +81,13 @@ describe("useCurrentUser()", () => {
     });
   });
 
-  test("returns 'unauthenticated' when active_campaign is null", () => {
+  test("returns 'unauthenticated' when active_campaign is null in cache", () => {
+    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
-    const response: AuthMeResponse = {
+    client.setQueryData(SESSION_QUERY_KEY, {
       user: { id: "kenan", username: "Kenan" },
       active_campaign: null,
-    };
-    client.setQueryData(SESSION_QUERY_KEY, response);
+    } satisfies AuthMeResponse);
 
     const { result } = renderHook(() => useCurrentUser(), {
       wrapper: wrap(client),
@@ -81,18 +96,25 @@ describe("useCurrentUser()", () => {
     expect(result.current.status).toBe("unauthenticated");
   });
 
-  test("does not trigger a fetch (enabled: false)", () => {
+  test("dedup: queryFn fires exactly once when SessionProvider and useCurrentUser observe the same key", async () => {
+    mockAuthMeSpy.mockResolvedValue(validResponse);
     const client = makeClient();
-    let fetchCount = 0;
-    client.setQueryDefaults(SESSION_QUERY_KEY, {
-      queryFn: () => {
-        fetchCount += 1;
-        return Promise.resolve({} as AuthMeResponse);
-      },
+
+    function Child() {
+      useCurrentUser();
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={client}>
+        <SessionProvider>
+          <Child />
+        </SessionProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockAuthMeSpy).toHaveBeenCalledTimes(1);
     });
-
-    renderHook(() => useCurrentUser(), { wrapper: wrap(client) });
-
-    expect(fetchCount).toBe(0);
   });
 });
