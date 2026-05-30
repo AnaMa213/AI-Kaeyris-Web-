@@ -14,6 +14,11 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+const probeGet = vi.fn();
+vi.mock("@/lib/core/api/client", () => ({
+  createApiClient: () => ({ GET: probeGet }),
+}));
+
 const mockAuthMeSpy = vi.fn();
 vi.mock("@/lib/core/api/mocks/auth-me", () => ({
   mockAuthMe: () => mockAuthMeSpy(),
@@ -26,6 +31,7 @@ const { useCurrentUser } = await import("@/lib/core/session/useCurrentUser");
 const { default: SessionProvider } = await import(
   "@/lib/core/session/SessionProvider"
 );
+const { AuthError } = await import("@/lib/core/api/errors");
 
 function wrap(client: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
@@ -52,12 +58,13 @@ const validResponse: AuthMeResponse = {
 };
 
 beforeEach(() => {
+  probeGet.mockReset();
   mockAuthMeSpy.mockReset();
 });
 
 describe("useCurrentUser()", () => {
   test("returns 'loading' on first render when cache is empty", () => {
-    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
+    probeGet.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     const { result } = renderHook(() => useCurrentUser(), {
       wrapper: wrap(client),
@@ -66,7 +73,7 @@ describe("useCurrentUser()", () => {
   });
 
   test("returns 'authenticated' triplet when cache holds a valid auth-me response", () => {
-    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
+    probeGet.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     client.setQueryData(SESSION_QUERY_KEY, validResponse);
 
@@ -82,7 +89,7 @@ describe("useCurrentUser()", () => {
   });
 
   test("returns 'unauthenticated' when active_campaign is null in cache", () => {
-    mockAuthMeSpy.mockReturnValue(new Promise(() => undefined));
+    probeGet.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     client.setQueryData(SESSION_QUERY_KEY, {
       user: { id: "kenan", username: "Kenan" },
@@ -96,8 +103,9 @@ describe("useCurrentUser()", () => {
     expect(result.current.status).toBe("unauthenticated");
   });
 
-  test("dedup: queryFn fires exactly once when SessionProvider and useCurrentUser observe the same key", async () => {
-    mockAuthMeSpy.mockResolvedValue(validResponse);
+  test("dedup: probe + mockAuthMe each fire exactly once when SessionProvider and useCurrentUser observe the same key", async () => {
+    probeGet.mockResolvedValue({ data: { items: [] }, error: undefined });
+    mockAuthMeSpy.mockReturnValue(validResponse);
     const client = makeClient();
 
     function Child() {
@@ -114,7 +122,46 @@ describe("useCurrentUser()", () => {
     );
 
     await waitFor(() => {
+      expect(probeGet).toHaveBeenCalledTimes(1);
       expect(mockAuthMeSpy).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test("probe failure (AuthError) leaves the hook in 'unauthenticated' and surfaces AuthError to query cache", async () => {
+    probeGet.mockRejectedValue(
+      new AuthError({
+        type: "about:blank",
+        title: "Session expirée",
+        status: 401,
+      }),
+    );
+    const client = makeClient();
+
+    const { result } = renderHook(() => useCurrentUser(), {
+      wrapper: wrap(client),
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("unauthenticated");
+    });
+
+    const state = client.getQueryState(SESSION_QUERY_KEY);
+    expect(state?.error).toBeInstanceOf(AuthError);
+  });
+
+  test("probe failure with non-Auth error is converted to AuthError (V1 fallback)", async () => {
+    probeGet.mockRejectedValue(new TypeError("network down"));
+    const client = makeClient();
+
+    const { result } = renderHook(() => useCurrentUser(), {
+      wrapper: wrap(client),
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("unauthenticated");
+    });
+
+    const state = client.getQueryState(SESSION_QUERY_KEY);
+    expect(state?.error).toBeInstanceOf(AuthError);
   });
 });

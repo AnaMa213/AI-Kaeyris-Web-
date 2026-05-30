@@ -13,6 +13,15 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+const probeGet = vi.fn().mockResolvedValue({
+  data: { items: [] },
+  error: undefined,
+});
+
+vi.mock("@/lib/core/api/client", () => ({
+  createApiClient: () => ({ GET: probeGet }),
+}));
+
 const { default: SessionProvider, SESSION_QUERY_KEY } = await import(
   "@/lib/core/session/SessionProvider"
 );
@@ -24,7 +33,7 @@ function makeClient(): QueryClient {
 }
 
 describe("<SessionProvider>", () => {
-  test("populates the session query cache from the V1 mock", async () => {
+  test("populates the session query cache from the V1 mock when the probe succeeds", async () => {
     const client = makeClient();
     render(
       <QueryClientProvider client={client}>
