@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
-import { ApiError } from "@/lib/core/api/errors";
 
 export function useLogout() {
   const router = useRouter();
@@ -12,19 +11,13 @@ export function useLogout() {
   const apiClient = useMemo(() => createApiClient(), []);
 
   return useMutation({
-    mutationFn: async () => {
-      const { error } = await apiClient.POST("/services/jdr/auth/logout");
-      if (error) {
-        throw new ApiError({
-          type: "about:blank",
-          title: "Déconnexion impossible",
-          status: 0,
-        });
-      }
-    },
-    onSuccess: () => {
+    onMutate: async () => {
+      await queryClient.cancelQueries();
       queryClient.clear();
-      router.push("/login");
+      router.replace("/login");
+    },
+    mutationFn: async () => {
+      await apiClient.POST("/services/jdr/auth/logout");
     },
   });
 }

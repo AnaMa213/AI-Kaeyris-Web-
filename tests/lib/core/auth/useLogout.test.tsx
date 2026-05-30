@@ -14,10 +14,11 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+const replaceMock = vi.fn();
 const pushMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
 }));
 
 const { useLogout } = await import("@/lib/core/auth/useLogout");
@@ -44,6 +45,7 @@ const renderProbe = () => {
 };
 
 beforeEach(() => {
+  replaceMock.mockReset();
   pushMock.mockReset();
 });
 
@@ -53,7 +55,29 @@ afterEach(() => {
 });
 
 describe("useLogout", () => {
-  test("POSTs to /services/jdr/auth/logout with credentials: include", async () => {
+  test("clears the query cache and redirects to /login BEFORE the network call completes", async () => {
+    // Network response that never resolves: forces us to verify the
+    // optimistic redirect happens without waiting for the POST.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => new Promise(() => undefined)),
+    );
+
+    const user = userEvent.setup();
+    const queryClient = renderProbe();
+    queryClient.setQueryData(["foo"], "bar");
+    expect(queryClient.getQueryData(["foo"])).toBe("bar");
+
+    await user.click(screen.getByRole("button", { name: "Logout" }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/login");
+      expect(queryClient.getQueryData(["foo"])).toBeUndefined();
+    });
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  test("POSTs to /services/jdr/auth/logout with credentials: include (fire-and-forget)", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 204 }));
@@ -70,31 +94,18 @@ describe("useLogout", () => {
     expect(request.credentials).toBe("include");
   });
 
-  test("clears the query cache on success", async () => {
+  test("redirect still happens even if the backend logout call fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+      vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
     );
-    const user = userEvent.setup();
-    const queryClient = renderProbe();
-    queryClient.setQueryData(["foo"], "bar");
-    expect(queryClient.getQueryData(["foo"])).toBe("bar");
 
-    await user.click(screen.getByRole("button", { name: "Logout" }));
-
-    await waitFor(() =>
-      expect(queryClient.getQueryData(["foo"])).toBeUndefined(),
-    );
-  });
-
-  test("routes to /login on success", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
-    );
     const user = userEvent.setup();
     renderProbe();
     await user.click(screen.getByRole("button", { name: "Logout" }));
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/login"));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/login");
+    });
   });
 });
