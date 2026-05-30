@@ -97,12 +97,12 @@ describe("<Sidebar>", () => {
     expect(aside.className).toMatch(/\bh-full\b/);
   });
 
-  test("uses w-16 (64px) and shows the AI-Kaeyris sigil when collapsed", () => {
+  test("uses w-20 (80px) and shows the AI-Kaeyris sigil when collapsed", () => {
     useUIStore.setState({ sidebarCollapsed: true });
     renderSidebar();
     const aside = screen.getByRole("complementary");
     expect(aside).toHaveAttribute("data-collapsed", "true");
-    expect(aside.className).toMatch(/\bw-16\b/);
+    expect(aside.className).toMatch(/\bw-20\b/);
     expect(
       screen.getByLabelText("AI-Kaeyris JDR Assistant"),
     ).toBeInTheDocument();

@@ -14,6 +14,12 @@ import { useUIStore } from "@/lib/core/stores/ui";
 import { Lockup } from "@/components/jdr/layout/Lockup";
 import { SidebarNav } from "@/components/jdr/layout/SidebarNav";
 
+const chevronClasses =
+  "text-text-chrome-muted hover:!bg-surface-overlay hover:!text-accent-gold h-7 w-7 shrink-0";
+
+const footerButtonBase =
+  "justify-start gap-3 hover:!bg-surface-overlay hover:!text-accent-gold";
+
 export function Sidebar() {
   const collapsed = useUIStore((state) => state.sidebarCollapsed);
   const toggle = useUIStore((state) => state.toggleSidebarCollapsed);
@@ -24,10 +30,15 @@ export function Sidebar() {
       data-collapsed={collapsed}
       className={cn(
         "bg-surface-raised border-border-chrome flex h-full flex-col border-r",
-        collapsed ? "w-16" : "w-60",
+        collapsed ? "w-20" : "w-60",
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-3">
+      <div
+        className={cn(
+          "flex items-center py-3",
+          collapsed ? "justify-between gap-1 px-2" : "justify-between gap-2 px-3",
+        )}
+      >
         <Lockup collapsed={collapsed} />
         <Button
           type="button"
@@ -40,7 +51,7 @@ export function Sidebar() {
               ? "Déplier la barre latérale"
               : "Replier la barre latérale"
           }
-          className="text-text-chrome-muted hover:bg-surface-overlay hover:text-accent-gold h-7 w-7 shrink-0"
+          className={chevronClasses}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -68,7 +79,8 @@ export function Sidebar() {
           title="Disponible plus tard"
           aria-label={collapsed ? "Settings" : undefined}
           className={cn(
-            "text-text-chrome-muted/60 justify-start gap-3",
+            "text-text-chrome-muted/60",
+            footerButtonBase,
             collapsed && "justify-center",
           )}
         >
@@ -84,7 +96,8 @@ export function Sidebar() {
           disabled={logout.isPending}
           aria-label="Se déconnecter"
           className={cn(
-            "text-text-chrome hover:bg-surface-overlay hover:text-accent-gold justify-start gap-3",
+            "text-text-chrome",
+            footerButtonBase,
             collapsed && "justify-center",
           )}
         >
