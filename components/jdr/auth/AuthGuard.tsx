@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const user = useCurrentUser();
 
   useEffect(() => {
     if (user.status === "unauthenticated") {
-      const from = encodeURIComponent(pathname);
-      router.replace(`/login?from=${from}`);
+      router.replace("/login");
     }
-  }, [user.status, router, pathname]);
+  }, [user.status, router]);
 
   if (user.status === "authenticated") {
     return <>{children}</>;

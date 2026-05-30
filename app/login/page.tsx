@@ -10,7 +10,6 @@ import { FantasyLoader } from "@/components/common/FantasyLoader";
 import SessionProvider from "@/lib/core/session/SessionProvider";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError, AuthError, NetworkError } from "@/lib/core/api/errors";
-import { safeRedirectTarget } from "@/lib/core/auth/redirect";
 import type { LoginInput, SetupInput } from "@/lib/jdr/schemas/auth";
 
 export default function LoginPage() {
@@ -80,11 +79,7 @@ function LoginForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["session", "me"] });
-      const target = safeRedirectTarget(
-        searchParams.get("from"),
-        window.location.origin,
-      );
-      router.push(target);
+      router.push("/jdr/sessions");
     },
     onError: (error: unknown) => {
       const isAuth =
@@ -129,11 +124,7 @@ function LoginForm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
       queryClient.invalidateQueries({ queryKey: ["session", "me"] });
-      const target = safeRedirectTarget(
-        searchParams.get("from"),
-        window.location.origin,
-      );
-      router.push(target);
+      router.push("/jdr/sessions");
     },
     onError: (error: unknown) => {
       setSetupErrorMessage(

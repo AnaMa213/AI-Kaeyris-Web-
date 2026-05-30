@@ -64,7 +64,7 @@ describe("<AuthGuard>", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  test("redirects to /login?from=... when status='unauthenticated' and does NOT render children", async () => {
+  test("redirects to /login (no ?from=) when status='unauthenticated' and does NOT render children", async () => {
     asUnauthenticated();
     render(
       <AuthGuard>
@@ -74,11 +74,11 @@ describe("<AuthGuard>", () => {
     expect(screen.queryByText("protected")).not.toBeInTheDocument();
     expect(screen.getByText(/Redirection/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/login?from=%2Fjdr%2Fusers");
+      expect(replaceMock).toHaveBeenCalledWith("/login");
     });
   });
 
-  test("preserves the current pathname in the from query param", async () => {
+  test("redirects identically regardless of the current pathname", async () => {
     pathnameMock = "/jdr/sessions/abc-123";
     asUnauthenticated();
     render(
@@ -87,9 +87,7 @@ describe("<AuthGuard>", () => {
       </AuthGuard>,
     );
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith(
-        "/login?from=%2Fjdr%2Fsessions%2Fabc-123",
-      );
+      expect(replaceMock).toHaveBeenCalledWith("/login");
     });
   });
 });

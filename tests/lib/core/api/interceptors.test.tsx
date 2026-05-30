@@ -79,11 +79,11 @@ describe("<AuthInterceptor>", () => {
     });
     renderWithInterceptor(<FailingQueryProbe error={authError} />);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/login?from=%2Fjdr&expired=true"),
+      expect(pushMock).toHaveBeenCalledWith("/login?expired=true"),
     );
   });
 
-  test("redirects on AuthError from a mutation", async () => {
+  test("redirects to /login?expired=true on AuthError from a mutation", async () => {
     const authError = new AuthError({
       type: "about:blank",
       title: "Unauthorized",
@@ -91,7 +91,7 @@ describe("<AuthInterceptor>", () => {
     });
     renderWithInterceptor(<FailingMutationProbe error={authError} />);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/login?from=%2Fjdr&expired=true"),
+      expect(pushMock).toHaveBeenCalledWith("/login?expired=true"),
     );
   });
 
@@ -112,7 +112,7 @@ describe("<AuthInterceptor>", () => {
     await waitFor(() =>
       expect(queryClient.getQueryData(["private", "profile"])).toBeUndefined(),
     );
-    expect(pushMock).toHaveBeenCalledWith("/login?from=%2Fjdr&expired=true");
+    expect(pushMock).toHaveBeenCalledWith("/login?expired=true");
   });
 
   test("does NOT redirect when pathname starts with /login (loop prevention)", async () => {

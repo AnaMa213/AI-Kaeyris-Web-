@@ -108,13 +108,15 @@ afterEach(() => {
 });
 
 describe("<LoginPage> happy path", () => {
-  test("redirects to / on 200 without ?from", async () => {
+  test("redirects to /jdr/sessions on 200", async () => {
     const fetchMock = makeFetchMock(() => new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderLoginPage();
     await fillAndSubmit(user);
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+    );
 
     const request = findLoginCall(fetchMock);
     expect(request.url).toBe("http://localhost:8000/services/jdr/auth/login");
@@ -128,7 +130,7 @@ describe("<LoginPage> happy path", () => {
     });
   });
 
-  test("redirects to ?from= when relative", async () => {
+  test("ignores any ?from= and still redirects to /jdr/sessions", async () => {
     currentSearch = "from=/jdr/sessions/abc";
     vi.stubGlobal(
       "fetch",
@@ -138,13 +140,13 @@ describe("<LoginPage> happy path", () => {
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions/abc"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
     );
   });
 });
 
-describe("<LoginPage> open-redirect guard", () => {
-  test("rejects absolute URL in ?from=", async () => {
+describe("<LoginPage> ?from= is ignored (security and UX guarantee)", () => {
+  test("absolute URL in ?from= is ignored", async () => {
     currentSearch = "from=https://evil.com";
     vi.stubGlobal(
       "fetch",
@@ -153,10 +155,12 @@ describe("<LoginPage> open-redirect guard", () => {
     const user = userEvent.setup();
     renderLoginPage();
     await fillAndSubmit(user);
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+    );
   });
 
-  test("rejects protocol-relative URL in ?from=", async () => {
+  test("protocol-relative URL in ?from= is ignored", async () => {
     currentSearch = "from=//evil.com";
     vi.stubGlobal(
       "fetch",
@@ -165,10 +169,12 @@ describe("<LoginPage> open-redirect guard", () => {
     const user = userEvent.setup();
     renderLoginPage();
     await fillAndSubmit(user);
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+    );
   });
 
-  test("rejects backslash-normalized external URL in ?from=", async () => {
+  test("backslash-normalized external URL in ?from= is ignored", async () => {
     currentSearch = "from=/%5C%5Cevil.com";
     vi.stubGlobal(
       "fetch",
@@ -177,7 +183,9 @@ describe("<LoginPage> open-redirect guard", () => {
     const user = userEvent.setup();
     renderLoginPage();
     await fillAndSubmit(user);
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    await waitFor(() =>
+      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+    );
   });
 });
 

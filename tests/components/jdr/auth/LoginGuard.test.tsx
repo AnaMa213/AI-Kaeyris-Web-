@@ -64,7 +64,7 @@ describe("<LoginGuard>", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  test("redirects to /jdr/sessions when authenticated without ?from", async () => {
+  test("redirects to /jdr/sessions when authenticated", async () => {
     asAuthenticated();
     render(
       <LoginGuard>
@@ -77,7 +77,7 @@ describe("<LoginGuard>", () => {
     });
   });
 
-  test("redirects to safeRedirectTarget(?from) when authenticated with ?from", async () => {
+  test("redirects to /jdr/sessions regardless of any ?from= query param", async () => {
     searchMock = "from=%2Fjdr%2Fusers";
     asAuthenticated();
     render(
@@ -86,20 +86,7 @@ describe("<LoginGuard>", () => {
       </LoginGuard>,
     );
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/jdr/users");
-    });
-  });
-
-  test("rejects external ?from and falls back to /", async () => {
-    searchMock = "from=https%3A%2F%2Fevil.com";
-    asAuthenticated();
-    render(
-      <LoginGuard>
-        <p>login form</p>
-      </LoginGuard>,
-    );
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/");
+      expect(replaceMock).toHaveBeenCalledWith("/jdr/sessions");
     });
   });
 });

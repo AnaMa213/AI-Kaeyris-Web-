@@ -14,7 +14,7 @@ test("already-authenticated user visiting /login is redirected to /jdr/sessions"
   await expect(page.getByText("MJ", { exact: true })).not.toBeVisible();
 });
 
-test("already-authenticated user visiting /login?from=/jdr/users lands on /jdr/users", async ({
+test("already-authenticated user visiting /login?from=/jdr/users still lands on /jdr/sessions (the from is ignored)", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
@@ -22,8 +22,6 @@ test("already-authenticated user visiting /login?from=/jdr/users lands on /jdr/u
 
   await page.goto("/login?from=%2Fjdr%2Fusers");
 
-  await expect(page).toHaveURL(/\/jdr\/users/);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Utilisateurs" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/jdr\/sessions/);
+  await expect(page.getByText("Aucune session encore.")).toBeVisible();
 });

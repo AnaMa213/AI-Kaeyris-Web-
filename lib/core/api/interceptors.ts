@@ -16,8 +16,7 @@ export function AuthInterceptor() {
       // Loop prevention: never redirect the login route to itself.
       if (pathname.startsWith("/login")) return;
       queryClient.clear();
-      const fromParam = encodeURIComponent(pathname);
-      router.push(`/login?from=${fromParam}&expired=true`);
+      router.push("/login?expired=true");
     };
 
     const unsubQuery = queryClient.getQueryCache().subscribe((event) => {
