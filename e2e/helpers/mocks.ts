@@ -14,7 +14,15 @@ const UNAUTH_BODY = JSON.stringify({
   status: 401,
 });
 
-const EMPTY_USERS_BODY = JSON.stringify({ items: [] });
+const AUTH_ME_BODY = JSON.stringify({
+  user: { id: "kenan-uuid", username: "kenan" },
+  active_campaign: {
+    id: "campaign-default-uuid",
+    name: "Campagne par défaut",
+    role: "gm",
+    character_id: "kenan-pc-uuid",
+  },
+});
 
 /**
  * Mutable session state shared between probe and login/logout mocks.
@@ -61,13 +69,36 @@ export async function mockSetupStatusNotRequired(page: Page) {
 }
 
 /**
- * V1 transitional probe: GET /services/jdr/users used by useCurrentUser
- * to validate the session cookie. Returns 200 or 401 based on sessionState.
+ * GET /services/jdr/auth/me — the real endpoint that lands with BD-4.
+ * Returns 200 with the Kenan-MJ payload or 401 based on sessionState.
  */
 export async function mockSessionProbe(
   page: Page,
   sessionState: SessionState,
 ) {
+  await page.route("**/services/jdr/auth/me", async (route) => {
+    if (sessionState.isAuthenticated()) {
+      await route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: AUTH_ME_BODY,
+      });
+    } else {
+      await route.fulfill({
+        status: 401,
+        headers: PROBLEM_HEADERS,
+        body: UNAUTH_BODY,
+      });
+    }
+  });
+}
+
+/**
+ * GET /services/jdr/users returns an empty list when authenticated, 401
+ * otherwise. The /jdr/users page calls this on mount; the empty-list 200
+ * keeps the page renderable in tests that visit it as an authenticated GM.
+ */
+export async function mockUsersList(page: Page, sessionState: SessionState) {
   await page.route("**/services/jdr/users", async (route) => {
     if (route.request().method() !== "GET") {
       await route.continue();
@@ -77,7 +108,7 @@ export async function mockSessionProbe(
       await route.fulfill({
         status: 200,
         headers: JSON_HEADERS,
-        body: EMPTY_USERS_BODY,
+        body: JSON.stringify({ items: [] }),
       });
     } else {
       await route.fulfill({
@@ -140,8 +171,8 @@ export async function mockLogoutSucceeds(
 }
 
 /**
- * Convenience: install setup-status, session probe, login, and logout
- * mocks at once, all wired to the same session state.
+ * Convenience: install setup-status, /auth/me probe, /users list, login,
+ * and logout mocks at once, all wired to the same session state.
  */
 export async function installAuthMocks(
   page: Page,
@@ -150,6 +181,7 @@ export async function installAuthMocks(
 ) {
   await mockSetupStatusNotRequired(page);
   await mockSessionProbe(page, sessionState);
+  await mockUsersList(page, sessionState);
   await mockLoginSucceeds(page, {
     sessionState,
     delayMs: opts.loginDelayMs,

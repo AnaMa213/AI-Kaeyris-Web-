@@ -107,6 +107,27 @@
         }
       }
     },
+    "/services/jdr/auth/me": {
+      "get": {
+        "tags": [
+          "jdr-auth"
+        ],
+        "summary": "Get Auth Me",
+        "operationId": "get_auth_me_services_jdr_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMeOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/services/jdr/auth/logout": {
       "post": {
         "tags": [
@@ -411,14 +432,6 @@
           "required": true
         },
         "responses": {
-          "501": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -426,6 +439,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          },
+          "501": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -2040,6 +2061,84 @@
         "title": "AudioUploadOut",
         "description": "Response of ``POST /sessions/{id}/audio``."
       },
+      "AuthMeCampaignOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "character_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "title": "AuthMeCampaignOut"
+      },
+      "AuthMeOut": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthMeUserOut"
+          },
+          "active_campaign": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthMeCampaignOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "active_campaign"
+        ],
+        "title": "AuthMeOut"
+      },
+      "AuthMeUserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "AuthMeUserOut"
+      },
       "Body_post_audio_services_jdr_sessions__session_id__audio_post": {
         "properties": {
           "audio": {
@@ -2369,6 +2468,7 @@
             "title": "Password"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "username",
@@ -2426,6 +2526,7 @@
             "description": "speaker_label -> pj_id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "MappingPut",
         "description": "Body for ``PUT /services/jdr/sessions/{session_id}/mapping``.\n\nShape ``{speaker_label: pj_id}`` per ``contracts/rest-api.md``\n§148-163."
@@ -2491,19 +2592,19 @@
           },
           "total": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Total"
           },
           "page": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Page",
             "default": 1
           },
           "size": {
             "type": "integer",
-            "maximum": 500.0,
-            "minimum": 1.0,
+            "maximum": 500,
+            "minimum": 1,
             "title": "Size",
             "default": 50
           }
@@ -2526,19 +2627,19 @@
           },
           "total": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Total"
           },
           "page": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Page",
             "default": 1
           },
           "size": {
             "type": "integer",
-            "maximum": 500.0,
-            "minimum": 1.0,
+            "maximum": 500,
+            "minimum": 1,
             "title": "Size",
             "default": 50
           }
@@ -2559,6 +2660,7 @@
             "title": "Name"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"
@@ -2626,6 +2728,7 @@
             "title": "Pj Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name",
@@ -2800,6 +2903,7 @@
             "description": "Optional campaign-bible block prepended to every narrative / elements LLM prompt for this session. Use it to anchor the model on recurring PNJ, the campaign tone, or the current story arc. Can be updated later via PATCH."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "title",
@@ -2890,6 +2994,7 @@
             "title": "Pj Ids"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "pj_ids"
@@ -2972,8 +3077,31 @@
               }
             ],
             "title": "Campaign Context"
+          },
+          "transcription_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "SessionUpdate",
         "description": "Payload accepted by ``PATCH /services/jdr/sessions/{id}``.\n\nEvery field is optional — the route applies only the keys that are\npresent (PATCH semantics). To clear ``campaign_context``, send\n``\"campaign_context\": null`` explicitly (the route distinguishes\n\"unset\" from \"explicit null\" via Pydantic's ``model_fields_set``)."
@@ -2993,6 +3121,7 @@
             "title": "Password"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "username",
@@ -3148,6 +3277,7 @@
             "title": "Password"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "username",
@@ -3268,6 +3398,7 @@
             ]
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "UserUpdate"
       },

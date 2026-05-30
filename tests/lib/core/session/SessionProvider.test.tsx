@@ -3,6 +3,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { AuthMeResponse } from "@/lib/core/session/types";
 
 vi.mock("@/lib/core/env", () => ({
   env: {
@@ -13,13 +14,22 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const probeGet = vi.fn().mockResolvedValue({
-  data: { items: [] },
-  error: undefined,
-});
+const authMeResponse: AuthMeResponse = {
+  user: { id: "kenan-uuid", username: "kenan" },
+  active_campaign: {
+    id: "campaign-default-uuid",
+    name: "Campagne par défaut",
+    role: "gm",
+    character_id: "kenan-pc-uuid",
+  },
+};
+
+const authMeGet = vi
+  .fn()
+  .mockResolvedValue({ data: authMeResponse, error: undefined });
 
 vi.mock("@/lib/core/api/client", () => ({
-  createApiClient: () => ({ GET: probeGet }),
+  createApiClient: () => ({ GET: authMeGet }),
 }));
 
 const { default: SessionProvider, SESSION_QUERY_KEY } = await import(
@@ -33,7 +43,7 @@ function makeClient(): QueryClient {
 }
 
 describe("<SessionProvider>", () => {
-  test("populates the session query cache from the V1 mock when the probe succeeds", async () => {
+  test("populates the session query cache by calling GET /services/jdr/auth/me", async () => {
     const client = makeClient();
     render(
       <QueryClientProvider client={client}>
@@ -45,9 +55,11 @@ describe("<SessionProvider>", () => {
 
     await waitFor(() => {
       const data = client.getQueryData(SESSION_QUERY_KEY) as
-        | { user: { username: string } }
+        | AuthMeResponse
         | undefined;
-      expect(data?.user.username).toBe("Kenan");
+      expect(data?.user.username).toBe("kenan");
+      expect(data?.active_campaign?.role).toBe("gm");
     });
+    expect(authMeGet).toHaveBeenCalledWith("/services/jdr/auth/me");
   });
 });

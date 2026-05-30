@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/services/jdr/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Auth Me */
+        get: operations["get_auth_me_services_jdr_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/services/jdr/auth/logout": {
         parameters: {
             query?: never;
@@ -813,6 +830,35 @@ export interface components {
              */
             job_id: string;
         };
+        /** AuthMeCampaignOut */
+        AuthMeCampaignOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Character Id */
+            character_id?: string | null;
+        };
+        /** AuthMeOut */
+        AuthMeOut: {
+            user: components["schemas"]["AuthMeUserOut"];
+            active_campaign: components["schemas"]["AuthMeCampaignOut"] | null;
+        };
+        /** AuthMeUserOut */
+        AuthMeUserOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string;
+        };
         /** Body_post_audio_services_jdr_sessions__session_id__audio_post */
         Body_post_audio_services_jdr_sessions__session_id__audio_post: {
             /**
@@ -1355,6 +1401,9 @@ export interface components {
             title?: string | null;
             /** Campaign Context */
             campaign_context?: string | null;
+            transcription_mode?: components["schemas"]["TranscriptionMode"] | null;
+            /** Campaign Id */
+            campaign_id?: string | null;
         };
         /** SetupRequest */
         SetupRequest: {
@@ -1602,6 +1651,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_auth_me_services_jdr_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMeOut"];
                 };
             };
         };
