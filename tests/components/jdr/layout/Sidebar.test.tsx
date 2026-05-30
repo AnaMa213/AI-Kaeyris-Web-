@@ -97,13 +97,25 @@ describe("<Sidebar>", () => {
     expect(aside.className).toMatch(/\bh-full\b/);
   });
 
-  test("uses w-16 (64px) and shows AK monogram when collapsed", () => {
+  test("uses w-16 (64px) and shows the AI-Kaeyris sigil when collapsed", () => {
     useUIStore.setState({ sidebarCollapsed: true });
     renderSidebar();
     const aside = screen.getByRole("complementary");
     expect(aside).toHaveAttribute("data-collapsed", "true");
     expect(aside.className).toMatch(/\bw-16\b/);
-    expect(screen.getByText("AK")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("AI-Kaeyris JDR Assistant"),
+    ).toBeInTheDocument();
+  });
+
+  test("collapsed header keeps the sigil and the expand chevron on the same row", () => {
+    useUIStore.setState({ sidebarCollapsed: true });
+    renderSidebar();
+    const expandButton = screen.getByRole("button", {
+      name: "Déplier la barre latérale",
+    });
+    const sigil = screen.getByLabelText("AI-Kaeyris JDR Assistant");
+    expect(expandButton.parentElement).toBe(sigil.parentElement);
   });
 
   test("collapse button toggles useUIStore and is positioned next to the lockup", async () => {

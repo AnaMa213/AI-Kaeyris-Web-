@@ -27,45 +27,30 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-60",
       )}
     >
-      <div
-        className={cn(
-          "flex items-center gap-2 px-3 py-3",
-          collapsed ? "justify-center" : "justify-between",
-        )}
-      >
+      <div className="flex items-center justify-between gap-2 px-3 py-3">
         <Lockup collapsed={collapsed} />
-        {!collapsed && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={toggle}
-            aria-expanded={true}
-            aria-label="Replier la barre latérale"
-            className="text-text-chrome-muted h-7 w-7 shrink-0"
-          >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={
+            collapsed
+              ? "Déplier la barre latérale"
+              : "Replier la barre latérale"
+          }
+          className="text-text-chrome-muted hover:bg-surface-overlay hover:text-accent-gold h-7 w-7 shrink-0"
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          ) : (
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        )}
+          )}
+        </Button>
       </div>
 
-      {collapsed && (
-        <div className="flex justify-center px-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={toggle}
-            aria-expanded={false}
-            aria-label="Déplier la barre latérale"
-            className="text-text-chrome-muted h-7 w-7"
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
-      )}
-
-      <Separator className="bg-border-chrome mt-1" />
+      <Separator className="bg-border-chrome" />
 
       <div className="flex-1 overflow-y-auto py-3">
         <SidebarNav collapsed={collapsed} />
@@ -99,7 +84,7 @@ export function Sidebar() {
           disabled={logout.isPending}
           aria-label="Se déconnecter"
           className={cn(
-            "text-text-chrome justify-start gap-3",
+            "text-text-chrome hover:bg-surface-overlay hover:text-accent-gold justify-start gap-3",
             collapsed && "justify-center",
           )}
         >
