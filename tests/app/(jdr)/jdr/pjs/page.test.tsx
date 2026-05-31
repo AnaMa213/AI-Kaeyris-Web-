@@ -18,6 +18,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 const { default: PjsPage } = await import("@/app/(jdr)/jdr/pjs/page");
 
 const samplePj = {
@@ -42,7 +44,9 @@ const renderPage = () => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <PjsPage />
+      <TooltipProvider delay={0}>
+        <PjsPage />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
   return queryClient;
@@ -213,5 +217,128 @@ describe("/jdr/pjs page", () => {
     expect(
       await screen.findByText("Ce nom de PJ existe déjà"),
     ).toBeInTheDocument();
+  });
+
+  test("clicking 'Supprimer' on a row opens the PjDeleteConfirm dialog with that PJ's name", async () => {
+    vi.stubGlobal(
+      "fetch",
+      setupFetch((url, method) => {
+        if (url.endsWith("/services/jdr/pjs") && method === "GET") {
+          return new Response(
+            JSON.stringify({ items: [samplePj], total: 1 }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(samplePj.name);
+
+    await user.click(
+      screen.getByRole("button", { name: `Supprimer le PJ ${samplePj.name}` }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: `Supprimer ${samplePj.name} ?`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("confirming deletion DELETE-s the PJ and removes it from the table", async () => {
+    const fetchMock = setupFetch((url, method) => {
+      if (url.endsWith("/services/jdr/pjs") && method === "GET") {
+        return new Response(JSON.stringify({ items: [samplePj], total: 1 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (
+        url.endsWith(`/services/jdr/pjs/${samplePj.id}`) &&
+        method === "DELETE"
+      ) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(null, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(samplePj.name);
+
+    await user.click(
+      screen.getByRole("button", { name: `Supprimer le PJ ${samplePj.name}` }),
+    );
+    await user.type(
+      await screen.findByLabelText(/Tape/i),
+      samplePj.name,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer le PJ" }),
+    );
+
+    await waitFor(() => {
+      const deleteCall = fetchMock.mock.calls.find((args) => {
+        const request = args[0] as Request;
+        return (
+          request.url.endsWith(`/services/jdr/pjs/${samplePj.id}`) &&
+          request.method === "DELETE"
+        );
+      });
+      expect(deleteCall).toBeDefined();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(samplePj.name)).not.toBeInTheDocument();
+    });
+    // The empty state replaces the table once the only PJ is gone.
+    expect(
+      await screen.findByText("Aucun PJ dans le grimoire."),
+    ).toBeInTheDocument();
+  });
+
+  test("Annuler closes the delete dialog without DELETE-ing", async () => {
+    const fetchMock = setupFetch((url, method) => {
+      if (url.endsWith("/services/jdr/pjs") && method === "GET") {
+        return new Response(JSON.stringify({ items: [samplePj], total: 1 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(samplePj.name);
+
+    await user.click(
+      screen.getByRole("button", { name: `Supprimer le PJ ${samplePj.name}` }),
+    );
+    await screen.findByRole("heading", {
+      name: `Supprimer ${samplePj.name} ?`,
+    });
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", {
+          name: `Supprimer ${samplePj.name} ?`,
+        }),
+      ).not.toBeInTheDocument();
+    });
+    // No DELETE issued
+    const deleteCall = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return request.method === "DELETE";
+    });
+    expect(deleteCall).toBeUndefined();
   });
 });

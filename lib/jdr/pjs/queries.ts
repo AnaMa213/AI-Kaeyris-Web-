@@ -53,4 +53,38 @@ export function useCreatePj() {
   });
 }
 
+export function useDeletePj() {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (pjId: string) => {
+      const result = await apiClient.DELETE("/services/jdr/pjs/{pj_id}", {
+        params: { path: { pj_id: pjId } },
+      });
+      if (result.error !== undefined) {
+        throw new ApiError({
+          type: "about:blank",
+          title: "Suppression impossible",
+          status: 0,
+        });
+      }
+      return pjId;
+    },
+    // V1 mocked: the backend never receives the delete (BD-3 endpoint missing),
+    // so invalidateQueries would refetch and bring the PJ back. We mutate the
+    // cache directly instead — the page hides the PJ locally, a refresh
+    // restores it. Documented in <MockBadge> tooltip + Story 2.2 AC4.
+    onSuccess: (deletedId) => {
+      queryClient.setQueryData<PageOfPjOut>(PJS_QUERY_KEY, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.filter((pj) => pj.id !== deletedId),
+          total: Math.max(0, old.total - 1),
+        };
+      });
+    },
+  });
+}
+
 export type { PjOut, PageOfPjOut };

@@ -5,11 +5,17 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { PjForm } from "@/components/jdr/pjs/PjForm";
+import { PjDeleteConfirm } from "@/components/jdr/pjs/PjDeleteConfirm";
 import { PjsTable } from "@/components/jdr/pjs/PjsTable";
 import { ApiError } from "@/lib/core/api/errors";
-import { useCreatePj, useListPjs } from "@/lib/jdr/pjs/queries";
+import {
+  useCreatePj,
+  useDeletePj,
+  useListPjs,
+  type PjOut,
+} from "@/lib/jdr/pjs/queries";
 
-function formatErrorMessage(error: unknown): string | null {
+function formatCreateError(error: unknown): string | null {
   if (!error) return null;
   if (error instanceof ApiError) {
     const haystack = `${error.problem.type ?? ""} ${error.problem.title ?? ""}`;
@@ -22,13 +28,23 @@ function formatErrorMessage(error: unknown): string | null {
   return null;
 }
 
+function formatDeleteError(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof ApiError) return "Suppression impossible. Réessaie.";
+  if (error instanceof Error) return error.message;
+  return null;
+}
+
 export default function PjsPage() {
   const pjsQuery = useListPjs();
   const createMutation = useCreatePj();
+  const deleteMutation = useDeletePj();
 
   const [creating, setCreating] = useState(false);
+  const [deletingPj, setDeletingPj] = useState<PjOut | null>(null);
 
-  const formErrorMessage = formatErrorMessage(createMutation.error);
+  const createErrorMessage = formatCreateError(createMutation.error);
+  const deleteErrorMessage = formatDeleteError(deleteMutation.error);
 
   return (
     <main className="bg-background text-foreground min-h-screen p-8">
@@ -75,7 +91,7 @@ export default function PjsPage() {
         )}
 
         {pjsQuery.data && pjsQuery.data.items.length > 0 && (
-          <PjsTable pjs={pjsQuery.data.items} />
+          <PjsTable pjs={pjsQuery.data.items} onDelete={setDeletingPj} />
         )}
       </section>
 
@@ -86,12 +102,30 @@ export default function PjsPage() {
           if (!open) createMutation.reset();
         }}
         submitting={createMutation.isPending}
-        errorMessage={formErrorMessage}
+        errorMessage={createErrorMessage}
         onSubmit={(values) => {
           createMutation.mutate(values, {
             onSuccess: () => {
               setCreating(false);
             },
+          });
+        }}
+      />
+
+      <PjDeleteConfirm
+        open={deletingPj !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingPj(null);
+            deleteMutation.reset();
+          }
+        }}
+        pj={deletingPj}
+        submitting={deleteMutation.isPending}
+        errorMessage={deleteErrorMessage}
+        onConfirm={(pjId) => {
+          deleteMutation.mutate(pjId, {
+            onSuccess: () => setDeletingPj(null),
           });
         }}
       />

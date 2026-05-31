@@ -19,7 +19,9 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useListPjs, useCreatePj } = await import("@/lib/jdr/pjs/queries");
+const { useListPjs, useCreatePj, useDeletePj, PJS_QUERY_KEY } = await import(
+  "@/lib/jdr/pjs/queries"
+);
 const { ApiError } = await import("@/lib/core/api/errors");
 
 const samplePj = {
@@ -69,6 +71,12 @@ beforeEach(() => {
           status: 201,
           headers: { "content-type": "application/json" },
         });
+      }
+      if (
+        url.includes("/services/jdr/pjs/") &&
+        method.toUpperCase() === "DELETE"
+      ) {
+        return new Response(null, { status: 204 });
       }
       return new Response(null, { status: 200 });
     }),
@@ -198,6 +206,81 @@ describe("useCreatePj", () => {
     });
     await expect(
       result.current.mutateAsync({ name: "Eldrin" }),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("useDeletePj", () => {
+  test("calls DELETE /services/jdr/pjs/{id} with credentials: include", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useDeletePj(), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync(samplePj.id);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith(`/services/jdr/pjs/${samplePj.id}`) &&
+        request.method === "DELETE"
+      );
+    });
+    if (!call) throw new Error("No DELETE /pjs/:id call found");
+    expect((call[0] as Request).credentials).toBe("include");
+  });
+
+  test("removes the deleted PJ from the cache without triggering a refetch", async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(PJS_QUERY_KEY, {
+      items: [samplePj, { ...samplePj, id: "pj-2", name: "Galadriel" }],
+      total: 2,
+    });
+
+    let refetchCount = 0;
+    queryClient.setQueryDefaults(PJS_QUERY_KEY, {
+      queryFn: () => {
+        refetchCount += 1;
+        return Promise.resolve({ items: [], total: 0 });
+      },
+    });
+
+    const { result } = renderHook(() => useDeletePj(), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync(samplePj.id);
+
+    const cached = queryClient.getQueryData(PJS_QUERY_KEY) as
+      | { items: { id: string }[]; total: number }
+      | undefined;
+    expect(cached?.items.map((p) => p.id)).toEqual(["pj-2"]);
+    expect(cached?.total).toBe(1);
+    expect(refetchCount).toBe(0);
+  });
+
+  test("propagates an ApiError when the DELETE call fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Server error",
+            status: 500,
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useDeletePj(), {
+      wrapper: wrapper(queryClient),
+    });
+    await expect(
+      result.current.mutateAsync(samplePj.id),
     ).rejects.toBeInstanceOf(ApiError);
   });
 });

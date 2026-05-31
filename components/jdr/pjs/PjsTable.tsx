@@ -2,13 +2,16 @@
 
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import { MockBadge } from "@/components/common/MockBadge";
 import type { PjOut } from "@/lib/jdr/pjs/queries";
 
 interface PjsTableProps {
   pjs: PjOut[];
+  onDelete: (pj: PjOut) => void;
 }
 
-export function PjsTable({ pjs }: PjsTableProps) {
+export function PjsTable({ pjs, onDelete }: PjsTableProps) {
   return (
     <table className="divide-border-chrome min-w-full divide-y">
       <thead>
@@ -18,6 +21,12 @@ export function PjsTable({ pjs }: PjsTableProps) {
           </th>
           <th scope="col" className="px-4 py-3 font-medium">
             Créé
+          </th>
+          <th scope="col" className="px-4 py-3 font-medium">
+            <span className="inline-flex items-center gap-2">
+              Actions
+              <MockBadge tooltip="Suppression locale, non persistée — endpoint backend en attente (BD-3)" />
+            </span>
           </th>
         </tr>
       </thead>
@@ -42,6 +51,18 @@ export function PjsTable({ pjs }: PjsTableProps) {
                   <span>{relativeDate}</span>
                   <span className="text-xs">{absoluteDate}</span>
                 </time>
+              </td>
+              <td className="px-4 py-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDelete(pj)}
+                  aria-label={`Supprimer le PJ ${pj.name}`}
+                  className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
+                >
+                  Supprimer
+                </Button>
               </td>
             </tr>
           );
