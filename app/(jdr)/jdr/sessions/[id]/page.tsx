@@ -3,10 +3,12 @@
 import { useParams } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { Upload, Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/common/EmptyState";
+import { Button } from "@/components/ui/button";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
+import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
 
 const STATE_LABEL: Record<SessionOut["state"], string> = {
@@ -16,6 +18,12 @@ const STATE_LABEL: Record<SessionOut["state"], string> = {
   transcription_failed: "Échec transcription",
   transcribed: "Transcrite",
 };
+
+const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
+
+function hasAudio(state: SessionOut["state"]): boolean {
+  return state !== "created";
+}
 
 export default function SessionDetailPage() {
   const params = useParams<{ id: string }>();
@@ -45,7 +53,7 @@ export default function SessionDetailPage() {
   }
 
   const session = sessionQuery.data;
-  const recordedAt = new Date(session.recorded_at);
+  const recordedAt = parseBackendDate(session.recorded_at);
   const absoluteDate = format(recordedAt, "dd/MM/yyyy 'à' HH:mm", {
     locale: fr,
   });
@@ -53,52 +61,54 @@ export default function SessionDetailPage() {
     addSuffix: true,
     locale: fr,
   });
+  const audioReady = hasAudio(session.state);
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
-      <header className="mx-auto mb-8 max-w-3xl">
-        <div className="mb-2 flex items-center gap-3">
-          <h1 className="font-display text-3xl font-semibold">
-            {session.title}
-          </h1>
-          <Badge variant="outline">{STATE_LABEL[session.state]}</Badge>
+      <header className="mx-auto max-w-3xl">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-3">
+              <h1 className="font-display text-3xl font-semibold">
+                {session.title}
+              </h1>
+              <Badge variant="outline">{STATE_LABEL[session.state]}</Badge>
+            </div>
+            <time
+              dateTime={session.recorded_at}
+              className="text-text-chrome-muted flex flex-col text-sm"
+            >
+              <span>{relativeDate}</span>
+              <span className="text-xs">{absoluteDate}</span>
+            </time>
+          </div>
+
+          <div className="shrink-0">
+            {audioReady ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled
+                title={AUDIO_DISABLED_HINT}
+                aria-label="Lire l'audio de la séance"
+              >
+                <Volume2 className="h-4 w-4" aria-hidden="true" />
+                Lire l&apos;audio
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled
+                title={AUDIO_DISABLED_HINT}
+                aria-label="Uploader l'audio de la séance"
+              >
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Uploader l&apos;audio
+              </Button>
+            )}
+          </div>
         </div>
-        <time
-          dateTime={session.recorded_at}
-          className="text-text-chrome-muted flex flex-col text-sm"
-        >
-          <span>{relativeDate}</span>
-          <span className="text-xs">{absoluteDate}</span>
-        </time>
       </header>
-
-      <section className="mx-auto mb-6 max-w-3xl">
-        <h2 className="font-display mb-3 text-xl">Audio</h2>
-        <EmptyState
-          title="Aucun audio uploadé"
-          description="L'upload audio sera disponible dans une story Epic 3."
-          action={{
-            label: "Uploader",
-            onClick: () => {},
-            disabled: true,
-            disabledHint: "Disponible avec Epic 3",
-          }}
-        />
-      </section>
-
-      <section className="mx-auto max-w-3xl">
-        <h2 className="font-display mb-3 text-xl">Transcription</h2>
-        <EmptyState
-          title="En attente d'audio"
-          description="La transcription démarre automatiquement après l'upload."
-          action={{
-            label: "Voir la transcription",
-            onClick: () => {},
-            disabled: true,
-            disabledHint: "Disponible avec Epic 3",
-          }}
-        />
-      </section>
     </section>
   );
 }

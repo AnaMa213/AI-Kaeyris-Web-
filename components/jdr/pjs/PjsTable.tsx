@@ -4,6 +4,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { MockBadge } from "@/components/common/MockBadge";
+import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import type { PjOut } from "@/lib/jdr/pjs/queries";
 
 interface PjsTableProps {
@@ -32,7 +33,7 @@ export function PjsTable({ pjs, onDelete }: PjsTableProps) {
       </thead>
       <tbody className="divide-border-chrome divide-y">
         {pjs.map((pj) => {
-          const createdAt = new Date(pj.created_at);
+          const createdAt = parseBackendDate(pj.created_at);
           const absoluteDate = format(createdAt, "dd/MM/yyyy", { locale: fr });
           const relativeDate = formatDistanceToNow(createdAt, {
             addSuffix: true,

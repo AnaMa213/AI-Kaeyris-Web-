@@ -73,7 +73,9 @@ test("GM creates a session and lands on /jdr/sessions/{id} with the title + stat
     }),
   ).toBeVisible();
   await expect(page.getByText("Créée")).toBeVisible();
-  await expect(page.getByText("Aucun audio uploadé")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Uploader l'audio de la séance" }),
+  ).toBeDisabled();
 });
 
 test("clicking 'Nouvelle session' on the empty /jdr/sessions library opens the creation form", async ({
