@@ -47,7 +47,7 @@ export default function PjsPage() {
   const deleteErrorMessage = formatDeleteError(deleteMutation.error);
 
   return (
-    <main className="bg-background text-foreground min-h-screen p-8">
+    <section className="bg-background text-foreground min-h-full p-8">
       <header className="mx-auto mb-8 flex max-w-5xl items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold">PJs</h1>
@@ -129,6 +129,6 @@ export default function PjsPage() {
           });
         }}
       />
-    </main>
+    </section>
   );
 }

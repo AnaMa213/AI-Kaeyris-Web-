@@ -40,7 +40,7 @@ export default function UsersPage() {
   })();
 
   return (
-    <main className="bg-background text-foreground min-h-screen p-8">
+    <section className="bg-background text-foreground min-h-full p-8">
       <header className="mx-auto mb-8 flex max-w-5xl items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold">Utilisateurs</h1>
@@ -158,6 +158,6 @@ export default function UsersPage() {
           });
         }}
       />
-    </main>
+    </section>
   );
 }
