@@ -22,14 +22,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Sessions", href: "/jdr/sessions", icon: ScrollText },
-  {
-    label: "PJs",
-    href: "/jdr/pjs",
-    icon: UserCircle,
-    disabled: true,
-    disabledHint: "Disponible plus tard",
-    gmOnly: true,
-  },
+  { label: "PJs", href: "/jdr/pjs", icon: UserCircle, gmOnly: true },
   { label: "Utilisateurs", href: "/jdr/users", icon: Users, gmOnly: true },
 ];
 

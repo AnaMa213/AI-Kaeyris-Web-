@@ -94,13 +94,12 @@ describe("<SidebarNav>", () => {
     expect(sessionsLink).toHaveAttribute("aria-current", "page");
   });
 
-  test("PJs is rendered disabled with aria-disabled and tooltip hint", () => {
+  test("PJs is rendered as an active link (no more disabled now that Story 2.1 ships /jdr/pjs)", () => {
     asGm();
     render(<SidebarNav />);
-    const pjsButton = screen.getByRole("button", { name: /PJs/i });
-    expect(pjsButton).toBeDisabled();
-    expect(pjsButton).toHaveAttribute("aria-disabled", "true");
-    expect(pjsButton.getAttribute("title")).toMatch(/plus tard/i);
+    const pjsLink = screen.getByRole("link", { name: /PJs/i });
+    expect(pjsLink).toHaveAttribute("href", "/jdr/pjs");
+    expect(pjsLink).not.toHaveAttribute("aria-disabled", "true");
   });
 
   test("active item label has visual emphasis class indicating selection", () => {
