@@ -1,0 +1,97 @@
+// @vitest-environment jsdom
+
+import { describe, expect, test, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { NewSessionForm } from "@/components/jdr/sessions/NewSessionForm";
+
+type RenderOverrides = Partial<Parameters<typeof NewSessionForm>[0]>;
+
+const renderForm = (overrides: RenderOverrides = {}) => {
+  const onSubmit = vi.fn();
+  const onCancel = vi.fn();
+  render(
+    <NewSessionForm
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+      submitting={false}
+      errorMessage={null}
+      {...overrides}
+    />,
+  );
+  return { onSubmit, onCancel };
+};
+
+describe("<NewSessionForm>", () => {
+  test("renders the Titre + Date inputs and the Créer + Annuler buttons", () => {
+    renderForm();
+    expect(screen.getByLabelText("Titre")).toBeInTheDocument();
+    expect(screen.getByLabelText("Date de la séance")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Créer la session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Annuler" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Date de la séance is pre-filled with today's local datetime", () => {
+    renderForm();
+    const dateInput = screen.getByLabelText(
+      "Date de la séance",
+    ) as HTMLInputElement;
+    expect(dateInput.value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  });
+
+  test("submits the typed title + the date value on Créer click", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.click(screen.getByRole("button", { name: "Créer la session" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const [values] = onSubmit.mock.calls[0];
+    expect(values.title).toBe("Session 7");
+    expect(values.recorded_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  });
+
+  test("blocks submit with an inline error when title is empty", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+    await user.click(screen.getByRole("button", { name: "Créer la session" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText((content) => /requis/i.test(content)),
+      ).toBeInTheDocument(),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test("renders the errorMessage banner when provided", () => {
+    renderForm({ errorMessage: "Création impossible. Réessaie." });
+    expect(
+      screen.getByText("Création impossible. Réessaie."),
+    ).toBeInTheDocument();
+  });
+
+  test("Annuler calls onCancel", async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderForm();
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  test("Créer button is disabled while submitting", () => {
+    renderForm({ submitting: true });
+    expect(screen.getByRole("button", { name: /Création/ })).toBeDisabled();
+  });
+
+  test("does NOT expose transcription_mode in the rendered form", () => {
+    renderForm();
+    expect(
+      screen.queryByLabelText(/transcription/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/non_diarised/i),
+    ).not.toBeInTheDocument();
+  });
+});

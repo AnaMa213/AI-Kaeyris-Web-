@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/common/EmptyState";
 
 export default function SessionsPage() {
+  const router = useRouter();
+
   return (
     <section className="bg-background text-foreground min-h-screen p-8">
       <header className="mx-auto mb-8 max-w-5xl">
@@ -18,9 +21,7 @@ export default function SessionsPage() {
           description="Crée ta première session pour commencer un récit."
           action={{
             label: "Nouvelle session",
-            onClick: () => {},
-            disabled: true,
-            disabledHint: "Disponible avec Epic 2",
+            onClick: () => router.push("/jdr/sessions/new"),
           }}
         />
       </div>
