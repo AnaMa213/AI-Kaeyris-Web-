@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PjsTable } from "@/components/jdr/pjs/PjsTable";
 
@@ -18,10 +18,20 @@ const samplePjs = [
 ];
 
 describe("<PjsTable>", () => {
-  test("renders one row per PJ with name and formatted date", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T10:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("renders one row per PJ with name and relative + absolute dates", () => {
     render(<PjsTable pjs={samplePjs} />);
     expect(screen.getByText("Eldrin le Sage")).toBeInTheDocument();
     expect(screen.getByText("Galadriel")).toBeInTheDocument();
+    expect(screen.getByText("il y a 1 jour")).toBeInTheDocument();
     expect(screen.getByText("30/05/2026")).toBeInTheDocument();
     expect(screen.getByText("15/04/2026")).toBeInTheDocument();
   });
