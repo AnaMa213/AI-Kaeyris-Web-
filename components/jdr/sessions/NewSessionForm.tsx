@@ -46,7 +46,11 @@ export function NewSessionForm({
   return (
     <form
       noValidate
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={
+        submitting
+          ? (event) => event.preventDefault()
+          : form.handleSubmit(onSubmit)
+      }
       className="flex flex-col gap-6"
     >
       <div className="flex flex-col gap-2">
@@ -56,6 +60,7 @@ export function NewSessionForm({
           type="text"
           autoComplete="off"
           autoFocus
+          disabled={submitting}
           aria-invalid={Boolean(titleError) || undefined}
           aria-describedby={titleError ? "session-title-error" : undefined}
           {...form.register("title")}
@@ -76,6 +81,7 @@ export function NewSessionForm({
         <Input
           id="session-recorded-at"
           type="datetime-local"
+          disabled={submitting}
           aria-invalid={Boolean(recordedAtError) || undefined}
           aria-describedby={
             recordedAtError ? "session-recorded-at-error" : undefined
@@ -103,7 +109,12 @@ export function NewSessionForm({
       )}
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={submitting}
+        >
           Annuler
         </Button>
         <Button

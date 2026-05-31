@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { NewSessionForm } from "@/components/jdr/sessions/NewSessionForm";
 import { ApiError } from "@/lib/core/api/errors";
@@ -17,11 +18,12 @@ function formatCreateError(error: unknown): string | null {
 export default function NewSessionPage() {
   const router = useRouter();
   const createMutation = useCreateSession();
+  const createInFlightRef = useRef(false);
 
   const errorMessage = formatCreateError(createMutation.error);
 
   return (
-    <main className="bg-background text-foreground min-h-screen p-8">
+    <section className="bg-background text-foreground min-h-full p-8">
       <header className="mx-auto mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-semibold">
           Nouvelle session
@@ -35,9 +37,14 @@ export default function NewSessionPage() {
       <section className="mx-auto max-w-2xl">
         <NewSessionForm
           onSubmit={(values) => {
+            if (createInFlightRef.current) return;
+            createInFlightRef.current = true;
             createMutation.mutate(values, {
               onSuccess: (data) => {
                 router.push(`/jdr/sessions/${data.id}`);
+              },
+              onSettled: () => {
+                createInFlightRef.current = false;
               },
             });
           }}
@@ -46,6 +53,6 @@ export default function NewSessionPage() {
           errorMessage={errorMessage}
         />
       </section>
-    </main>
+    </section>
   );
 }

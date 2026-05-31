@@ -28,7 +28,7 @@ export default function SessionDetailPage() {
 
   if (sessionQuery.isError) {
     return (
-      <main className="bg-background text-foreground min-h-screen p-8">
+      <section className="bg-background text-foreground min-h-full p-8">
         <div
           role="alert"
           className="text-state-error border-state-error/30 bg-state-error/10 mx-auto max-w-3xl rounded-md border p-4 text-sm"
@@ -40,7 +40,7 @@ export default function SessionDetailPage() {
             </p>
           )}
         </div>
-      </main>
+      </section>
     );
   }
 
@@ -55,7 +55,7 @@ export default function SessionDetailPage() {
   });
 
   return (
-    <main className="bg-background text-foreground min-h-screen p-8">
+    <section className="bg-background text-foreground min-h-full p-8">
       <header className="mx-auto mb-8 max-w-3xl">
         <div className="mb-2 flex items-center gap-3">
           <h1 className="font-display text-3xl font-semibold">
@@ -99,6 +99,6 @@ export default function SessionDetailPage() {
           }}
         />
       </section>
-    </main>
+    </section>
   );
 }

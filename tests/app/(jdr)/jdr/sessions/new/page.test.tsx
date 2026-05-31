@@ -92,6 +92,55 @@ describe("/jdr/sessions/new page", () => {
     });
   });
 
+  test("double submit while pending sends a single POST", async () => {
+    pushMock.mockClear();
+    let resolveCreate!: () => void;
+    const createGate = new Promise<void>((resolve) => {
+      resolveCreate = resolve;
+    });
+    const fetchMock = vi.fn(async (input: Request | string) => {
+      const url = typeof input === "string" ? input : input.url;
+      const method =
+        typeof input === "string" ? "GET" : (input.method ?? "GET");
+      if (
+        url.endsWith("/services/jdr/sessions") &&
+        method.toUpperCase() === "POST"
+      ) {
+        await createGate;
+        return new Response(JSON.stringify(sampleSession), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.dblClick(
+      screen.getByRole("button", { name: "Créer la session" }),
+    );
+
+    const postCallsBeforeResolve = fetchMock.mock.calls.filter((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith("/services/jdr/sessions") &&
+        request.method === "POST"
+      );
+    });
+    expect(postCallsBeforeResolve).toHaveLength(1);
+
+    resolveCreate();
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(
+        "/jdr/sessions/00000000-0000-0000-0000-000000000abc",
+      );
+    });
+  });
+
   test("Annuler redirects back to /jdr/sessions", async () => {
     pushMock.mockClear();
     vi.stubGlobal(

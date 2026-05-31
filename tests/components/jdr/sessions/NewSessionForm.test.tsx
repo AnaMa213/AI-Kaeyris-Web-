@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NewSessionForm } from "@/components/jdr/sessions/NewSessionForm";
 
@@ -83,6 +83,22 @@ describe("<NewSessionForm>", () => {
   test("Créer button is disabled while submitting", () => {
     renderForm({ submitting: true });
     expect(screen.getByRole("button", { name: /Création/ })).toBeDisabled();
+  });
+
+  test("disables fields + cancel and ignores submit while submitting", () => {
+    const { onSubmit, onCancel } = renderForm({ submitting: true });
+    const titleInput = screen.getByLabelText("Titre");
+    const dateInput = screen.getByLabelText("Date de la séance");
+    const form = titleInput.closest("form");
+    if (!form) throw new Error("Form not found");
+
+    expect(titleInput).toBeDisabled();
+    expect(dateInput).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Annuler" })).toBeDisabled();
+
+    fireEvent.submit(form);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   test("does NOT expose transcription_mode in the rendered form", () => {
