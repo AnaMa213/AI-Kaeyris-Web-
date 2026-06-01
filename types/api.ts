@@ -55,23 +55,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Auth Me */
-        get: operations["get_auth_me_services_jdr_auth_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/services/jdr/auth/logout": {
         parameters: {
             query?: never;
@@ -83,6 +66,23 @@ export interface paths {
         put?: never;
         /** Post Logout */
         post: operations["post_logout_services_jdr_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the current web user and active JDR campaign context. */
+        get: operations["get_me_services_jdr_auth_me_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -180,6 +180,43 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current web user's campaigns. */
+        get: operations["list_campaigns_services_jdr_campaigns_get"];
+        put?: never;
+        /** Create a campaign and make the current user its GM. */
+        post: operations["create_campaign_services_jdr_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one of the current web user's campaigns. */
+        get: operations["get_campaign_services_jdr_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete an empty campaign. */
+        delete: operations["delete_campaign_services_jdr_campaigns__campaign_id__delete"];
+        options?: never;
+        head?: never;
+        /** Partially update a campaign. */
+        patch: operations["patch_campaign_services_jdr_campaigns__campaign_id__patch"];
         trace?: never;
     };
     "/services/jdr/sessions": {
@@ -847,7 +884,7 @@ export interface components {
         /** AuthMeOut */
         AuthMeOut: {
             user: components["schemas"]["AuthMeUserOut"];
-            active_campaign: components["schemas"]["AuthMeCampaignOut"] | null;
+            active_campaign?: components["schemas"]["AuthMeCampaignOut"] | null;
         };
         /** AuthMeUserOut */
         AuthMeUserOut: {
@@ -866,6 +903,46 @@ export interface components {
              * @description Audio file (M4A). The upload itself is streamed to disk and has no hard size limit at this layer. Note: with TRANSCRIPTION_PROVIDER=cloud, the OpenAI Whisper API caps individual requests at 25 MB, so the transcription job has to chunk larger files (R3 — to be implemented). With provider=local (LAN GPU host running faster-whisper), any size is supported.
              */
             audio: string;
+        };
+        /** CampaignCreate */
+        CampaignCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** CampaignOut */
+        CampaignOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "gm" | "player";
+            /** Session Count */
+            session_count: number;
+            /** Last Session At */
+            last_session_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CampaignPatch */
+        CampaignPatch: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
         };
         /**
          * ChunkListOut
@@ -1118,6 +1195,23 @@ export interface components {
              */
             generated_at: string;
         };
+        /** Page[CampaignOut] */
+        Page_CampaignOut_: {
+            /** Items */
+            items: components["schemas"]["CampaignOut"][];
+            /** Total */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Size
+             * @default 50
+             */
+            size: number;
+        };
         /** Page[PjOut] */
         Page_PjOut_: {
             /** Items */
@@ -1305,6 +1399,11 @@ export interface components {
             /** Title */
             title: string;
             /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
+            /**
              * Recorded At
              * Format: date-time
              * @description When the session actually took place (not the upload time). ISO-8601 with timezone.
@@ -1401,9 +1500,6 @@ export interface components {
             title?: string | null;
             /** Campaign Context */
             campaign_context?: string | null;
-            transcription_mode?: components["schemas"]["TranscriptionMode"] | null;
-            /** Campaign Id */
-            campaign_id?: string | null;
         };
         /** SetupRequest */
         SetupRequest: {
@@ -1655,7 +1751,25 @@ export interface operations {
             };
         };
     };
-    get_auth_me_services_jdr_auth_me_get: {
+    post_logout_services_jdr_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_me_services_jdr_auth_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1672,24 +1786,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthMeOut"];
                 };
-            };
-        };
-    };
-    post_logout_services_jdr_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -1907,7 +2003,7 @@ export interface operations {
             };
         };
     };
-    list_sessions_services_jdr_sessions_get: {
+    list_campaigns_services_jdr_campaigns_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1922,7 +2018,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["Page_CampaignOut_"];
+                };
+            };
+        };
+    };
+    create_campaign_services_jdr_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_campaign_services_jdr_campaigns__campaign_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_campaign_services_jdr_campaigns__campaign_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_campaign_services_jdr_campaigns__campaign_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_services_jdr_sessions_get: {
+        parameters: {
+            query?: {
+                campaign_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["Page_SessionOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
