@@ -77,7 +77,7 @@ describe("<CampaignCard>", () => {
   });
 
   test("renders the role badge Joueur for player role", () => {
-    render(<CampaignCard campaign={{ ...baseCampaign, role: "player" }} />);
+    render(<CampaignCard campaign={{ ...baseCampaign, role: "pj" }} />);
     expect(screen.getByText("Joueur")).toBeInTheDocument();
     expect(screen.queryByText("MJ")).not.toBeInTheDocument();
   });

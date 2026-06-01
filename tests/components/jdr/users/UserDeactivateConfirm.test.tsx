@@ -9,7 +9,7 @@ import type { UserOut } from "@/lib/jdr/users/queries";
 const aliceUser: UserOut = {
   id: "u-1",
   username: "alice",
-  profile: "user",
+  system_role: "user",
   status: "active",
   created_at: "2026-05-29T10:00:00Z",
   updated_at: "2026-05-29T10:00:00Z",

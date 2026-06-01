@@ -10,11 +10,15 @@ const samplePjs = [
   {
     id: "00000000-0000-0000-0000-000000000001",
     name: "Eldrin le Sage",
+    campaign_id: "11111111-1111-1111-1111-111111111111",
+    user_id: null,
     created_at: "2026-05-30T10:00:00Z",
   },
   {
     id: "00000000-0000-0000-0000-000000000002",
     name: "Galadriel",
+    campaign_id: "11111111-1111-1111-1111-111111111111",
+    user_id: null,
     created_at: "2026-04-15T14:30:00Z",
   },
 ];

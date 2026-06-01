@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { sessionQueryOptions } from "@/lib/core/session/queries";
-import type { CurrentUser } from "@/lib/core/session/types";
+import type { CampaignRole, CurrentUser } from "@/lib/core/session/types";
 
 export function useCurrentUser(): CurrentUser {
   const { data, isLoading, isError } = useQuery(sessionQueryOptions);
@@ -11,7 +11,14 @@ export function useCurrentUser(): CurrentUser {
     return { status: "loading" };
   }
 
-  if (isError || !data || !data.active_campaign) {
+  if (isError || !data) {
+    return { status: "unauthenticated" };
+  }
+
+  // Logout sentinel pinned by useLogout: an empty `user.id` means the cache
+  // is in the post-logout placeholder state. Real /auth/me responses always
+  // carry a non-empty UUID.
+  if (!data.user.id) {
     return { status: "unauthenticated" };
   }
 
@@ -19,12 +26,18 @@ export function useCurrentUser(): CurrentUser {
     status: "authenticated",
     auth: {
       authId: data.user.id,
-      campaignId: data.active_campaign.id,
+      username: data.user.username,
+      systemRole: data.user.system_role,
     },
-    jdr: {
-      role: data.active_campaign.role,
-      characterId: data.active_campaign.character_id ?? "",
-      displayName: data.user.username,
-    },
+    activeCampaign: data.active_campaign
+      ? {
+          id: data.active_campaign.id,
+          name: data.active_campaign.name,
+          // Backend BD-7 returns role as "gm" | "pj" but the openapi schema
+          // types it loosely as string. Narrow at the adapter boundary.
+          role: data.active_campaign.role as CampaignRole,
+          characterId: data.active_campaign.character_id,
+        }
+      : null,
   };
 }

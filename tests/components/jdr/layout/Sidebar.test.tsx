@@ -22,8 +22,13 @@ vi.mock("@/lib/core/auth/useLogout", () => ({
 vi.mock("@/lib/core/session/useCurrentUser", () => ({
   useCurrentUser: () => ({
     status: "authenticated",
-    auth: { authId: "kenan", campaignId: "campaign-default" },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
+    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "gm",
+      characterId: "kenan-pc",
+    },
   }),
 }));
 

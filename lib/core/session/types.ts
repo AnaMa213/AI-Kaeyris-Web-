@@ -1,26 +1,38 @@
+export type SystemRole = "admin" | "user";
+export type CampaignRole = "gm" | "pj";
+
 export type AuthIdentity = {
   authId: string;
-  campaignId: string;
+  username: string;
+  systemRole: SystemRole;
 };
 
-export type JdrProfile =
-  | { role: "gm"; characterId: string; displayName: string }
-  | { role: "player"; characterId: string; displayName: string };
+export type ActiveCampaign = {
+  id: string;
+  name: string;
+  role: CampaignRole;
+  characterId: string | null;
+};
 
 export type CurrentUser =
   | { status: "loading" }
   | { status: "unauthenticated" }
-  | { status: "authenticated"; auth: AuthIdentity; jdr: JdrProfile };
+  | {
+      status: "authenticated";
+      auth: AuthIdentity;
+      activeCampaign: ActiveCampaign | null;
+    };
 
 export type AuthMeResponse = {
   user: {
     id: string;
     username: string;
+    system_role: SystemRole;
   };
   active_campaign: {
     id: string;
     name: string;
-    role: "gm" | "player";
+    role: CampaignRole;
     character_id: string | null;
   } | null;
 };

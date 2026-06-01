@@ -23,7 +23,7 @@ const {
 const sampleUser = {
   id: "u-1",
   username: "alice",
-  profile: "user" as const,
+  system_role: "user" as const,
   status: "active" as const,
   created_at: "2026-05-29T10:00:00Z",
   updated_at: "2026-05-29T10:00:00Z",
@@ -117,7 +117,7 @@ describe("useCreateUser", () => {
     });
     result.current.mutate({
       username: "bob",
-      profile: "user",
+      system_role: "user",
       password: "secret",
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -132,7 +132,7 @@ describe("useUpdateUser", () => {
     const { result } = renderHook(() => useUpdateUser(), {
       wrapper: wrapper(queryClient),
     });
-    result.current.mutate({ id: "u-1", body: { profile: "gm" } });
+    result.current.mutate({ id: "u-1", body: { system_role: "admin" } });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["users"] });
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;

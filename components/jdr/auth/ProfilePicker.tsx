@@ -29,7 +29,7 @@ export function ProfilePicker({
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { username: "", profile: "gm", password: "" },
+    defaultValues: { username: "", password: "" },
   });
 
   useEffect(() => {

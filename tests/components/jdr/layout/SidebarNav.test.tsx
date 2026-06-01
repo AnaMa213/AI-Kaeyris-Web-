@@ -25,8 +25,17 @@ vi.mock("next/link", () => ({
 const userMock = vi.hoisted(() => ({
   current: {
     status: "authenticated" as const,
-    auth: { authId: "kenan", campaignId: "campaign-default" },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
+    auth: {
+      authId: "kenan",
+      username: "kenan",
+      systemRole: "admin" as const,
+    },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "gm" as const,
+      characterId: "kenan-pc",
+    },
   } as unknown,
 }));
 
@@ -36,19 +45,37 @@ vi.mock("@/lib/core/session/useCurrentUser", () => ({
 
 const { SidebarNav } = await import("@/components/jdr/layout/SidebarNav");
 
-function asGm() {
+function asAdminGm() {
   userMock.current = {
     status: "authenticated",
-    auth: { authId: "kenan", campaignId: "campaign-default" },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
+    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "gm",
+      characterId: "kenan-pc",
+    },
   };
 }
 
-function asPlayer() {
+function asUserPj() {
   userMock.current = {
     status: "authenticated",
-    auth: { authId: "alice", campaignId: "campaign-default" },
-    jdr: { role: "player", characterId: "alice-pc", displayName: "Alice" },
+    auth: { authId: "alice", username: "alice", systemRole: "user" },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "pj",
+      characterId: "alice-pc",
+    },
+  };
+}
+
+function asAdminWithoutCampaign() {
+  userMock.current = {
+    status: "authenticated",
+    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
+    activeCampaign: null,
   };
 }
 
@@ -57,8 +84,8 @@ function asLoading() {
 }
 
 describe("<SidebarNav>", () => {
-  test("GM sees Sessions, PJs, Utilisateurs in order (Settings moved to footer)", () => {
-    asGm();
+  test("Admin + GM sees Campagnes, Sessions, PJs, Utilisateurs in order", () => {
+    asAdminGm();
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
     const labels = Array.from(nav.children).map(
@@ -67,8 +94,8 @@ describe("<SidebarNav>", () => {
     expect(labels).toEqual(["Campagnes", "Sessions", "PJs", "Utilisateurs"]);
   });
 
-  test("Player only sees Sessions (PJs and Utilisateurs hidden)", () => {
-    asPlayer();
+  test("user + pj sees Campagnes + Sessions only (PJs hidden — not gm, Utilisateurs hidden — not admin)", () => {
+    asUserPj();
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
     const labels = Array.from(nav.children).map(
@@ -77,7 +104,17 @@ describe("<SidebarNav>", () => {
     expect(labels).toEqual(["Campagnes", "Sessions"]);
   });
 
-  test("Loading state hides gm-only items", () => {
+  test("Admin without active campaign sees Campagnes + Sessions + Utilisateurs (no PJs because not gm of any active campaign)", () => {
+    asAdminWithoutCampaign();
+    render(<SidebarNav />);
+    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
+    const labels = Array.from(nav.children).map(
+      (el) => el.textContent?.trim() ?? "",
+    );
+    expect(labels).toEqual(["Campagnes", "Sessions", "Utilisateurs"]);
+  });
+
+  test("Loading state hides admin-only and campaignGm-only items", () => {
     asLoading();
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
@@ -88,14 +125,14 @@ describe("<SidebarNav>", () => {
   });
 
   test("active item (matching pathname) carries aria-current='page'", () => {
-    asGm();
+    asAdminGm();
     render(<SidebarNav />);
     const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
     expect(sessionsLink).toHaveAttribute("aria-current", "page");
   });
 
-  test("PJs is rendered as an active link (no more disabled now that Story 2.1 ships /jdr/pjs)", () => {
-    asGm();
+  test("PJs is rendered as an active link for an admin+gm user", () => {
+    asAdminGm();
     render(<SidebarNav />);
     const pjsLink = screen.getByRole("link", { name: /PJs/i });
     expect(pjsLink).toHaveAttribute("href", "/jdr/pjs");
@@ -103,21 +140,21 @@ describe("<SidebarNav>", () => {
   });
 
   test("active item label has visual emphasis class indicating selection", () => {
-    asGm();
+    asAdminGm();
     render(<SidebarNav />);
     const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
     expect(sessionsLink.className).toMatch(/surface-overlay/);
   });
 
   test("collapsed mode hides labels visually but keeps them accessible via aria-label", () => {
-    asGm();
+    asAdminGm();
     render(<SidebarNav collapsed />);
     const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
     expect(sessionsLink.getAttribute("aria-label")).toBe("Sessions");
   });
 
   test("Campagnes is rendered as the first nav item and points to /jdr/campaigns", () => {
-    asGm();
+    asAdminGm();
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
     const firstLink = nav.querySelector("a");
@@ -126,8 +163,8 @@ describe("<SidebarNav>", () => {
     expect(firstLink?.textContent?.trim()).toBe("Campagnes");
   });
 
-  test("Campagnes is visible to players (not gm-only)", () => {
-    asPlayer();
+  test("Campagnes is visible to non-admin / pj users (always visible)", () => {
+    asUserPj();
     render(<SidebarNav />);
     expect(screen.getByRole("link", { name: /Campagnes/i })).toBeInTheDocument();
   });

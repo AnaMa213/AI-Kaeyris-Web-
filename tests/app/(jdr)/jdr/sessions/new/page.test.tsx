@@ -22,11 +22,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/core/session/useCurrentUser", () => ({
   useCurrentUser: () => ({
     status: "authenticated" as const,
-    auth: {
-      authId: "kenan",
-      campaignId: "11111111-1111-1111-1111-111111111111",
+    auth: { authId: "kenan", username: "kenan", systemRole: "admin" as const },
+    activeCampaign: {
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "Campagne par défaut",
+      role: "gm" as const,
+      characterId: "kenan-pc",
     },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
   }),
 }));
 

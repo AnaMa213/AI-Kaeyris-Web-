@@ -15,7 +15,7 @@ const UNAUTH_BODY = JSON.stringify({
 });
 
 const AUTH_ME_BODY = JSON.stringify({
-  user: { id: "kenan-uuid", username: "kenan" },
+  user: { id: "kenan-uuid", username: "kenan", system_role: "admin" },
   active_campaign: {
     id: "campaign-default-uuid",
     name: "Campagne par défaut",
@@ -124,7 +124,7 @@ interface CampaignFixture {
   id: string;
   name: string;
   description: string | null;
-  role: "gm" | "player";
+  role: "gm" | "pj";
   session_count: number;
   last_session_at: string | null;
   created_at: string;

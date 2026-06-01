@@ -125,7 +125,6 @@ describe("<LoginPage> happy path", () => {
     expect(request.headers.get("content-type")).toBe("application/json");
     await expect(request.clone().json()).resolves.toEqual({
       username: "alice",
-      profile: "gm",
       password: "hunter2",
     });
   });

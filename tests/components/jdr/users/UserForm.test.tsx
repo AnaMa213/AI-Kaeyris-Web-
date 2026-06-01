@@ -9,7 +9,7 @@ import type { UserOut } from "@/lib/jdr/users/queries";
 const aliceUser: UserOut = {
   id: "u-1",
   username: "alice",
-  profile: "user",
+  system_role: "user",
   status: "active",
   created_at: "2026-05-29T10:00:00Z",
   updated_at: "2026-05-29T10:00:00Z",
@@ -31,14 +31,14 @@ describe("<UserForm> create mode", () => {
       />,
     );
     await user.type(screen.getByLabelText("Nom d'utilisateur"), "carol");
-    await user.selectOptions(screen.getByLabelText("Profil"), "gm");
+    await user.selectOptions(screen.getByLabelText("Rôle système"), "admin");
     await user.type(screen.getByLabelText("Mot de passe"), "secret");
     await user.click(screen.getByRole("button", { name: "Créer" }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0]).toEqual({
       mode: "create",
-      values: { username: "carol", profile: "gm", password: "secret" },
+      values: { username: "carol", system_role: "admin", password: "secret" },
     });
   });
 
@@ -99,14 +99,14 @@ describe("<UserForm> edit mode", () => {
         errorMessage={null}
       />,
     );
-    // Change the profile but leave password empty.
-    await user.selectOptions(screen.getByLabelText("Profil"), "gm");
+    // Change the system_role but leave password empty.
+    await user.selectOptions(screen.getByLabelText("Rôle système"), "admin");
     await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const payload = onSubmit.mock.calls[0][0];
     expect(payload.mode).toBe("edit");
     expect(payload.id).toBe("u-1");
-    expect(payload.values).toEqual({ profile: "gm", status: "active" });
+    expect(payload.values).toEqual({ system_role: "admin", status: "active" });
     expect(payload.values.password).toBeUndefined();
   });
 });

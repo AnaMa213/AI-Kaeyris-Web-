@@ -24,8 +24,13 @@ const { LoginGuard } = await import("@/components/jdr/auth/LoginGuard");
 function asAuthenticated() {
   userMock.current = {
     status: "authenticated",
-    auth: { authId: "kenan", campaignId: "campaign-default" },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
+    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "gm",
+      characterId: "kenan-pc",
+    },
   };
 }
 function asLoading() {

@@ -22,7 +22,9 @@ export default function NewSessionPage() {
   const createInFlightRef = useRef(false);
   const currentUser = useCurrentUser();
   const campaignId =
-    currentUser.status === "authenticated" ? currentUser.auth.campaignId : null;
+    currentUser.status === "authenticated"
+      ? (currentUser.activeCampaign?.id ?? null)
+      : null;
 
   const errorMessage = formatCreateError(createMutation.error);
 

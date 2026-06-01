@@ -8,6 +8,8 @@ import { PjDeleteConfirm } from "@/components/jdr/pjs/PjDeleteConfirm";
 const samplePj = {
   id: "00000000-0000-0000-0000-000000000001",
   name: "Eldrin",
+  campaign_id: "11111111-1111-1111-1111-111111111111",
+  user_id: null,
   created_at: "2026-05-30T10:00:00Z",
 };
 

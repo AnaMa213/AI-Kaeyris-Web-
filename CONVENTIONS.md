@@ -27,8 +27,8 @@ Les route groups sont des frontières d'application en devenir. Un composant par
 **JAMAIS lire `document.cookie` ou `localStorage` pour de l'auth.**
 Toujours via `useCurrentUser()` de `lib/core/session/`. Garantit le swap V1 mock → V2 Hub SSO sans toucher aux composants.
 
-**JAMAIS hardcoder `"MJ"`, `"player"`, `"gm"`, `"mj"` comme string literal dans la logique UI.**
-Toujours via un type discriminé (`role: 'mj' | 'player'`) typé depuis `lib/core/session/types.ts`. Préserve la cohérence quand un user pourra être MJ sur une campagne et Joueur sur une autre (V2).
+**JAMAIS hardcoder un rôle (`"admin"`, `"user"`, `"gm"`, `"pj"`) comme string literal dans la logique UI.**
+L'identité est désormais à 2 niveaux : (a) `auth.systemRole: "admin" | "user"` global au compte, (b) `activeCampaign.role: "gm" | "pj"` par campagne. Toujours via les helpers `isSystemAdmin()`, `isCampaignGm(campaignId?)`, `isCampaignMember(campaignId?)` exposés par `lib/core/session/helpers.ts`. Aucun composant ne lit directement `user.auth.systemRole` ou `user.activeCampaign.role` en dehors de ces helpers.
 
 **JAMAIS supposer qu'il existe 1 utilisateur.**
 Tout endpoint backend reçoit un `user_id` (même si V1 = toujours Kenan). Pas de `WHERE user_id = 1` côté backend, pas de `currentUser === 'kenan'` côté frontend.
@@ -41,8 +41,8 @@ La campagne active vient du backend (`/auth/me`) et est lue via `useCurrentUser(
 ## Naming
 
 **JAMAIS mélanger "user JDR" (compte d'auth + character) et "user Hub" (compte global futur).**
-- En V1, le terme `User` côté JDR backend = compte JDR. Le `profile: 'gm' | 'user'` reste comme contrat backend stable.
-- En V2, on aura `HubUser` (compte global multi-tenant) et `JdrCharacter` (= User actuel renommé). Mais aujourd'hui : pas de renommage prématuré, juste pas de référence "Hub user" dans le code tant que le Hub n'existe pas.
+- Depuis BD-7 (SCP 2026-06-01), le contrat backend distingue `system_role: 'admin' | 'user'` (permissions globales du compte) et `campaign_members.role: 'gm' | 'pj'` (rôle par campagne). L'ancien champ `profile` a été retiré. Côté frontend, on reflète cette distinction via `auth.systemRole` et `activeCampaign.role`.
+- En V2, on aura `HubUser` (compte global multi-tenant) et `JdrCharacter` (= User actuel renommé). Aujourd'hui : pas de renommage prématuré, juste pas de référence "Hub user" dans le code tant que le Hub n'existe pas.
 
 **Anti-pattern : `tenant_id` dans le code JDR.**
 Utiliser `campaign_id` (= `campaignId` côté TypeScript). La sémantique JDR est "campagne", pas "tenant" SaaS générique.

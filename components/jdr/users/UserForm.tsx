@@ -41,7 +41,7 @@ const formSchema = z.object({
   username: z
     .string({ message: "Nom d'utilisateur requis." })
     .min(1, "Nom d'utilisateur requis."),
-  profile: z.enum(["gm", "user"]),
+  system_role: z.enum(["admin", "user"]),
   password: z.string(),
   status: z.enum(["active", "inactive"]),
 });
@@ -50,14 +50,14 @@ type FormShape = z.infer<typeof formSchema>;
 
 const defaultForCreate = (): FormShape => ({
   username: "",
-  profile: "user",
+  system_role: "user",
   password: "",
   status: "active",
 });
 
 const defaultForEdit = (user: UserOut): FormShape => ({
   username: user.username,
-  profile: user.profile,
+  system_role: user.system_role,
   password: "",
   // Backend allows "deleted" but the UI never proposes it from the edit form
   // (deletion has its own dialog). Fall back to "inactive" if the user is
@@ -88,7 +88,7 @@ export function UserForm({
   }, [open, mode, user, form]);
 
   const usernameError = form.formState.errors.username?.message;
-  const profileError = form.formState.errors.profile?.message;
+  const systemRoleError = form.formState.errors.system_role?.message;
   const passwordError = form.formState.errors.password?.message;
 
   const handleSubmit = (values: FormShape) => {
@@ -105,7 +105,7 @@ export function UserForm({
         mode: "create",
         values: {
           username: values.username,
-          profile: values.profile,
+          system_role: values.system_role,
           password: values.password,
         },
       });
@@ -113,7 +113,7 @@ export function UserForm({
     }
     if (!user) return;
     const patch: UserUpdateInput = {
-      profile: values.profile,
+      system_role: values.system_role,
       status: values.status,
     };
     // Empty password = "do not change". Omit from payload so the backend
@@ -168,19 +168,19 @@ export function UserForm({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="user-profile">Profil</Label>
+            <Label htmlFor="user-system-role">Rôle système</Label>
             <select
-              id="user-profile"
+              id="user-system-role"
               className="border-border-chrome bg-surface-raised rounded-md border px-3 py-2 text-sm"
-              aria-invalid={Boolean(profileError) || undefined}
-              {...form.register("profile")}
+              aria-invalid={Boolean(systemRoleError) || undefined}
+              {...form.register("system_role")}
             >
-              <option value="gm">MJ</option>
-              <option value="user">Joueur</option>
+              <option value="admin">Administrateur</option>
+              <option value="user">Utilisateur</option>
             </select>
-            {profileError && (
+            {systemRoleError && (
               <p role="alert" className="text-state-error text-sm">
-                {profileError}
+                {systemRoleError}
               </p>
             )}
           </div>

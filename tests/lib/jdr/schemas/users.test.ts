@@ -2,37 +2,37 @@ import { describe, expect, test } from "vitest";
 import { userCreateSchema, userUpdateSchema } from "@/lib/jdr/schemas/users";
 
 describe("userCreateSchema", () => {
-  test("accepts a valid GM account", () => {
+  test("accepts a valid admin account", () => {
     const result = userCreateSchema.safeParse({
       username: "alice",
-      profile: "gm",
+      system_role: "admin",
       password: "secret",
     });
     expect(result.success).toBe(true);
   });
 
-  test("accepts a valid user account", () => {
+  test("accepts a valid standard user account", () => {
     const result = userCreateSchema.safeParse({
       username: "bob",
-      profile: "user",
+      system_role: "user",
       password: "secret",
     });
     expect(result.success).toBe(true);
   });
 
-  test("rejects an uppercase profile (case-sensitive enum)", () => {
+  test("rejects an uppercase system_role (case-sensitive enum)", () => {
     const result = userCreateSchema.safeParse({
       username: "alice",
-      profile: "GM",
+      system_role: "ADMIN",
       password: "secret",
     });
     expect(result.success).toBe(false);
   });
 
-  test("rejects a 'player' profile value (handoff legacy term)", () => {
+  test("rejects a 'gm' system_role value (legacy from pre-BD-7)", () => {
     const result = userCreateSchema.safeParse({
       username: "alice",
-      profile: "player",
+      system_role: "gm",
       password: "secret",
     });
     expect(result.success).toBe(false);
@@ -40,7 +40,7 @@ describe("userCreateSchema", () => {
 
   test("rejects a payload missing username with the French error", () => {
     const result = userCreateSchema.safeParse({
-      profile: "user",
+      system_role: "user",
       password: "secret",
     });
     expect(result.success).toBe(false);
@@ -53,7 +53,7 @@ describe("userCreateSchema", () => {
   test("rejects a payload missing password with the French error", () => {
     const result = userCreateSchema.safeParse({
       username: "alice",
-      profile: "user",
+      system_role: "user",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -64,8 +64,8 @@ describe("userCreateSchema", () => {
 });
 
 describe("userUpdateSchema", () => {
-  test("accepts a partial profile-only update", () => {
-    const result = userUpdateSchema.safeParse({ profile: "gm" });
+  test("accepts a partial system_role-only update", () => {
+    const result = userUpdateSchema.safeParse({ system_role: "admin" });
     expect(result.success).toBe(true);
   });
 

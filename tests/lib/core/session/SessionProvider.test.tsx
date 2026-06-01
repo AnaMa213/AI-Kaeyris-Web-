@@ -15,7 +15,7 @@ vi.mock("@/lib/core/env", () => ({
 }));
 
 const authMeResponse: AuthMeResponse = {
-  user: { id: "kenan-uuid", username: "kenan" },
+  user: { id: "kenan-uuid", username: "kenan", system_role: "admin" },
   active_campaign: {
     id: "campaign-default-uuid",
     name: "Campagne par défaut",

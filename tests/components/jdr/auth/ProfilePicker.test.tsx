@@ -72,7 +72,7 @@ describe("<ProfilePicker>", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  test("submitting a valid username + password calls onSubmit with profile=gm", async () => {
+  test("submitting a valid username + password calls onSubmit with { username, password } (no profile field — BD-7)", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderPicker();
     await user.click(screen.getByText("MJ"));
@@ -82,7 +82,6 @@ describe("<ProfilePicker>", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0]).toEqual({
       username: "alice",
-      profile: "gm",
       password: "hunter2",
     });
   });

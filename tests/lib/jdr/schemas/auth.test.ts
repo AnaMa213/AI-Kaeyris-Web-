@@ -2,10 +2,9 @@ import { describe, expect, test } from "vitest";
 import { loginSchema, setupSchema } from "@/lib/jdr/schemas/auth";
 
 describe("loginSchema", () => {
-  test("accepts a valid GM login payload", () => {
+  test("accepts a valid login payload (BD-7: no profile field anymore)", () => {
     const result = loginSchema.safeParse({
       username: "alice",
-      profile: "gm",
       password: "hunter2",
     });
     expect(result.success).toBe(true);
@@ -13,7 +12,6 @@ describe("loginSchema", () => {
 
   test("rejects a payload missing username with the French error", () => {
     const result = loginSchema.safeParse({
-      profile: "gm",
       password: "hunter2",
     });
     expect(result.success).toBe(false);
@@ -23,22 +21,22 @@ describe("loginSchema", () => {
     }
   });
 
-  test("rejects an uppercase profile (case-sensitive literal)", () => {
-    const result = loginSchema.safeParse({
-      username: "alice",
-      profile: "GM",
-      password: "hunter2",
-    });
+  test("rejects a payload missing password with the French error", () => {
+    const result = loginSchema.safeParse({ username: "alice" });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      expect(fieldErrors.password).toEqual(["Mot de passe requis."]);
+    }
   });
 
-  test("rejects a user profile value (V1 login is GM-only)", () => {
+  test("tolerates an extra profile field (zod default: strips unknowns)", () => {
     const result = loginSchema.safeParse({
       username: "alice",
-      profile: "user",
       password: "hunter2",
+      profile: "gm",
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 });
 
@@ -51,7 +49,7 @@ describe("setupSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("does not require a profile field (setup implicitly creates GM)", () => {
+  test("tolerates an extra profile field (legacy; backend ignores)", () => {
     const result = setupSchema.safeParse({
       username: "admin",
       password: "secret",

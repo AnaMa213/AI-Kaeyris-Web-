@@ -12,8 +12,8 @@ interface UsersTableProps {
   onDelete: (user: UserOut) => void;
 }
 
-const profileLabel = (profile: UserOut["profile"]) =>
-  profile === "gm" ? "MJ" : "Joueur";
+const systemRoleLabel = (role: UserOut["system_role"]) =>
+  role === "admin" ? "Administrateur" : "Utilisateur";
 
 const statusLabel = (status: UserOut["status"]) => {
   switch (status) {
@@ -32,7 +32,7 @@ export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
       <thead>
         <tr className="text-text-chrome-muted text-left text-xs uppercase">
           <th className="px-4 py-3 font-medium">Nom d&apos;utilisateur</th>
-          <th className="px-4 py-3 font-medium">Profil</th>
+          <th className="px-4 py-3 font-medium">Rôle système</th>
           <th className="px-4 py-3 font-medium">Statut</th>
           <th className="px-4 py-3 font-medium">Créé</th>
           <th className="px-4 py-3 font-medium">Actions</th>
@@ -45,12 +45,12 @@ export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
             <td className="px-4 py-3">
               <Badge
                 className={
-                  user.profile === "gm"
+                  user.system_role === "admin"
                     ? "bg-accent-gold/10 text-accent-gold border-accent-gold/30"
                     : "bg-surface-overlay text-text-chrome-muted border-border-chrome"
                 }
               >
-                {profileLabel(user.profile)}
+                {systemRoleLabel(user.system_role)}
               </Badge>
             </td>
             <td

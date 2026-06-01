@@ -43,7 +43,7 @@ function makeClient(): QueryClient {
 }
 
 const validResponse: AuthMeResponse = {
-  user: { id: "kenan-uuid", username: "kenan" },
+  user: { id: "kenan-uuid", username: "kenan", system_role: "admin" },
   active_campaign: {
     id: "campaign-default-uuid",
     name: "Campagne par défaut",
@@ -66,7 +66,7 @@ describe("useCurrentUser()", () => {
     expect(result.current.status).toBe("loading");
   });
 
-  test("returns 'authenticated' triplet when cache holds a valid auth-me response", () => {
+  test("returns authenticated with auth + activeCampaign when /auth/me cache holds a valid response", () => {
     authMeGet.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     client.setQueryData(SESSION_QUERY_KEY, validResponse);
@@ -77,20 +77,25 @@ describe("useCurrentUser()", () => {
 
     expect(result.current).toEqual({
       status: "authenticated",
-      auth: { authId: "kenan-uuid", campaignId: "campaign-default-uuid" },
-      jdr: {
+      auth: {
+        authId: "kenan-uuid",
+        username: "kenan",
+        systemRole: "admin",
+      },
+      activeCampaign: {
+        id: "campaign-default-uuid",
+        name: "Campagne par défaut",
         role: "gm",
         characterId: "kenan-pc-uuid",
-        displayName: "kenan",
       },
     });
   });
 
-  test("returns 'unauthenticated' when active_campaign is null in cache", () => {
+  test("returns authenticated with activeCampaign=null when /auth/me has no active campaign (admin without campaign)", () => {
     authMeGet.mockReturnValue(new Promise(() => undefined));
     const client = makeClient();
     client.setQueryData(SESSION_QUERY_KEY, {
-      user: { id: "kenan-uuid", username: "kenan" },
+      user: { id: "kenan-uuid", username: "kenan", system_role: "admin" },
       active_campaign: null,
     } satisfies AuthMeResponse);
 
@@ -98,7 +103,35 @@ describe("useCurrentUser()", () => {
       wrapper: wrap(client),
     });
 
-    expect(result.current.status).toBe("unauthenticated");
+    expect(result.current).toMatchObject({
+      status: "authenticated",
+      auth: { systemRole: "admin" },
+      activeCampaign: null,
+    });
+  });
+
+  test("returns authenticated with role=pj when active_campaign role is pj", () => {
+    authMeGet.mockReturnValue(new Promise(() => undefined));
+    const client = makeClient();
+    client.setQueryData(SESSION_QUERY_KEY, {
+      user: { id: "alice-uuid", username: "alice", system_role: "user" },
+      active_campaign: {
+        id: "c1",
+        name: "Royaumes",
+        role: "pj",
+        character_id: "alice-pc",
+      },
+    } satisfies AuthMeResponse);
+
+    const { result } = renderHook(() => useCurrentUser(), {
+      wrapper: wrap(client),
+    });
+
+    expect(result.current).toMatchObject({
+      status: "authenticated",
+      auth: { systemRole: "user" },
+      activeCampaign: { role: "pj" },
+    });
   });
 
   test("dedup: /auth/me GET fires exactly once when SessionProvider and useCurrentUser observe the same key", async () => {

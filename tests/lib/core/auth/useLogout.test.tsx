@@ -58,7 +58,7 @@ afterEach(() => {
 });
 
 describe("useLogout", () => {
-  test("pins the session cache to an unauthenticated placeholder BEFORE the network call", async () => {
+  test("pins the session cache to the unauth placeholder (user.id='') BEFORE the network call", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(() => new Promise(() => undefined)),
@@ -67,7 +67,7 @@ describe("useLogout", () => {
     const user = userEvent.setup();
     const queryClient = renderProbe();
     queryClient.setQueryData(SESSION_QUERY_KEY, {
-      user: { id: "kenan", username: "Kenan" },
+      user: { id: "kenan", username: "Kenan", system_role: "admin" },
       active_campaign: {
         id: "c1",
         name: "Default",
@@ -79,16 +79,17 @@ describe("useLogout", () => {
     await user.click(screen.getByRole("button", { name: "Logout" }));
 
     await waitFor(() => {
-      const data = queryClient.getQueryData(SESSION_QUERY_KEY) as {
-        active_campaign: unknown;
-      } | undefined;
+      const data = queryClient.getQueryData(SESSION_QUERY_KEY) as
+        | { user: { id: string }; active_campaign: unknown }
+        | undefined;
+      expect(data?.user.id).toBe("");
       expect(data?.active_campaign).toBeNull();
       expect(replaceMock).toHaveBeenCalledWith("/login");
     });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  test("removes non-session queries from the cache but preserves the session entry", async () => {
+  test("removes non-session queries from the cache but preserves the session sentinel entry", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(() => new Promise(() => undefined)),

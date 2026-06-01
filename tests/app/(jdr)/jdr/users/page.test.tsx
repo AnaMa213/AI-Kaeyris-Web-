@@ -22,7 +22,7 @@ const { default: UsersPage } = await import("@/app/(jdr)/jdr/users/page");
 const sampleUser = {
   id: "u-1",
   username: "alice",
-  profile: "user" as const,
+  system_role: "user" as const,
   status: "active" as const,
   created_at: "2026-05-29T10:00:00Z",
   updated_at: "2026-05-29T10:00:00Z",
@@ -86,6 +86,6 @@ describe("<UsersPage>", () => {
     );
     renderPage();
     expect(await screen.findByText("alice")).toBeInTheDocument();
-    expect(screen.getByText("Joueur")).toBeInTheDocument();
+    expect(screen.getByText("Utilisateur")).toBeInTheDocument();
   });
 });

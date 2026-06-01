@@ -10,7 +10,7 @@ const users: UserOut[] = [
   {
     id: "u-1",
     username: "alice",
-    profile: "gm",
+    system_role: "admin",
     status: "active",
     created_at: "2026-05-29T10:00:00Z",
     updated_at: "2026-05-29T10:00:00Z",
@@ -19,7 +19,7 @@ const users: UserOut[] = [
   {
     id: "u-2",
     username: "bob",
-    profile: "user",
+    system_role: "user",
     status: "inactive",
     created_at: "2026-04-15T08:30:00Z",
     updated_at: "2026-04-15T08:30:00Z",
@@ -33,12 +33,12 @@ describe("<UsersTable>", () => {
       <UsersTable users={users} onEdit={vi.fn()} onDelete={vi.fn()} />,
     );
     expect(screen.getByText("alice")).toBeInTheDocument();
-    expect(screen.getByText("MJ")).toBeInTheDocument();
+    expect(screen.getByText("Administrateur")).toBeInTheDocument();
     expect(screen.getByText("Actif")).toBeInTheDocument();
     expect(screen.getByText("29/05/2026")).toBeInTheDocument();
 
     expect(screen.getByText("bob")).toBeInTheDocument();
-    expect(screen.getByText("Joueur")).toBeInTheDocument();
+    expect(screen.getByText("Utilisateur")).toBeInTheDocument();
     expect(screen.getByText("Inactif")).toBeInTheDocument();
     expect(screen.getByText("15/04/2026")).toBeInTheDocument();
   });

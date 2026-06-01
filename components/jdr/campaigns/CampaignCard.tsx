@@ -4,15 +4,16 @@ import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
+import type { CampaignRole } from "@/lib/core/session/types";
 import type { CampaignOut } from "@/lib/jdr/campaigns/queries";
 
 interface CampaignCardProps {
   campaign: CampaignOut;
 }
 
-const ROLE_LABEL: Record<CampaignOut["role"], string> = {
+const ROLE_LABEL: Record<CampaignRole, string> = {
   gm: "MJ",
-  player: "Joueur",
+  pj: "Joueur",
 };
 
 function lastSessionLabels(value: string | null | undefined) {

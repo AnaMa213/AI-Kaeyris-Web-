@@ -3,7 +3,6 @@ import { passwordField, usernameField } from "@/lib/core/schemas/_helpers";
 
 export const loginSchema = z.object({
   username: usernameField,
-  profile: z.literal("gm"),
   password: passwordField,
 });
 
