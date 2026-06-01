@@ -19,20 +19,19 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
-vi.mock("@/lib/core/session/useCurrentUser", () => ({
-  useCurrentUser: () => ({
-    status: "authenticated" as const,
-    auth: {
-      authId: "kenan",
-      campaignId: "11111111-1111-1111-1111-111111111111",
-    },
-    jdr: { role: "gm", characterId: "kenan-pc", displayName: "Kenan" },
-  }),
-}));
-
-const { default: NewSessionPage } = await import(
-  "@/app/(jdr)/jdr/sessions/new/page"
+const { default: NewCampaignPage } = await import(
+  "@/app/(jdr)/jdr/campaigns/new/page"
 );
+
+const sampleCampaign = {
+  id: "11111111-1111-1111-1111-111111111111",
+  name: "Royaumes Brisés",
+  description: null,
+  role: "gm" as const,
+  session_count: 0,
+  last_session_at: null,
+  created_at: "2026-05-31T18:05:00+00:00",
+};
 
 const renderPage = () => {
   const queryClient = new QueryClient({
@@ -40,46 +39,33 @@ const renderPage = () => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <NewSessionPage />
+      <NewCampaignPage />
     </QueryClientProvider>,
   );
   return queryClient;
 };
 
-const sampleSession = {
-  id: "00000000-0000-0000-0000-000000000abc",
-  title: "Session 7",
-  recorded_at: "2026-05-31T18:00:00.000Z",
-  mode: "batch",
-  state: "created",
-  transcription_mode: "non_diarised",
-  campaign_context: null,
-  created_at: "2026-05-31T18:05:00.000Z",
-  updated_at: "2026-05-31T18:05:00.000Z",
-};
-
-describe("/jdr/sessions/new page", () => {
-  test("renders the page header + the NewSessionForm", () => {
+describe("/jdr/campaigns/new page", () => {
+  test("renders the page header + the CampaignForm", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     renderPage();
     expect(
-      screen.getByRole("heading", { level: 1, name: "Nouvelle session" }),
+      screen.getByRole("heading", { level: 1, name: "Nouvelle campagne" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Titre")).toBeInTheDocument();
-    expect(screen.getByLabelText("Date de la séance")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom")).toBeInTheDocument();
   });
 
-  test("submitting the form POSTs to /sessions and redirects to /jdr/sessions/{id}", async () => {
+  test("submits the form, POSTs to /campaigns, and redirects to /jdr/campaigns/{id}", async () => {
     pushMock.mockClear();
     const fetchMock = vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
       const method =
         typeof input === "string" ? "GET" : (input.method ?? "GET");
       if (
-        url.endsWith("/services/jdr/sessions") &&
+        url.endsWith("/services/jdr/campaigns") &&
         method.toUpperCase() === "POST"
       ) {
-        return new Response(JSON.stringify(sampleSession), {
+        return new Response(JSON.stringify(sampleCampaign), {
           status: 201,
           headers: { "content-type": "application/json" },
         });
@@ -90,15 +76,13 @@ describe("/jdr/sessions/new page", () => {
 
     const user = userEvent.setup();
     renderPage();
-
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(screen.getByLabelText("Nom"), "Royaumes Brisés");
     await user.click(
-      screen.getByRole("button", { name: "Créer la session" }),
+      screen.getByRole("button", { name: "Créer la campagne" }),
     );
-
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        "/jdr/sessions/00000000-0000-0000-0000-000000000abc",
+        "/jdr/campaigns/11111111-1111-1111-1111-111111111111",
       );
     });
   });
@@ -114,11 +98,11 @@ describe("/jdr/sessions/new page", () => {
       const method =
         typeof input === "string" ? "GET" : (input.method ?? "GET");
       if (
-        url.endsWith("/services/jdr/sessions") &&
+        url.endsWith("/services/jdr/campaigns") &&
         method.toUpperCase() === "POST"
       ) {
         await createGate;
-        return new Response(JSON.stringify(sampleSession), {
+        return new Response(JSON.stringify(sampleCampaign), {
           status: 201,
           headers: { "content-type": "application/json" },
         });
@@ -129,16 +113,15 @@ describe("/jdr/sessions/new page", () => {
 
     const user = userEvent.setup();
     renderPage();
-
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(screen.getByLabelText("Nom"), "Royaumes Brisés");
     await user.dblClick(
-      screen.getByRole("button", { name: "Créer la session" }),
+      screen.getByRole("button", { name: "Créer la campagne" }),
     );
 
     const postCallsBeforeResolve = fetchMock.mock.calls.filter((args) => {
       const request = args[0] as Request;
       return (
-        request.url.endsWith("/services/jdr/sessions") &&
+        request.url.endsWith("/services/jdr/campaigns") &&
         request.method === "POST"
       );
     });
@@ -147,12 +130,12 @@ describe("/jdr/sessions/new page", () => {
     resolveCreate();
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        "/jdr/sessions/00000000-0000-0000-0000-000000000abc",
+        "/jdr/campaigns/11111111-1111-1111-1111-111111111111",
       );
     });
   });
 
-  test("Annuler redirects back to /jdr/sessions", async () => {
+  test("Annuler redirects back to /jdr/campaigns", async () => {
     pushMock.mockClear();
     vi.stubGlobal(
       "fetch",
@@ -160,12 +143,41 @@ describe("/jdr/sessions/new page", () => {
     );
     const user = userEvent.setup();
     renderPage();
-
     await user.click(screen.getByRole("button", { name: "Annuler" }));
-    expect(pushMock).toHaveBeenCalledWith("/jdr/sessions");
+    expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns");
   });
 
-  test("surfaces a generic error when the POST fails", async () => {
+  test("surfaces 'Tu as déjà une campagne avec ce nom' on duplicate 409", async () => {
+    pushMock.mockClear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "https://kaeyris.local/errors/duplicate-campaign",
+            title: "Duplicate campaign name",
+            status: 409,
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText("Nom"), "Royaumes Brisés");
+    await user.click(
+      screen.getByRole("button", { name: "Créer la campagne" }),
+    );
+    expect(
+      await screen.findByText(/Tu as déjà une campagne avec ce nom/i),
+    ).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  test("surfaces a generic error message on 422", async () => {
     pushMock.mockClear();
     vi.stubGlobal(
       "fetch",
@@ -183,14 +195,12 @@ describe("/jdr/sessions/new page", () => {
         ),
       ),
     );
-
     const user = userEvent.setup();
     renderPage();
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(screen.getByLabelText("Nom"), "Royaumes Brisés");
     await user.click(
-      screen.getByRole("button", { name: "Créer la session" }),
+      screen.getByRole("button", { name: "Créer la campagne" }),
     );
-
     expect(
       await screen.findByText(/Création impossible/i),
     ).toBeInTheDocument();

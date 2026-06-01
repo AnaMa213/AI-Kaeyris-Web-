@@ -27,16 +27,21 @@ export const SESSIONS_QUERY_KEY = ["sessions"] as const;
 export const sessionQueryKey = (id: string) =>
   ["sessions", id] as const;
 
+export interface CreateSessionInput extends SessionCreateInput {
+  campaign_id: string;
+}
+
 export function useCreateSession() {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SessionCreateInput) => {
+    mutationFn: async (input: CreateSessionInput) => {
       // V1 lock: transcription_mode is hardcoded "non_diarised" per PRD FR-6.
       // The UI does not expose it; the user does not choose it.
       const result = await apiClient.POST("/services/jdr/sessions", {
         body: {
           title: input.title,
+          campaign_id: input.campaign_id,
           recorded_at: toIsoUtc(input.recorded_at),
           transcription_mode: "non_diarised",
         },

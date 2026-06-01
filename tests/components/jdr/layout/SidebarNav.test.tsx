@@ -64,7 +64,7 @@ describe("<SidebarNav>", () => {
     const labels = Array.from(nav.children).map(
       (el) => el.textContent?.trim() ?? "",
     );
-    expect(labels).toEqual(["Sessions", "PJs", "Utilisateurs"]);
+    expect(labels).toEqual(["Campagnes", "Sessions", "PJs", "Utilisateurs"]);
   });
 
   test("Player only sees Sessions (PJs and Utilisateurs hidden)", () => {
@@ -74,7 +74,7 @@ describe("<SidebarNav>", () => {
     const labels = Array.from(nav.children).map(
       (el) => el.textContent?.trim() ?? "",
     );
-    expect(labels).toEqual(["Sessions"]);
+    expect(labels).toEqual(["Campagnes", "Sessions"]);
   });
 
   test("Loading state hides gm-only items", () => {
@@ -84,7 +84,7 @@ describe("<SidebarNav>", () => {
     const labels = Array.from(nav.children).map(
       (el) => el.textContent?.trim() ?? "",
     );
-    expect(labels).toEqual(["Sessions"]);
+    expect(labels).toEqual(["Campagnes", "Sessions"]);
   });
 
   test("active item (matching pathname) carries aria-current='page'", () => {
@@ -114,5 +114,21 @@ describe("<SidebarNav>", () => {
     render(<SidebarNav collapsed />);
     const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
     expect(sessionsLink.getAttribute("aria-label")).toBe("Sessions");
+  });
+
+  test("Campagnes is rendered as the first nav item and points to /jdr/campaigns", () => {
+    asGm();
+    render(<SidebarNav />);
+    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
+    const firstLink = nav.querySelector("a");
+    expect(firstLink).not.toBeNull();
+    expect(firstLink?.getAttribute("href")).toBe("/jdr/campaigns");
+    expect(firstLink?.textContent?.trim()).toBe("Campagnes");
+  });
+
+  test("Campagnes is visible to players (not gm-only)", () => {
+    asPlayer();
+    render(<SidebarNav />);
+    expect(screen.getByRole("link", { name: /Campagnes/i })).toBeInTheDocument();
   });
 });

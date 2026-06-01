@@ -87,6 +87,7 @@ describe("useCreateSession", () => {
     const data = await result.current.mutateAsync({
       title: "Session 7",
       recorded_at: "2026-05-31T20:00",
+      campaign_id: "11111111-1111-1111-1111-111111111111",
     });
     expect(data).toEqual(sampleSession);
 
@@ -105,6 +106,7 @@ describe("useCreateSession", () => {
     const body = await request.clone().json();
     expect(body.title).toBe("Session 7");
     expect(body.transcription_mode).toBe("non_diarised");
+    expect(body.campaign_id).toBe("11111111-1111-1111-1111-111111111111");
     // recorded_at must be converted to ISO UTC (toIsoUtc helper).
     expect(body.recorded_at).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/,

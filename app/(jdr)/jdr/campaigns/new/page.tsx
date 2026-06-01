@@ -2,27 +2,28 @@
 
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
-import { NewSessionForm } from "@/components/jdr/sessions/NewSessionForm";
+import { CampaignForm } from "@/components/jdr/campaigns/CampaignForm";
 import { ApiError } from "@/lib/core/api/errors";
-import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
-import { useCreateSession } from "@/lib/jdr/sessions/queries";
+import { useCreateCampaign } from "@/lib/jdr/campaigns/queries";
 
 function formatCreateError(error: unknown): string | null {
   if (!error) return null;
   if (error instanceof ApiError) {
+    const haystack =
+      `${error.problem.type ?? ""} ${error.problem.title ?? ""}`.toLowerCase();
+    if (haystack.includes("duplicate")) {
+      return "Tu as déjà une campagne avec ce nom.";
+    }
     return "Création impossible. Vérifie les informations saisies.";
   }
   if (error instanceof Error) return error.message;
   return null;
 }
 
-export default function NewSessionPage() {
+export default function NewCampaignPage() {
   const router = useRouter();
-  const createMutation = useCreateSession();
+  const createMutation = useCreateCampaign();
   const createInFlightRef = useRef(false);
-  const currentUser = useCurrentUser();
-  const campaignId =
-    currentUser.status === "authenticated" ? currentUser.auth.campaignId : null;
 
   const errorMessage = formatCreateError(createMutation.error);
 
@@ -30,33 +31,28 @@ export default function NewSessionPage() {
     <section className="bg-background text-foreground min-h-full p-8">
       <header className="mx-auto mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-semibold">
-          Nouvelle session
+          Nouvelle campagne
         </h1>
         <p className="text-text-chrome-muted mt-1 text-sm">
-          Saisis le titre et la date de la séance. L&apos;audio s&apos;upload
-          ensuite dans le détail.
+          Donne-lui un nom et une intro narrative.
         </p>
       </header>
 
       <section className="mx-auto max-w-2xl">
-        <NewSessionForm
+        <CampaignForm
           onSubmit={(values) => {
             if (createInFlightRef.current) return;
-            if (!campaignId) return;
             createInFlightRef.current = true;
-            createMutation.mutate(
-              { ...values, campaign_id: campaignId },
-              {
-                onSuccess: (data) => {
-                  router.push(`/jdr/sessions/${data.id}`);
-                },
-                onSettled: () => {
-                  createInFlightRef.current = false;
-                },
+            createMutation.mutate(values, {
+              onSuccess: (data) => {
+                router.push(`/jdr/campaigns/${data.id}`);
               },
-            );
+              onSettled: () => {
+                createInFlightRef.current = false;
+              },
+            });
           }}
-          onCancel={() => router.push("/jdr/sessions")}
+          onCancel={() => router.push("/jdr/campaigns")}
           submitting={createMutation.isPending}
           errorMessage={errorMessage}
         />

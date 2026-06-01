@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Library,
   ScrollText,
   UserCircle,
   Users,
@@ -21,6 +22,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { label: "Campagnes", href: "/jdr/campaigns", icon: Library },
   { label: "Sessions", href: "/jdr/sessions", icon: ScrollText },
   { label: "PJs", href: "/jdr/pjs", icon: UserCircle, gmOnly: true },
   { label: "Utilisateurs", href: "/jdr/users", icon: Users, gmOnly: true },

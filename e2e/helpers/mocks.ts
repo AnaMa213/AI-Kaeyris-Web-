@@ -120,6 +120,63 @@ export async function mockUsersList(page: Page, sessionState: SessionState) {
   });
 }
 
+interface CampaignFixture {
+  id: string;
+  name: string;
+  description: string | null;
+  role: "gm" | "player";
+  session_count: number;
+  last_session_at: string | null;
+  created_at: string;
+}
+
+/**
+ * GET /services/jdr/campaigns returns a paginated CampaignOut list.
+ * Story 2.4 onwards: /jdr/campaigns calls this on mount.
+ */
+export async function mockCampaignsList(
+  page: Page,
+  campaigns: CampaignFixture[],
+) {
+  await page.route("**/services/jdr/campaigns", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        items: campaigns,
+        total: campaigns.length,
+        page: 1,
+        size: 50,
+      }),
+    });
+  });
+}
+
+/**
+ * POST /services/jdr/campaigns returns 201 with the provided CampaignOut.
+ * Used by Story 2.4 create flow.
+ */
+export async function mockCampaignCreate(
+  page: Page,
+  response: CampaignFixture,
+) {
+  await page.route("**/services/jdr/campaigns", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      headers: JSON_HEADERS,
+      body: JSON.stringify(response),
+    });
+  });
+}
+
 interface MockLoginOptions {
   delayMs?: number;
   sessionState?: SessionState;
