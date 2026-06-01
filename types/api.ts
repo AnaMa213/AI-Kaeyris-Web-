@@ -895,6 +895,7 @@ export interface components {
             id: string;
             /** Username */
             username: string;
+            system_role: components["schemas"]["SystemRole"];
         };
         /** Body_post_audio_services_jdr_sessions__session_id__audio_post */
         Body_post_audio_services_jdr_sessions__session_id__audio_post: {
@@ -926,7 +927,7 @@ export interface components {
              * Role
              * @enum {string}
              */
-            role: "gm" | "player";
+            role: "gm" | "pj";
             /** Session Count */
             session_count: number;
             /** Last Session At */
@@ -1122,8 +1123,6 @@ export interface components {
         LoginRequest: {
             /** Username */
             username: string;
-            /** Profile */
-            profile: string;
             /** Password */
             password: string;
         };
@@ -1253,6 +1252,10 @@ export interface components {
         PjCreate: {
             /** Name */
             name: string;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
         };
         /**
          * PjMini
@@ -1279,6 +1282,13 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
+            /** User Id */
+            user_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1386,11 +1396,6 @@ export interface components {
              */
             generated_at: string;
         };
-        /**
-         * Profile
-         * @enum {string}
-         */
-        Profile: "gm" | "user";
         /**
          * SessionCreate
          * @description Payload accepted by ``POST /services/jdr/sessions``.
@@ -1537,6 +1542,11 @@ export interface components {
             generated_at: string;
         };
         /**
+         * SystemRole
+         * @enum {string}
+         */
+        SystemRole: "admin" | "user";
+        /**
          * TranscriptionMode
          * @description Per-session transcription posture — see feature 002 data-model.md §2.
          *
@@ -1598,7 +1608,8 @@ export interface components {
         UserCreate: {
             /** Username */
             username: string;
-            profile: components["schemas"]["Profile"];
+            /** @default user */
+            system_role: components["schemas"]["SystemRole"];
             /** Password */
             password: string;
         };
@@ -1616,7 +1627,7 @@ export interface components {
             id: string;
             /** Username */
             username: string;
-            profile: components["schemas"]["Profile"];
+            system_role: components["schemas"]["SystemRole"];
             status: components["schemas"]["UserStatus"];
             /**
              * Created At
@@ -1638,7 +1649,7 @@ export interface components {
         UserStatus: "active" | "inactive" | "deleted";
         /** UserUpdate */
         UserUpdate: {
-            profile?: components["schemas"]["Profile"] | null;
+            system_role?: components["schemas"]["SystemRole"] | null;
             /** Password */
             password?: string | null;
             status?: components["schemas"]["UserStatus"] | null;
@@ -2314,7 +2325,9 @@ export interface operations {
     };
     list_pjs_services_jdr_pjs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                campaign_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2328,6 +2341,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Page_PjOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
