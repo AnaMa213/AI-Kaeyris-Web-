@@ -17,8 +17,8 @@ export default function CampaignsPage() {
   }
 
   return (
-    <section className="bg-background text-foreground min-h-full p-8">
-      <header className="mx-auto mb-8 flex max-w-5xl items-center justify-between">
+    <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
+      <header className="border-border-chrome mb-8 flex items-end justify-between gap-4 border-b pb-6">
         <div>
           <h1 className="font-display text-3xl font-semibold">Campagnes</h1>
           <p className="text-text-chrome-muted mt-1 text-sm">
@@ -33,36 +33,34 @@ export default function CampaignsPage() {
         </Button>
       </header>
 
-      <div className="mx-auto max-w-5xl">
-        {campaignsQuery.isError && (
-          <div
-            role="alert"
-            className="text-state-error border-state-error/30 bg-state-error/10 rounded-md border p-4 text-sm"
-          >
-            <p className="font-medium">Impossible de charger les campagnes.</p>
-            {campaignsQuery.error instanceof ApiError && (
-              <p className="text-text-chrome-muted mt-2 text-xs">
-                {campaignsQuery.error.problem.title}
-              </p>
-            )}
-          </div>
-        )}
+      {campaignsQuery.isError && (
+        <div
+          role="alert"
+          className="text-state-error border-state-error/30 bg-state-error/10 rounded-md border p-4 text-sm"
+        >
+          <p className="font-medium">Impossible de charger les campagnes.</p>
+          {campaignsQuery.error instanceof ApiError && (
+            <p className="text-text-chrome-muted mt-2 text-xs">
+              {campaignsQuery.error.problem.title}
+            </p>
+          )}
+        </div>
+      )}
 
-        {campaignsQuery.data && campaignsQuery.data.items.length === 0 && (
-          <EmptyState
-            title="Aucune campagne encore."
-            description="Crée ta première campagne pour commencer à organiser tes sessions."
-            action={{
-              label: "Nouvelle campagne",
-              onClick: () => router.push("/jdr/campaigns/new"),
-            }}
-          />
-        )}
+      {campaignsQuery.data && campaignsQuery.data.items.length === 0 && (
+        <EmptyState
+          title="Aucune campagne encore."
+          description="Crée ta première campagne pour commencer à organiser tes sessions."
+          action={{
+            label: "Nouvelle campagne",
+            onClick: () => router.push("/jdr/campaigns/new"),
+          }}
+        />
+      )}
 
-        {campaignsQuery.data && campaignsQuery.data.items.length > 0 && (
-          <CampaignsList campaigns={campaignsQuery.data.items} />
-        )}
-      </div>
+      {campaignsQuery.data && campaignsQuery.data.items.length > 0 && (
+        <CampaignsList campaigns={campaignsQuery.data.items} />
+      )}
     </section>
   );
 }

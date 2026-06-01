@@ -28,7 +28,8 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
     <nav aria-label="Navigation JDR" className="flex flex-col gap-1 px-2">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href;
+        const isActive =
+          pathname === item.href || pathname.startsWith(`${item.href}/`);
         const baseClasses = cn(
           "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
           collapsed && "justify-center px-2",

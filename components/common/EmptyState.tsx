@@ -11,15 +11,22 @@ interface EmptyStateProps {
   title: string;
   description: string;
   action?: EmptyStateAction;
+  icon?: React.ReactNode;
 }
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  action,
+  icon,
+}: EmptyStateProps) {
   return (
     <div
       role="status"
-      className="border-border-chrome bg-surface-raised flex flex-col items-center gap-4 rounded-md border px-8 py-16 text-center"
+      className="border-border-chrome bg-surface-raised mx-auto my-16 flex max-w-120 flex-col items-center gap-3 rounded-md border px-6 py-10 text-center"
     >
-      <h2 className="font-display text-2xl">{title}</h2>
+      {icon && <div className="text-4xl leading-none">{icon}</div>}
+      <h2 className="font-display text-xl">{title}</h2>
       <p className="text-text-chrome-muted font-sans text-sm">{description}</p>
       {action && (
         <Button

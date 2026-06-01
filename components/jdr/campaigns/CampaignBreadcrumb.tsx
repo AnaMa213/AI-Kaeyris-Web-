@@ -16,7 +16,7 @@ export function CampaignBreadcrumb({ campaignId }: CampaignBreadcrumbProps) {
   return (
     <Link
       href={`/jdr/campaigns/${campaignId}`}
-      className="text-text-chrome-muted hover:text-accent-gold! inline-flex items-center gap-1 text-sm"
+      className="text-text-chrome-muted hover:bg-accent-gold/10 hover:text-accent-gold! -mx-2 inline-flex items-center gap-1 rounded px-2 py-1 text-sm transition-all duration-120"
     >
       <span aria-hidden="true">←</span>
       <span>{label}</span>

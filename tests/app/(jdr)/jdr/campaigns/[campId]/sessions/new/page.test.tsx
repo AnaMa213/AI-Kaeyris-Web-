@@ -41,7 +41,7 @@ const sampleCampaign = {
   id: campId,
   name: "Campagne par défaut",
   description: null,
-  role: "gm",
+  role: "gm" as "gm" | "pj",
   session_count: 0,
   last_session_at: null,
   created_at: "2026-05-31T18:00:00.000Z",
@@ -71,13 +71,39 @@ const breadcrumbFetch = async (input: Request | string) => {
 };
 
 describe("/jdr/campaigns/[campId]/sessions/new page", () => {
-  test("renders the page header + the NewSessionForm", () => {
+  test("renders the page header + the NewSessionForm", async () => {
     vi.stubGlobal("fetch", vi.fn(breadcrumbFetch));
     renderPage();
     expect(
       screen.getByRole("heading", { level: 1, name: "Nouvelle session" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Titre")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Titre")).toBeInTheDocument();
+  });
+
+  test("blocks the form for a player campaign role", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+          return new Response(
+            JSON.stringify({ ...sampleCampaign, role: "pj" }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+    renderPage();
+    expect(
+      await screen.findByText(
+        "Seul le MJ de cette campagne peut créer une session.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Titre")).not.toBeInTheDocument();
   });
 
   test("submits the form, POSTs to /sessions with campaign_id, and redirects under campaigns", async () => {
@@ -101,7 +127,7 @@ describe("/jdr/campaigns/[campId]/sessions/new page", () => {
 
     const user = userEvent.setup();
     renderPage();
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(await screen.findByLabelText("Titre"), "Session 7");
     await user.click(
       screen.getByRole("button", { name: "Créer la session" }),
     );
@@ -138,7 +164,7 @@ describe("/jdr/campaigns/[campId]/sessions/new page", () => {
 
     const user = userEvent.setup();
     renderPage();
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(await screen.findByLabelText("Titre"), "Session 7");
     await user.dblClick(
       screen.getByRole("button", { name: "Créer la session" }),
     );
@@ -162,13 +188,10 @@ describe("/jdr/campaigns/[campId]/sessions/new page", () => {
 
   test("Annuler redirects back to the campaign detail", async () => {
     pushMock.mockClear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
-    );
+    vi.stubGlobal("fetch", vi.fn(breadcrumbFetch));
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    await user.click(await screen.findByRole("button", { name: "Annuler" }));
     expect(pushMock).toHaveBeenCalledWith(`/jdr/campaigns/${campId}`);
   });
 
@@ -200,7 +223,7 @@ describe("/jdr/campaigns/[campId]/sessions/new page", () => {
 
     const user = userEvent.setup();
     renderPage();
-    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.type(await screen.findByLabelText("Titre"), "Session 7");
     await user.click(
       screen.getByRole("button", { name: "Créer la session" }),
     );

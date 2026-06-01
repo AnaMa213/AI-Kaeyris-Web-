@@ -39,11 +39,23 @@ describe("<CampaignCard>", () => {
     ).toBeInTheDocument();
   });
 
-  test("omits the description block when absent", () => {
+  test("renders 'Sans description' italic fallback when description is null (Story 2.7)", () => {
     render(<CampaignCard campaign={{ ...baseCampaign, description: null }} />);
     expect(
       screen.queryByText(/Un royaume autrefois uni/),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("Sans description")).toBeInTheDocument();
+  });
+
+  test("renders 'Sans description' fallback for empty-string description", () => {
+    render(<CampaignCard campaign={{ ...baseCampaign, description: "   " }} />);
+    expect(screen.getByText("Sans description")).toBeInTheDocument();
+  });
+
+  test("renders Lucide icons (ScrollText + Clock) in the meta row (Story 2.7)", () => {
+    const { container } = render(<CampaignCard campaign={baseCampaign} />);
+    const icons = container.querySelectorAll('svg[aria-hidden="true"]');
+    expect(icons.length).toBeGreaterThanOrEqual(2);
   });
 
   test("renders the session count with singular/plural", () => {

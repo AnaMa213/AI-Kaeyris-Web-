@@ -29,7 +29,7 @@ const campaign = {
   id: campId,
   name: "Les Royaumes Brisés",
   description: "Une trahison ancienne.",
-  role: "gm" as const,
+  role: "gm" as "gm" | "pj",
   session_count: 2,
   last_session_at: "2026-05-30T20:00:00+00:00",
   created_at: "2026-01-12T18:00:00+00:00",
@@ -74,6 +74,7 @@ function stubFetch(opts: {
   campaign?: typeof campaign;
   sessions?: Array<Record<string, unknown>>;
   campaignStatus?: number;
+  sessionsStatus?: number;
 }) {
   vi.stubGlobal(
     "fetch",
@@ -102,6 +103,19 @@ function stubFetch(opts: {
         });
       }
       if (url.includes("/services/jdr/sessions")) {
+        if (opts.sessionsStatus && opts.sessionsStatus >= 400) {
+          return new Response(
+            JSON.stringify({
+              type: "about:blank",
+              title: "Internal Server Error",
+              status: opts.sessionsStatus,
+            }),
+            {
+              status: opts.sessionsStatus,
+              headers: { "content-type": "application/problem+json" },
+            },
+          );
+        }
         return new Response(
           JSON.stringify({
             items: opts.sessions ?? [],
@@ -166,6 +180,37 @@ describe("/jdr/campaigns/[campId] page", () => {
         level: 2,
         name: "Aucune session dans cette campagne.",
       }),
+    ).toBeInTheDocument();
+  });
+
+  test("renders a sessions error instead of the empty state when the scoped list fails", async () => {
+    stubFetch({ sessionsStatus: 500 });
+    renderPage();
+    expect(
+      await screen.findByText(
+        "Les sessions de cette campagne n'ont pas pu être chargées.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        level: 2,
+        name: "Aucune session dans cette campagne.",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("hides create-session actions for a player campaign role", async () => {
+    stubFetch({
+      campaign: { ...campaign, role: "pj", session_count: 0 },
+      sessions: [],
+    });
+    renderPage();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Nouvelle session" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Les sessions créées par le MJ apparaîtront ici."),
     ).toBeInTheDocument();
   });
 

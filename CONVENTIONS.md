@@ -79,6 +79,21 @@ Quand un futur composant Hub apparaîtra (V2 dans un autre repo), il aura son pr
 
 ---
 
+## Patterns visuels (chrome / parchemin)
+
+**Grammaire bichromatique** (formalisée Story 2.7 — session UX Sally 2026-06-01) :
+
+- **Chrome dark** (`--surface-base`, `--surface-card`, `--surface-raised`, `--surface-overlay`) = navigation, exploration, dashboards, formulaires. Toutes les pages "outil" du MJ : Campagnes list/detail, Session create, PJ roster, Users admin.
+- **Parchemin warm** (`--surface-narrative`, `--surface-narrative-warm`, `--surface-narrative-raised`) = lecture longue, concentration. Réservé Epic 5 : artefacts Récit/Résumé/Éléments/POVs en pleine page.
+
+**JAMAIS mélanger les deux dans une même page V1.** Le clash chrome ↔ parchemin est un signal sémantique fort (passage de "je navigue" à "je lis") — il doit rester rare et délibéré.
+
+**Cards & hovers** : pattern unifié via tokens `--surface-card`, `--border-card`, `--border-card-hover`, `--shadow-card-inset`, `--shadow-card-hover`, `--t-base`, `--t-snappy`. Hovers : translate-y subtil (1-2px) + shadow déployée + couleur `accent-gold` sur titre/border. `prefers-reduced-motion: reduce` désactive globalement les animations (cf. `app/globals.css`).
+
+**Cas particulier** : `--surface-narrative-warm` (oklch 0.62 0.05 80, sépia clair) est **réservé** pour Epic 5 (page session detail quand les artefacts longs arriveront). **Ne pas l'utiliser en Story 2.7-2.9** — le token existe mais reste non-appliqué jusqu'à Epic 5.
+
+---
+
 ## Backend & API
 
 **`docs/context/api/openapi.json`** reste le contrat source. `types/api.ts` régénéré via `npm run gen:api` (pre-commit hook).

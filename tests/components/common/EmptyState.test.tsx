@@ -59,4 +59,20 @@ describe("<EmptyState>", () => {
     render(<EmptyState title="t" description="d" />);
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
+
+  test("renders the icon prop when provided (Story 2.7)", () => {
+    render(
+      <EmptyState
+        title="Aucune campagne encore."
+        description="Crée ta première campagne."
+        icon={<span data-testid="empty-icon">📚</span>}
+      />,
+    );
+    expect(screen.getByTestId("empty-icon")).toBeInTheDocument();
+  });
+
+  test("omits the icon container when no icon prop is provided", () => {
+    render(<EmptyState title="t" description="d" />);
+    expect(screen.queryByTestId("empty-icon")).not.toBeInTheDocument();
+  });
 });

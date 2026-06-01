@@ -23,7 +23,7 @@ function sortByLastSessionDesc(items: CampaignOut[]): CampaignOut[] {
 export function CampaignsList({ campaigns }: CampaignsListProps) {
   const sorted = sortByLastSessionDesc(campaigns);
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
       {sorted.map((campaign) => (
         <li key={campaign.id}>
           <CampaignCard campaign={campaign} />

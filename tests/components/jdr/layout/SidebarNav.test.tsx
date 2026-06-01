@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+const pathnameMock = vi.hoisted(() => vi.fn(() => "/jdr/campaigns"));
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/jdr/campaigns",
+  usePathname: () => pathnameMock(),
 }));
 
 vi.mock("next/link", () => ({
@@ -25,6 +27,10 @@ vi.mock("next/link", () => ({
 const { SidebarNav } = await import("@/components/jdr/layout/SidebarNav");
 
 describe("<SidebarNav>", () => {
+  beforeEach(() => {
+    pathnameMock.mockReturnValue("/jdr/campaigns");
+  });
+
   test("renders Campagnes as the only nav item (Story 2.6 restructure)", () => {
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
@@ -64,5 +70,14 @@ describe("<SidebarNav>", () => {
     render(<SidebarNav />);
     const link = screen.getByRole("link", { name: /Campagnes/i });
     expect(link.className).toMatch(/surface-overlay/);
+  });
+
+  test("Campagnes remains active on nested campaign routes", () => {
+    pathnameMock.mockReturnValue(
+      "/jdr/campaigns/11111111-1111-1111-1111-111111111111/sessions/ses-1",
+    );
+    render(<SidebarNav />);
+    const link = screen.getByRole("link", { name: /Campagnes/i });
+    expect(link).toHaveAttribute("aria-current", "page");
   });
 });
