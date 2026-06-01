@@ -11,6 +11,7 @@ import {
 import type { components } from "@/types/api";
 
 type SessionOut = components["schemas"]["SessionOut"];
+type PageOfSessionOut = components["schemas"]["Page_SessionOut_"];
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
   if (result.error !== undefined) {
@@ -26,6 +27,22 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 export const SESSIONS_QUERY_KEY = ["sessions"] as const;
 export const sessionQueryKey = (id: string) =>
   ["sessions", id] as const;
+export const sessionsListQueryKey = (campaignId: string) =>
+  ["sessions", "list", { campaignId }] as const;
+
+export function useListSessions(input: { campaignId: string }) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: sessionsListQueryKey(input.campaignId),
+    queryFn: async () => {
+      const result = await apiClient.GET("/services/jdr/sessions", {
+        params: { query: { campaign_id: input.campaignId } },
+      });
+      return unwrap<PageOfSessionOut>(result);
+    },
+    enabled: input.campaignId !== "",
+  });
+}
 
 export interface CreateSessionInput extends SessionCreateInput {
   campaign_id: string;
@@ -69,4 +86,4 @@ export function useGetSession(id: string) {
   });
 }
 
-export type { SessionOut };
+export type { SessionOut, PageOfSessionOut };

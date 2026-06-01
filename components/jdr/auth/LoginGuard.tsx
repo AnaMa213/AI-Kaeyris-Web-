@@ -11,7 +11,7 @@ export function LoginGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user.status === "authenticated") {
-      router.replace("/jdr/sessions");
+      router.replace("/jdr/campaigns");
     }
   }, [user.status, router]);
 

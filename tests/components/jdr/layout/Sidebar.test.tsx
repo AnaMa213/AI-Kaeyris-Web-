@@ -19,8 +19,35 @@ vi.mock("@/lib/core/auth/useLogout", () => ({
   useLogout: () => ({ mutate: logoutMutate, isPending: false }),
 }));
 
+const userMock = vi.hoisted(() => ({
+  current: {
+    status: "authenticated" as const,
+    auth: {
+      authId: "kenan",
+      username: "kenan",
+      systemRole: "admin" as const,
+    },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "gm" as const,
+      characterId: "kenan-pc",
+    },
+  } as unknown,
+}));
+
 vi.mock("@/lib/core/session/useCurrentUser", () => ({
-  useCurrentUser: () => ({
+  useCurrentUser: () => userMock.current,
+}));
+
+const routerPushMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPushMock }),
+  usePathname: () => "/jdr/campaigns",
+}));
+
+function asAdmin() {
+  userMock.current = {
     status: "authenticated",
     auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
     activeCampaign: {
@@ -29,12 +56,21 @@ vi.mock("@/lib/core/session/useCurrentUser", () => ({
       role: "gm",
       characterId: "kenan-pc",
     },
-  }),
-}));
+  };
+}
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/jdr/sessions",
-}));
+function asNonAdmin() {
+  userMock.current = {
+    status: "authenticated",
+    auth: { authId: "alice", username: "alice", systemRole: "user" },
+    activeCampaign: {
+      id: "campaign-default",
+      name: "Campagne par défaut",
+      role: "pj",
+      characterId: "alice-pc",
+    },
+  };
+}
 
 vi.mock("next/link", () => ({
   default: ({
@@ -69,6 +105,8 @@ beforeEach(() => {
   window.localStorage.clear();
   useUIStore.setState({ sidebarCollapsed: false });
   logoutMutate.mockClear();
+  routerPushMock.mockClear();
+  asAdmin();
 });
 
 afterEach(() => {
@@ -146,5 +184,29 @@ describe("<Sidebar>", () => {
     renderSidebar();
     await user.click(screen.getByRole("button", { name: "Se déconnecter" }));
     expect(logoutMutate).toHaveBeenCalledOnce();
+  });
+
+  test("admin sees the Utilisateurs button in the footer", () => {
+    asAdmin();
+    renderSidebar();
+    expect(
+      screen.getByRole("button", { name: /Utilisateurs/i }),
+    ).toBeInTheDocument();
+  });
+
+  test("non-admin user does NOT see the Utilisateurs button", () => {
+    asNonAdmin();
+    renderSidebar();
+    expect(
+      screen.queryByRole("button", { name: /Utilisateurs/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking Utilisateurs (admin only) navigates to /jdr/users", async () => {
+    asAdmin();
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.click(screen.getByRole("button", { name: /Utilisateurs/i }));
+    expect(routerPushMock).toHaveBeenCalledWith("/jdr/users");
   });
 });

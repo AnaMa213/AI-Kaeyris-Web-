@@ -108,14 +108,14 @@ afterEach(() => {
 });
 
 describe("<LoginPage> happy path", () => {
-  test("redirects to /jdr/sessions on 200", async () => {
+  test("redirects to /jdr/campaigns on 200", async () => {
     const fetchMock = makeFetchMock(() => new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
 
     const request = findLoginCall(fetchMock);
@@ -129,7 +129,7 @@ describe("<LoginPage> happy path", () => {
     });
   });
 
-  test("ignores any ?from= and still redirects to /jdr/sessions", async () => {
+  test("ignores any ?from= and still redirects to /jdr/campaigns", async () => {
     currentSearch = "from=/jdr/sessions/abc";
     vi.stubGlobal(
       "fetch",
@@ -139,7 +139,7 @@ describe("<LoginPage> happy path", () => {
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
   });
 });
@@ -155,7 +155,7 @@ describe("<LoginPage> ?from= is ignored (security and UX guarantee)", () => {
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
   });
 
@@ -169,7 +169,7 @@ describe("<LoginPage> ?from= is ignored (security and UX guarantee)", () => {
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
   });
 
@@ -183,7 +183,7 @@ describe("<LoginPage> ?from= is ignored (security and UX guarantee)", () => {
     renderLoginPage();
     await fillAndSubmit(user);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
   });
 });

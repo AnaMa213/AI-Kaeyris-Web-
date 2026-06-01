@@ -13,9 +13,13 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useCreateSession, useGetSession, sessionQueryKey } = await import(
-  "@/lib/jdr/sessions/queries"
-);
+const {
+  useCreateSession,
+  useGetSession,
+  useListSessions,
+  sessionQueryKey,
+  sessionsListQueryKey,
+} = await import("@/lib/jdr/sessions/queries");
 
 const sampleSession = {
   id: "00000000-0000-0000-0000-000000000abc",
@@ -156,5 +160,52 @@ describe("useGetSession", () => {
 
   test("exposes the right queryKey via sessionQueryKey() factory", () => {
     expect(sessionQueryKey("abc")).toEqual(["sessions", "abc"]);
+  });
+});
+
+describe("useListSessions", () => {
+  test("fetches the campaign-scoped session list with ?campaign_id query param", async () => {
+    const capturedUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/services/jdr/sessions")) {
+          capturedUrls.push(url);
+          return new Response(
+            JSON.stringify({
+              items: [sampleSession],
+              total: 1,
+              page: 1,
+              size: 50,
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useListSessions({ campaignId: "camp-uuid" }),
+      { wrapper: wrapper(queryClient) },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.items).toHaveLength(1);
+    expect(capturedUrls.some((u) => u.includes("campaign_id=camp-uuid"))).toBe(
+      true,
+    );
+  });
+
+  test("exposes a queryKey scoped by campaignId", () => {
+    expect(sessionsListQueryKey("camp-uuid")).toEqual([
+      "sessions",
+      "list",
+      { campaignId: "camp-uuid" },
+    ]);
   });
 });

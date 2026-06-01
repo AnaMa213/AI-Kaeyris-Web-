@@ -69,7 +69,7 @@ describe("<LoginGuard>", () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  test("redirects to /jdr/sessions when authenticated", async () => {
+  test("redirects to /jdr/campaigns when authenticated", async () => {
     asAuthenticated();
     render(
       <LoginGuard>
@@ -78,11 +78,11 @@ describe("<LoginGuard>", () => {
     );
     expect(screen.queryByText("login form")).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/jdr/sessions");
+      expect(replaceMock).toHaveBeenCalledWith("/jdr/campaigns");
     });
   });
 
-  test("redirects to /jdr/sessions regardless of any ?from= query param", async () => {
+  test("redirects to /jdr/campaigns regardless of any ?from= query param", async () => {
     searchMock = "from=%2Fjdr%2Fusers";
     asAuthenticated();
     render(
@@ -91,7 +91,7 @@ describe("<LoginGuard>", () => {
       </LoginGuard>,
     );
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/jdr/sessions");
+      expect(replaceMock).toHaveBeenCalledWith("/jdr/campaigns");
     });
   });
 });

@@ -78,7 +78,7 @@ test("GM can create a PJ from the EmptyState and see it in the roster", async ({
   ).not.toBeVisible();
 });
 
-test("GM lands on /jdr/pjs from the sidebar and sees an existing PJ", async ({
+test("GM lands on /jdr/pjs via direct URL (legacy V1 entry — sidebar nav removed in Story 2.6) and sees an existing PJ", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
@@ -86,15 +86,13 @@ test("GM lands on /jdr/pjs from the sidebar and sees an existing PJ", async ({
   const pjStore: PjStore = { items: [samplePj] };
   await mockPjs(page, pjStore);
 
-  await page.goto("/jdr/sessions");
-  await page.getByRole("link", { name: /PJs/i }).click();
+  // Direct URL visit — the sidebar no longer exposes /jdr/pjs (Story 2.6
+  // restructure). The route stays alive as a V1 legacy until Story 2.X
+  // migrates PJs under /jdr/campaigns/[id]/pjs.
+  await page.goto("/jdr/pjs");
 
-  await expect(page).toHaveURL(/\/jdr\/pjs/);
   await expect(
     page.getByRole("heading", { level: 1, name: "PJs" }),
   ).toBeVisible();
   await expect(page.getByText(samplePj.name)).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /PJs/i }),
-  ).toHaveAttribute("aria-current", "page");
 });

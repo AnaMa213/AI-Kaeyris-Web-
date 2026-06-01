@@ -41,13 +41,13 @@ describe("<LauncherPage>", () => {
     expect(screen.getByText(/Ouverture du grimoire/i)).toBeInTheDocument();
   });
 
-  test("redirects to /jdr/sessions once authenticated cache is hydrated", async () => {
+  test("redirects to /jdr/campaigns once authenticated cache is hydrated", async () => {
     pushMock.mockClear();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
     client.setQueryData(SESSION_QUERY_KEY, {
-      user: { id: "kenan", username: "Kenan" },
+      user: { id: "kenan", username: "Kenan", system_role: "admin" },
       active_campaign: {
         id: "campaign-default",
         name: "Campagne par défaut",
@@ -57,7 +57,7 @@ describe("<LauncherPage>", () => {
     });
     renderWith(client);
     await waitFor(() =>
-      expect(pushMock).toHaveBeenCalledWith("/jdr/sessions"),
+      expect(pushMock).toHaveBeenCalledWith("/jdr/campaigns"),
     );
   });
 });

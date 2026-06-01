@@ -79,7 +79,7 @@ function LoginForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["session", "me"] });
-      router.push("/jdr/sessions");
+      router.push("/jdr/campaigns");
     },
     onError: (error: unknown) => {
       const isAuth =
@@ -124,7 +124,7 @@ function LoginForm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
       queryClient.invalidateQueries({ queryKey: ["session", "me"] });
-      router.push("/jdr/sessions");
+      router.push("/jdr/campaigns");
     },
     onError: (error: unknown) => {
       setSetupErrorMessage(

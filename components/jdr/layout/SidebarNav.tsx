@@ -2,16 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Library,
-  ScrollText,
-  UserCircle,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { Library, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isCampaignGm, isSystemAdmin } from "@/lib/core/session/helpers";
-import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 
 type NavItem = {
   label: string;
@@ -19,15 +11,10 @@ type NavItem = {
   icon: LucideIcon;
   disabled?: boolean;
   disabledHint?: string;
-  adminOnly?: boolean;
-  campaignGmOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Campagnes", href: "/jdr/campaigns", icon: Library },
-  { label: "Sessions", href: "/jdr/sessions", icon: ScrollText },
-  { label: "PJs", href: "/jdr/pjs", icon: UserCircle, campaignGmOnly: true },
-  { label: "Utilisateurs", href: "/jdr/users", icon: Users, adminOnly: true },
 ];
 
 interface SidebarNavProps {
@@ -36,17 +23,10 @@ interface SidebarNavProps {
 
 export function SidebarNav({ collapsed = false }: SidebarNavProps) {
   const pathname = usePathname();
-  const user = useCurrentUser();
-
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    if (item.adminOnly && !isSystemAdmin(user)) return false;
-    if (item.campaignGmOnly && !isCampaignGm(user)) return false;
-    return true;
-  });
 
   return (
     <nav aria-label="Navigation JDR" className="flex flex-col gap-1 px-2">
-      {visibleItems.map((item) => {
+      {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
         const baseClasses = cn(

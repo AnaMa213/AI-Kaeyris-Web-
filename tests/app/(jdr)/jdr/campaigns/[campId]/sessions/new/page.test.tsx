@@ -15,38 +15,15 @@ vi.mock("@/lib/core/env", () => ({
 }));
 
 const pushMock = vi.fn();
+const campId = "11111111-1111-1111-1111-111111111111";
 vi.mock("next/navigation", () => ({
+  useParams: () => ({ campId }),
   useRouter: () => ({ push: pushMock }),
 }));
 
-vi.mock("@/lib/core/session/useCurrentUser", () => ({
-  useCurrentUser: () => ({
-    status: "authenticated" as const,
-    auth: { authId: "kenan", username: "kenan", systemRole: "admin" as const },
-    activeCampaign: {
-      id: "11111111-1111-1111-1111-111111111111",
-      name: "Campagne par défaut",
-      role: "gm" as const,
-      characterId: "kenan-pc",
-    },
-  }),
-}));
-
 const { default: NewSessionPage } = await import(
-  "@/app/(jdr)/jdr/sessions/new/page"
+  "@/app/(jdr)/jdr/campaigns/[campId]/sessions/new/page"
 );
-
-const renderPage = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <NewSessionPage />
-    </QueryClientProvider>,
-  );
-  return queryClient;
-};
 
 const sampleSession = {
   id: "00000000-0000-0000-0000-000000000abc",
@@ -60,18 +37,50 @@ const sampleSession = {
   updated_at: "2026-05-31T18:05:00.000Z",
 };
 
-describe("/jdr/sessions/new page", () => {
+const sampleCampaign = {
+  id: campId,
+  name: "Campagne par défaut",
+  description: null,
+  role: "gm",
+  session_count: 0,
+  last_session_at: null,
+  created_at: "2026-05-31T18:00:00.000Z",
+};
+
+const renderPage = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <NewSessionPage />
+    </QueryClientProvider>,
+  );
+  return queryClient;
+};
+
+const breadcrumbFetch = async (input: Request | string) => {
+  const url = typeof input === "string" ? input : input.url;
+  if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+    return new Response(JSON.stringify(sampleCampaign), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  return new Response(null, { status: 200 });
+};
+
+describe("/jdr/campaigns/[campId]/sessions/new page", () => {
   test("renders the page header + the NewSessionForm", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    vi.stubGlobal("fetch", vi.fn(breadcrumbFetch));
     renderPage();
     expect(
       screen.getByRole("heading", { level: 1, name: "Nouvelle session" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Titre")).toBeInTheDocument();
-    expect(screen.getByLabelText("Date de la séance")).toBeInTheDocument();
   });
 
-  test("submitting the form POSTs to /sessions and redirects to /jdr/sessions/{id}", async () => {
+  test("submits the form, POSTs to /sessions with campaign_id, and redirects under campaigns", async () => {
     pushMock.mockClear();
     const fetchMock = vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
@@ -86,21 +95,19 @@ describe("/jdr/sessions/new page", () => {
           headers: { "content-type": "application/json" },
         });
       }
-      return new Response(null, { status: 200 });
+      return breadcrumbFetch(input);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
     renderPage();
-
     await user.type(screen.getByLabelText("Titre"), "Session 7");
     await user.click(
       screen.getByRole("button", { name: "Créer la session" }),
     );
-
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        "/jdr/sessions/00000000-0000-0000-0000-000000000abc",
+        `/jdr/campaigns/${campId}/sessions/${sampleSession.id}`,
       );
     });
   });
@@ -125,13 +132,12 @@ describe("/jdr/sessions/new page", () => {
           headers: { "content-type": "application/json" },
         });
       }
-      return new Response(null, { status: 200 });
+      return breadcrumbFetch(input);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
     renderPage();
-
     await user.type(screen.getByLabelText("Titre"), "Session 7");
     await user.dblClick(
       screen.getByRole("button", { name: "Créer la session" }),
@@ -149,12 +155,12 @@ describe("/jdr/sessions/new page", () => {
     resolveCreate();
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        "/jdr/sessions/00000000-0000-0000-0000-000000000abc",
+        `/jdr/campaigns/${campId}/sessions/${sampleSession.id}`,
       );
     });
   });
 
-  test("Annuler redirects back to /jdr/sessions", async () => {
+  test("Annuler redirects back to the campaign detail", async () => {
     pushMock.mockClear();
     vi.stubGlobal(
       "fetch",
@@ -162,17 +168,21 @@ describe("/jdr/sessions/new page", () => {
     );
     const user = userEvent.setup();
     renderPage();
-
     await user.click(screen.getByRole("button", { name: "Annuler" }));
-    expect(pushMock).toHaveBeenCalledWith("/jdr/sessions");
+    expect(pushMock).toHaveBeenCalledWith(`/jdr/campaigns/${campId}`);
   });
 
   test("surfaces a generic error when the POST fails", async () => {
     pushMock.mockClear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
+    const fetchMock = vi.fn(async (input: Request | string) => {
+      const url = typeof input === "string" ? input : input.url;
+      const method =
+        typeof input === "string" ? "GET" : (input.method ?? "GET");
+      if (
+        url.endsWith("/services/jdr/sessions") &&
+        method.toUpperCase() === "POST"
+      ) {
+        return new Response(
           JSON.stringify({
             type: "about:blank",
             title: "Validation Error",
@@ -182,9 +192,11 @@ describe("/jdr/sessions/new page", () => {
             status: 422,
             headers: { "content-type": "application/problem+json" },
           },
-        ),
-      ),
-    );
+        );
+      }
+      return breadcrumbFetch(input);
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const user = userEvent.setup();
     renderPage();
@@ -192,7 +204,6 @@ describe("/jdr/sessions/new page", () => {
     await user.click(
       screen.getByRole("button", { name: "Créer la session" }),
     );
-
     expect(
       await screen.findByText(/Création impossible/i),
     ).toBeInTheDocument();

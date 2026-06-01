@@ -5,11 +5,15 @@ import {
   ChevronRight,
   LogOut,
   Settings,
+  Users,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useLogout } from "@/lib/core/auth/useLogout";
+import { isSystemAdmin } from "@/lib/core/session/helpers";
+import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 import { useUIStore } from "@/lib/core/stores/ui";
 import { Lockup } from "@/components/jdr/layout/Lockup";
 import { SidebarNav } from "@/components/jdr/layout/SidebarNav";
@@ -24,6 +28,9 @@ export function Sidebar() {
   const collapsed = useUIStore((state) => state.sidebarCollapsed);
   const toggle = useUIStore((state) => state.toggleSidebarCollapsed);
   const logout = useLogout();
+  const user = useCurrentUser();
+  const router = useRouter();
+  const isAdmin = isSystemAdmin(user);
 
   return (
     <aside
@@ -87,6 +94,24 @@ export function Sidebar() {
           <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
           {!collapsed && <span>Settings</span>}
         </Button>
+
+        {isAdmin && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/jdr/users")}
+            aria-label={collapsed ? "Utilisateurs" : undefined}
+            className={cn(
+              "text-text-chrome",
+              footerButtonBase,
+              collapsed && "justify-center",
+            )}
+          >
+            <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {!collapsed && <span>Utilisateurs</span>}
+          </Button>
+        )}
 
         <Button
           type="button"

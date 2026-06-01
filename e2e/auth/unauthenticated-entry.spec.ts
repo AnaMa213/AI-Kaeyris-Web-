@@ -16,17 +16,17 @@ test("direct visit to /jdr/users without a session redirects to /login (no ?from
   ).not.toBeVisible();
 });
 
-test("direct visit to /jdr/sessions without a session redirects to /login (no ?from=)", async ({
+test("direct visit to /jdr/campaigns without a session redirects to /login (no ?from=)", async ({
   page,
 }) => {
   const session = createSessionState("unauthenticated");
   await installAuthMocks(page, session);
 
-  await page.goto("/jdr/sessions");
+  await page.goto("/jdr/campaigns");
 
   await expect(page).toHaveURL("/login");
   await expect(page.getByText("MJ", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { level: 1, name: "Sessions" }),
+    page.getByRole("heading", { level: 1, name: "Campagnes" }),
   ).not.toBeVisible();
 });

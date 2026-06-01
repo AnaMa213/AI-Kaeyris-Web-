@@ -22,6 +22,8 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 }
 
 export const CAMPAIGNS_QUERY_KEY = ["campaigns"] as const;
+export const campaignQueryKey = (id: string) =>
+  ["campaigns", id] as const;
 
 export function useListCampaigns() {
   const apiClient = useMemo(() => createApiClient(), []);
@@ -31,6 +33,21 @@ export function useListCampaigns() {
       const result = await apiClient.GET("/services/jdr/campaigns");
       return unwrap<PageOfCampaignOut>(result);
     },
+  });
+}
+
+export function useGetCampaign(id: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: campaignQueryKey(id),
+    queryFn: async () => {
+      const result = await apiClient.GET(
+        "/services/jdr/campaigns/{campaign_id}",
+        { params: { path: { campaign_id: id } } },
+      );
+      return unwrap<CampaignOut>(result);
+    },
+    enabled: id !== "",
   });
 }
 

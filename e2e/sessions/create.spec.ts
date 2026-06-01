@@ -5,6 +5,7 @@ import {
   installAuthMocks,
 } from "../helpers/mocks";
 
+const campId = "campaign-default-uuid";
 const createdSession = {
   id: "00000000-0000-0000-0000-000000000abc",
   title: "Session 7 — La crypte oubliée",
@@ -17,6 +18,33 @@ const createdSession = {
   updated_at: "2026-05-31T18:05:00.000Z",
 };
 
+const campaignFixture = {
+  id: campId,
+  name: "Campagne par défaut",
+  description: null,
+  role: "gm" as const,
+  session_count: 0,
+  last_session_at: null,
+  created_at: "2026-01-12T18:00:00+00:00",
+};
+
+async function mockCampaignDetail(page: Page) {
+  await page.route(
+    `**/services/jdr/campaigns/${campId}`,
+    async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(campaignFixture),
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+}
+
 async function mockSessionCreate(page: Page) {
   await page.route("**/services/jdr/sessions", async (route) => {
     const method = route.request().method();
@@ -25,6 +53,19 @@ async function mockSessionCreate(page: Page) {
         status: 201,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(createdSession),
+      });
+      return;
+    }
+    if (method === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          items: [],
+          total: 0,
+          page: 1,
+          size: 50,
+        }),
       });
       return;
     }
@@ -46,14 +87,15 @@ async function mockSessionCreate(page: Page) {
   );
 }
 
-test("GM creates a session and lands on /jdr/sessions/{id} with the title + state badge", async ({
+test("GM creates a session inside a campaign and lands on the new session detail page", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
   await installAuthMocks(page, session);
+  await mockCampaignDetail(page);
   await mockSessionCreate(page);
 
-  await page.goto("/jdr/sessions/new");
+  await page.goto(`/jdr/campaigns/${campId}/sessions/new`);
 
   await expect(
     page.getByRole("heading", { level: 1, name: "Nouvelle session" }),
@@ -64,7 +106,9 @@ test("GM creates a session and lands on /jdr/sessions/{id} with the title + stat
   await page.getByRole("button", { name: "Créer la session" }).click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/jdr/sessions/${createdSession.id}$`),
+    new RegExp(
+      `/jdr/campaigns/${campId}/sessions/${createdSession.id}$`,
+    ),
   );
   await expect(
     page.getByRole("heading", {
@@ -78,17 +122,17 @@ test("GM creates a session and lands on /jdr/sessions/{id} with the title + stat
   ).toBeDisabled();
 });
 
-test("clicking 'Nouvelle session' on the empty /jdr/sessions library opens the creation form", async ({
+test("the new-session form is reachable via direct URL and exposes the campaign breadcrumb", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
   await installAuthMocks(page, session);
+  await mockCampaignDetail(page);
   await mockSessionCreate(page);
 
-  await page.goto("/jdr/sessions");
-
-  await expect(page.getByText("Aucune session encore.")).toBeVisible();
-  await page.getByRole("button", { name: "Nouvelle session" }).click();
-  await expect(page).toHaveURL(/\/jdr\/sessions\/new$/);
+  await page.goto(`/jdr/campaigns/${campId}/sessions/new`);
   await expect(page.getByLabel("Titre")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Campagne par défaut/ }),
+  ).toBeVisible();
 });

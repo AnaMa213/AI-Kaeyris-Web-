@@ -12,7 +12,7 @@ function LauncherGateway() {
 
   useEffect(() => {
     if (user.status === "authenticated") {
-      router.push("/jdr/sessions");
+      router.push("/jdr/campaigns");
     } else if (user.status === "unauthenticated") {
       router.push("/login");
     }

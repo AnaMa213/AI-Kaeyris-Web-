@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { NewSessionForm } from "@/components/jdr/sessions/NewSessionForm";
 import { ApiError } from "@/lib/core/api/errors";
-import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 import { useCreateSession } from "@/lib/jdr/sessions/queries";
 
 function formatCreateError(error: unknown): string | null {
@@ -17,19 +17,20 @@ function formatCreateError(error: unknown): string | null {
 }
 
 export default function NewSessionPage() {
+  const params = useParams<{ campId: string }>();
   const router = useRouter();
   const createMutation = useCreateSession();
   const createInFlightRef = useRef(false);
-  const currentUser = useCurrentUser();
-  const campaignId =
-    currentUser.status === "authenticated"
-      ? (currentUser.activeCampaign?.id ?? null)
-      : null;
 
+  const campId = typeof params.campId === "string" ? params.campId : "";
   const errorMessage = formatCreateError(createMutation.error);
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
+      <div className="mx-auto mb-4 max-w-2xl">
+        <CampaignBreadcrumb campaignId={campId} />
+      </div>
+
       <header className="mx-auto mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-semibold">
           Nouvelle session
@@ -44,13 +45,13 @@ export default function NewSessionPage() {
         <NewSessionForm
           onSubmit={(values) => {
             if (createInFlightRef.current) return;
-            if (!campaignId) return;
+            if (!campId) return;
             createInFlightRef.current = true;
             createMutation.mutate(
-              { ...values, campaign_id: campaignId },
+              { ...values, campaign_id: campId },
               {
                 onSuccess: (data) => {
-                  router.push(`/jdr/sessions/${data.id}`);
+                  router.push(`/jdr/campaigns/${campId}/sessions/${data.id}`);
                 },
                 onSettled: () => {
                   createInFlightRef.current = false;
@@ -58,7 +59,7 @@ export default function NewSessionPage() {
               },
             );
           }}
-          onCancel={() => router.push("/jdr/sessions")}
+          onCancel={() => router.push(`/jdr/campaigns/${campId}`)}
           submitting={createMutation.isPending}
           errorMessage={errorMessage}
         />

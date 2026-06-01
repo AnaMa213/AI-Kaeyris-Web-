@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 import { Upload, Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
@@ -26,9 +27,10 @@ function hasAudio(state: SessionOut["state"]): boolean {
 }
 
 export default function SessionDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = typeof params.id === "string" ? params.id : "";
-  const sessionQuery = useGetSession(id);
+  const params = useParams<{ campId: string; sid: string }>();
+  const campId = typeof params.campId === "string" ? params.campId : "";
+  const sid = typeof params.sid === "string" ? params.sid : "";
+  const sessionQuery = useGetSession(sid);
 
   if (sessionQuery.isPending) {
     return <FantasyLoader message="Consultation du grimoire..." />;
@@ -37,6 +39,9 @@ export default function SessionDetailPage() {
   if (sessionQuery.isError) {
     return (
       <section className="bg-background text-foreground min-h-full p-8">
+        <div className="mx-auto mb-4 max-w-3xl">
+          <CampaignBreadcrumb campaignId={campId} />
+        </div>
         <div
           role="alert"
           className="text-state-error border-state-error/30 bg-state-error/10 mx-auto max-w-3xl rounded-md border p-4 text-sm"
@@ -65,6 +70,10 @@ export default function SessionDetailPage() {
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
+      <div className="mx-auto mb-4 max-w-3xl">
+        <CampaignBreadcrumb campaignId={campId} />
+      </div>
+
       <header className="mx-auto max-w-3xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">

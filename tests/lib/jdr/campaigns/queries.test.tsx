@@ -14,9 +14,13 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useListCampaigns, useCreateCampaign, CAMPAIGNS_QUERY_KEY } = await import(
-  "@/lib/jdr/campaigns/queries"
-);
+const {
+  useListCampaigns,
+  useCreateCampaign,
+  useGetCampaign,
+  CAMPAIGNS_QUERY_KEY,
+  campaignQueryKey,
+} = await import("@/lib/jdr/campaigns/queries");
 
 const sampleCampaign = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -83,6 +87,56 @@ describe("useListCampaigns", () => {
     expect(result.current.data?.items).toHaveLength(1);
     expect(result.current.data?.items[0].name).toBe("Les Royaumes Brisés");
     expect(CAMPAIGNS_QUERY_KEY).toEqual(["campaigns"]);
+  });
+});
+
+describe("useGetCampaign", () => {
+  test("fetches a single campaign by id under queryKey ['campaigns', id]", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (
+          url.includes("/services/jdr/campaigns/") &&
+          method.toUpperCase() === "GET"
+        ) {
+          return new Response(JSON.stringify(sampleCampaign), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(() => useGetCampaign(sampleCampaign.id), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.name).toBe("Les Royaumes Brisés");
+    expect(campaignQueryKey(sampleCampaign.id)).toEqual([
+      "campaigns",
+      sampleCampaign.id,
+    ]);
+  });
+
+  test("does NOT fire the GET when id is empty (enabled gate)", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify(sampleCampaign), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = makeClient();
+    renderHook(() => useGetCampaign(""), { wrapper: wrapper(client) });
+    // Give time for any async effect to fire if it would.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

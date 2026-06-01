@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/jdr/sessions",
+  usePathname: () => "/jdr/campaigns",
 }));
 
 vi.mock("next/link", () => ({
@@ -22,150 +22,47 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const userMock = vi.hoisted(() => ({
-  current: {
-    status: "authenticated" as const,
-    auth: {
-      authId: "kenan",
-      username: "kenan",
-      systemRole: "admin" as const,
-    },
-    activeCampaign: {
-      id: "campaign-default",
-      name: "Campagne par défaut",
-      role: "gm" as const,
-      characterId: "kenan-pc",
-    },
-  } as unknown,
-}));
-
-vi.mock("@/lib/core/session/useCurrentUser", () => ({
-  useCurrentUser: () => userMock.current,
-}));
-
 const { SidebarNav } = await import("@/components/jdr/layout/SidebarNav");
 
-function asAdminGm() {
-  userMock.current = {
-    status: "authenticated",
-    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
-    activeCampaign: {
-      id: "campaign-default",
-      name: "Campagne par défaut",
-      role: "gm",
-      characterId: "kenan-pc",
-    },
-  };
-}
-
-function asUserPj() {
-  userMock.current = {
-    status: "authenticated",
-    auth: { authId: "alice", username: "alice", systemRole: "user" },
-    activeCampaign: {
-      id: "campaign-default",
-      name: "Campagne par défaut",
-      role: "pj",
-      characterId: "alice-pc",
-    },
-  };
-}
-
-function asAdminWithoutCampaign() {
-  userMock.current = {
-    status: "authenticated",
-    auth: { authId: "kenan", username: "kenan", systemRole: "admin" },
-    activeCampaign: null,
-  };
-}
-
-function asLoading() {
-  userMock.current = { status: "loading" };
-}
-
 describe("<SidebarNav>", () => {
-  test("Admin + GM sees Campagnes, Sessions, PJs, Utilisateurs in order", () => {
-    asAdminGm();
+  test("renders Campagnes as the only nav item (Story 2.6 restructure)", () => {
     render(<SidebarNav />);
     const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
     const labels = Array.from(nav.children).map(
       (el) => el.textContent?.trim() ?? "",
     );
-    expect(labels).toEqual(["Campagnes", "Sessions", "PJs", "Utilisateurs"]);
+    expect(labels).toEqual(["Campagnes"]);
   });
 
-  test("user + pj sees Campagnes + Sessions only (PJs hidden — not gm, Utilisateurs hidden — not admin)", () => {
-    asUserPj();
+  test("Campagnes link points to /jdr/campaigns and carries aria-current on active path", () => {
     render(<SidebarNav />);
-    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
-    const labels = Array.from(nav.children).map(
-      (el) => el.textContent?.trim() ?? "",
-    );
-    expect(labels).toEqual(["Campagnes", "Sessions"]);
+    const link = screen.getByRole("link", { name: /Campagnes/i });
+    expect(link).toHaveAttribute("href", "/jdr/campaigns");
+    expect(link).toHaveAttribute("aria-current", "page");
   });
 
-  test("Admin without active campaign sees Campagnes + Sessions + Utilisateurs (no PJs because not gm of any active campaign)", () => {
-    asAdminWithoutCampaign();
+  test("Sessions, PJs, Utilisateurs items are NOT in the global sidebar nav anymore", () => {
     render(<SidebarNav />);
-    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
-    const labels = Array.from(nav.children).map(
-      (el) => el.textContent?.trim() ?? "",
-    );
-    expect(labels).toEqual(["Campagnes", "Sessions", "Utilisateurs"]);
+    expect(
+      screen.queryByRole("link", { name: /Sessions/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /^PJs$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Utilisateurs/i }),
+    ).not.toBeInTheDocument();
   });
 
-  test("Loading state hides admin-only and campaignGm-only items", () => {
-    asLoading();
-    render(<SidebarNav />);
-    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
-    const labels = Array.from(nav.children).map(
-      (el) => el.textContent?.trim() ?? "",
-    );
-    expect(labels).toEqual(["Campagnes", "Sessions"]);
-  });
-
-  test("active item (matching pathname) carries aria-current='page'", () => {
-    asAdminGm();
-    render(<SidebarNav />);
-    const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
-    expect(sessionsLink).toHaveAttribute("aria-current", "page");
-  });
-
-  test("PJs is rendered as an active link for an admin+gm user", () => {
-    asAdminGm();
-    render(<SidebarNav />);
-    const pjsLink = screen.getByRole("link", { name: /PJs/i });
-    expect(pjsLink).toHaveAttribute("href", "/jdr/pjs");
-    expect(pjsLink).not.toHaveAttribute("aria-disabled", "true");
-  });
-
-  test("active item label has visual emphasis class indicating selection", () => {
-    asAdminGm();
-    render(<SidebarNav />);
-    const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
-    expect(sessionsLink.className).toMatch(/surface-overlay/);
-  });
-
-  test("collapsed mode hides labels visually but keeps them accessible via aria-label", () => {
-    asAdminGm();
+  test("collapsed mode keeps the Campagnes link accessible via aria-label", () => {
     render(<SidebarNav collapsed />);
-    const sessionsLink = screen.getByRole("link", { name: /Sessions/i });
-    expect(sessionsLink.getAttribute("aria-label")).toBe("Sessions");
+    const link = screen.getByRole("link", { name: /Campagnes/i });
+    expect(link.getAttribute("aria-label")).toBe("Campagnes");
   });
 
-  test("Campagnes is rendered as the first nav item and points to /jdr/campaigns", () => {
-    asAdminGm();
+  test("active item carries the visual emphasis class", () => {
     render(<SidebarNav />);
-    const nav = screen.getByRole("navigation", { name: "Navigation JDR" });
-    const firstLink = nav.querySelector("a");
-    expect(firstLink).not.toBeNull();
-    expect(firstLink?.getAttribute("href")).toBe("/jdr/campaigns");
-    expect(firstLink?.textContent?.trim()).toBe("Campagnes");
-  });
-
-  test("Campagnes is visible to non-admin / pj users (always visible)", () => {
-    asUserPj();
-    render(<SidebarNav />);
-    expect(screen.getByRole("link", { name: /Campagnes/i })).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Campagnes/i });
+    expect(link.className).toMatch(/surface-overlay/);
   });
 });
