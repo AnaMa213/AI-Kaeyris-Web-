@@ -88,7 +88,14 @@ Quand un futur composant Hub apparaîtra (V2 dans un autre repo), il aura son pr
 
 **JAMAIS mélanger les deux dans une même page V1.** Le clash chrome ↔ parchemin est un signal sémantique fort (passage de "je navigue" à "je lis") — il doit rester rare et délibéré.
 
-**Cards & hovers** : pattern unifié via tokens `--surface-card`, `--border-card`, `--border-card-hover`, `--shadow-card-inset`, `--shadow-card-hover`, `--t-base`, `--t-snappy`. Hovers : translate-y subtil (1-2px) + shadow déployée + couleur `accent-gold` sur titre/border. `prefers-reduced-motion: reduce` désactive globalement les animations (cf. `app/globals.css`).
+**Cards & hovers** : pattern unifié via tokens `--surface-card`, `--border-card`, `--border-card-hover`, `--shadow-card-inset`, `--shadow-card-hover`, `--t-base`, `--t-snappy`. Hovers : translate-y subtil (1-2px) + shadow déployée + couleur `accent-gold` sur titre/border.
+
+**Reduced motion — défense en profondeur (2 lignes)** :
+
+1. **Préfixe `motion-safe:` sur les utilities qui créent du mouvement** (transforms : `translate`, `rotate`, `scale`). Exemple : `motion-safe:hover:-translate-y-0.5` plutôt que `hover:-translate-y-0.5`. Sans ce préfixe, la règle globale (ci-dessous) écrase juste la durée → le translate snape instantanément à -2px au survol, contraire à l'esprit UX-DR20.
+2. **Règle CSS globale `@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; ... } }`** dans `app/globals.css` comme filet de sécurité pour toute durée résiduelle (transitions de couleur, opacity, etc. qui n'ont pas le préfixe `motion-safe:`).
+
+→ Les deux couches sont **complémentaires**, jamais substituts. Toujours écrire les translates avec `motion-safe:` ; toujours garder la règle globale active.
 
 **Cas particulier** : `--surface-narrative-warm` (oklch 0.62 0.05 80, sépia clair) est **réservé** pour Epic 5 (page session detail quand les artefacts longs arriveront). **Ne pas l'utiliser en Story 2.7-2.9** — le token existe mais reste non-appliqué jusqu'à Epic 5.
 
