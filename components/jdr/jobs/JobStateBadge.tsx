@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { jobQueryKey, type JobOut } from "@/lib/jdr/jobs/queries";
+import { useJob, type JobOut } from "@/lib/jdr/jobs/queries";
 
 interface JobStateBadgeProps {
   jobId: string;
@@ -17,12 +16,11 @@ const STATUS_LABEL: Record<JobOut["status"], string> = {
 };
 
 export function JobStateBadge({ jobId }: JobStateBadgeProps) {
-  // Story 3.3: this only consumes the cache populated by useUploadSessionAudio.
-  // Story 3.4 will flip `enabled` to true and add `refetchInterval`.
-  const { data: job } = useQuery<JobOut | undefined>({
-    queryKey: jobQueryKey(jobId),
-    enabled: false,
-  });
+  // Story 3.3: read-only consumer of the cache seeded by useUploadSessionAudio.
+  // useJob ships with a queryFn so TanStack v5 stops yelling about missing
+  // default functions; `enabled: false` keeps it from actually firing.
+  // Story 3.4 will flip enabled + add refetchInterval for live polling.
+  const { data: job } = useJob(jobId);
 
   if (!job) return null;
 
