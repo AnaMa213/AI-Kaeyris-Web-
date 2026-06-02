@@ -21,20 +21,8 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
   return result.data as T;
 }
 
-export const PJS_QUERY_KEY = ["pjs"] as const;
 export const campaignPjsListQueryKey = (campaignId: string) =>
   ["pjs", "list", { campaignId }] as const;
-
-export function useListPjs() {
-  const apiClient = useMemo(() => createApiClient(), []);
-  return useQuery({
-    queryKey: PJS_QUERY_KEY,
-    queryFn: async () => {
-      const result = await apiClient.GET("/services/jdr/pjs");
-      return unwrap<PageOfPjOut>(result);
-    },
-  });
-}
 
 export function useListCampaignPjs(campaignId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
@@ -47,25 +35,6 @@ export function useListCampaignPjs(campaignId: string) {
       return unwrap<PageOfPjOut>(result);
     },
     enabled: campaignId !== "",
-  });
-}
-
-function useInvalidatePjs() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: PJS_QUERY_KEY });
-}
-
-export function useCreatePj() {
-  const apiClient = useMemo(() => createApiClient(), []);
-  const invalidatePjs = useInvalidatePjs();
-  return useMutation({
-    mutationFn: async (body: PjCreateInput) => {
-      const result = await apiClient.POST("/services/jdr/pjs", { body });
-      return unwrap<PjOut>(result);
-    },
-    onSuccess: () => {
-      invalidatePjs();
-    },
   });
 }
 
@@ -83,12 +52,11 @@ export function useCreateCampaignPj(campaignId: string) {
       queryClient.invalidateQueries({
         queryKey: campaignPjsListQueryKey(campaignId),
       });
-      queryClient.invalidateQueries({ queryKey: PJS_QUERY_KEY });
     },
   });
 }
 
-export function useDeletePj(campaignId?: string) {
+export function useDeleteCampaignPj(campaignId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
@@ -105,32 +73,21 @@ export function useDeletePj(campaignId?: string) {
       }
       return pjId;
     },
-    // V1 mocked: the backend never receives the delete (BD-3 endpoint missing),
-    // so invalidateQueries would refetch and bring the PJ back. We mutate the
-    // cache directly instead — the page hides the PJ locally, a refresh
-    // restores it. Documented in <MockBadge> tooltip + Story 2.2 AC4.
+    // V1 mocked: BD-3 endpoint still pending, so a refetch would resurrect
+    // the PJ. We mutate the cache directly — the row hides locally, a refresh
+    // restores it. <MockBadge> in <CampaignPjsCard> signals the limitation.
     onSuccess: (deletedId) => {
-      queryClient.setQueryData<PageOfPjOut>(PJS_QUERY_KEY, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.filter((pj) => pj.id !== deletedId),
-          total: Math.max(0, old.total - 1),
-        };
-      });
-      if (campaignId) {
-        queryClient.setQueryData<PageOfPjOut>(
-          campaignPjsListQueryKey(campaignId),
-          (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              items: old.items.filter((pj) => pj.id !== deletedId),
-              total: Math.max(0, old.total - 1),
-            };
-          },
-        );
-      }
+      queryClient.setQueryData<PageOfPjOut>(
+        campaignPjsListQueryKey(campaignId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter((pj) => pj.id !== deletedId),
+            total: Math.max(0, old.total - 1),
+          };
+        },
+      );
     },
   });
 }

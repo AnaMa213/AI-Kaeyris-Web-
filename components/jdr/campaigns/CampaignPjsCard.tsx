@@ -14,7 +14,7 @@ import { canManageCampaignPjs } from "@/lib/jdr/campaigns/permissions";
 import type { CampaignOut } from "@/lib/jdr/campaigns/queries";
 import {
   useCreateCampaignPj,
-  useDeletePj,
+  useDeleteCampaignPj,
   useListCampaignPjs,
   type PjOut,
 } from "@/lib/jdr/pjs/queries";
@@ -57,7 +57,7 @@ function sortByCreatedAtDesc(items: PjOut[]): PjOut[] {
 export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
   const pjsQuery = useListCampaignPjs(campaign.id);
   const createMutation = useCreateCampaignPj(campaign.id);
-  const deleteMutation = useDeletePj(campaign.id);
+  const deleteMutation = useDeleteCampaignPj(campaign.id);
 
   const [creating, setCreating] = useState(false);
   const [deletingPj, setDeletingPj] = useState<PjOut | null>(null);
