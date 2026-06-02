@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { CampaignDeleteConfirm } from "@/components/jdr/campaigns/CampaignDeleteConfirm";
 import { CampaignEditDialog } from "@/components/jdr/campaigns/CampaignEditDialog";
+import { CampaignPjsCard } from "@/components/jdr/campaigns/CampaignPjsCard";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import {
@@ -246,12 +247,7 @@ export default function CampaignDetailPage() {
         </section>
 
         <aside className="flex flex-col gap-5 lg:col-span-1">
-          <section className={SECTION_CARD_CLASSES}>
-            <h2 className="font-display mb-3 text-xl">PJs</h2>
-            <p className="text-text-chrome-muted text-sm italic">
-              Les PJs liés à cette campagne arrivent bientôt.
-            </p>
-          </section>
+          <CampaignPjsCard campaign={campaign} />
         </aside>
       </div>
 

@@ -90,6 +90,19 @@ test("GM lands on campaign detail and sees the sessions list scoped to this camp
   await installAuthMocks(page, session);
   await mockCampaignDetail(page);
   await mockSessionsList(page, [session11, session12]);
+  // Story 2.10 mounts <CampaignPjsCard> which fetches /pjs?campaign_id=… ;
+  // we stub an empty roster so the side card renders without an error banner.
+  await page.route(/\/services\/jdr\/pjs(\?|$)/, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ items: [], total: 0 }),
+      });
+      return;
+    }
+    await route.continue();
+  });
 
   await page.goto(`/jdr/campaigns/${campId}`);
 
@@ -106,9 +119,9 @@ test("GM lands on campaign detail and sees the sessions list scoped to this camp
   await expect(titles[0]).toHaveText(/Session 12/);
   await expect(titles[1]).toHaveText(/Session 11/);
 
-  // PJs placeholder text is rendered.
+  // <CampaignPjsCard> is mounted (Story 2.10 replaced the placeholder).
   await expect(
-    page.getByText("Les PJs liés à cette campagne arrivent bientôt."),
+    page.getByRole("heading", { level: 2, name: "PJs" }),
   ).toBeVisible();
 });
 

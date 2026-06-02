@@ -19,14 +19,23 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useListPjs, useCreatePj, useDeletePj, PJS_QUERY_KEY } = await import(
-  "@/lib/jdr/pjs/queries"
-);
+const {
+  useListPjs,
+  useListCampaignPjs,
+  useCreatePj,
+  useCreateCampaignPj,
+  useDeletePj,
+  PJS_QUERY_KEY,
+  campaignPjsListQueryKey,
+} = await import("@/lib/jdr/pjs/queries");
 const { ApiError } = await import("@/lib/core/api/errors");
+
+const CAMPAIGN_ID = "11111111-1111-1111-1111-111111111111";
 
 const samplePj = {
   id: "00000000-0000-0000-0000-000000000001",
   name: "Eldrin",
+  campaign_id: CAMPAIGN_ID,
   created_at: "2026-05-30T10:00:00Z",
 };
 
@@ -52,7 +61,7 @@ beforeEach(() => {
       const method =
         typeof input === "string" ? "GET" : (input.method ?? "GET");
       if (
-        url.endsWith("/services/jdr/pjs") &&
+        /\/services\/jdr\/pjs(\?|$)/.test(url) &&
         method.toUpperCase() === "GET"
       ) {
         return new Response(
@@ -282,5 +291,117 @@ describe("useDeletePj", () => {
     await expect(
       result.current.mutateAsync(samplePj.id),
     ).rejects.toBeInstanceOf(ApiError);
+  });
+
+  test("also mutates the campaign-scoped cache when campaignId is provided", async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(PJS_QUERY_KEY, {
+      items: [samplePj, { ...samplePj, id: "pj-2", name: "Galadriel" }],
+      total: 2,
+    });
+    queryClient.setQueryData(campaignPjsListQueryKey(CAMPAIGN_ID), {
+      items: [samplePj, { ...samplePj, id: "pj-2", name: "Galadriel" }],
+      total: 2,
+    });
+
+    const { result } = renderHook(() => useDeletePj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync(samplePj.id);
+
+    const globalCached = queryClient.getQueryData(PJS_QUERY_KEY) as
+      | { items: { id: string }[]; total: number }
+      | undefined;
+    const scopedCached = queryClient.getQueryData(
+      campaignPjsListQueryKey(CAMPAIGN_ID),
+    ) as { items: { id: string }[]; total: number } | undefined;
+
+    expect(globalCached?.items.map((p) => p.id)).toEqual(["pj-2"]);
+    expect(scopedCached?.items.map((p) => p.id)).toEqual(["pj-2"]);
+    expect(scopedCached?.total).toBe(1);
+  });
+});
+
+describe("useListCampaignPjs", () => {
+  test("calls GET /services/jdr/pjs?campaign_id=… and stores under the scoped query key", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useListCampaignPjs(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.items).toEqual([samplePj]);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.includes("/services/jdr/pjs") &&
+        request.url.includes(`campaign_id=${CAMPAIGN_ID}`) &&
+        request.method === "GET"
+      );
+    });
+    if (!call) throw new Error("No GET /pjs?campaign_id=… call found");
+    expect(campaignPjsListQueryKey(CAMPAIGN_ID)).toEqual([
+      "pjs",
+      "list",
+      { campaignId: CAMPAIGN_ID },
+    ]);
+  });
+
+  test("does NOT fire the GET when campaignId is empty (enabled gate)", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ items: [], total: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const queryClient = makeClient();
+    renderHook(() => useListCampaignPjs(""), {
+      wrapper: wrapper(queryClient),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useCreateCampaignPj", () => {
+  test("POSTs /services/jdr/pjs with name + campaign_id in the body", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useCreateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({ name: "Aragorn" });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith("/services/jdr/pjs") && request.method === "POST"
+      );
+    });
+    if (!call) throw new Error("No POST /pjs call found");
+    await expect((call[0] as Request).clone().json()).resolves.toEqual({
+      name: "Aragorn",
+      campaign_id: CAMPAIGN_ID,
+    });
+  });
+
+  test("invalidates BOTH the scoped key and PJS_QUERY_KEY on success", async () => {
+    const queryClient = makeClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useCreateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({ name: "Aragorn" });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: campaignPjsListQueryKey(CAMPAIGN_ID),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: PJS_QUERY_KEY,
+    });
   });
 });

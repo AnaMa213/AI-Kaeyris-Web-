@@ -22,6 +22,8 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 }
 
 export const PJS_QUERY_KEY = ["pjs"] as const;
+export const campaignPjsListQueryKey = (campaignId: string) =>
+  ["pjs", "list", { campaignId }] as const;
 
 export function useListPjs() {
   const apiClient = useMemo(() => createApiClient(), []);
@@ -31,6 +33,20 @@ export function useListPjs() {
       const result = await apiClient.GET("/services/jdr/pjs");
       return unwrap<PageOfPjOut>(result);
     },
+  });
+}
+
+export function useListCampaignPjs(campaignId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: campaignPjsListQueryKey(campaignId),
+    queryFn: async () => {
+      const result = await apiClient.GET("/services/jdr/pjs", {
+        params: { query: { campaign_id: campaignId } },
+      });
+      return unwrap<PageOfPjOut>(result);
+    },
+    enabled: campaignId !== "",
   });
 }
 
@@ -53,7 +69,26 @@ export function useCreatePj() {
   });
 }
 
-export function useDeletePj() {
+export function useCreateCampaignPj(campaignId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PjCreateInput) => {
+      const result = await apiClient.POST("/services/jdr/pjs", {
+        body: { name: input.name, campaign_id: campaignId },
+      });
+      return unwrap<PjOut>(result);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: campaignPjsListQueryKey(campaignId),
+      });
+      queryClient.invalidateQueries({ queryKey: PJS_QUERY_KEY });
+    },
+  });
+}
+
+export function useDeletePj(campaignId?: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
@@ -83,6 +118,19 @@ export function useDeletePj() {
           total: Math.max(0, old.total - 1),
         };
       });
+      if (campaignId) {
+        queryClient.setQueryData<PageOfPjOut>(
+          campaignPjsListQueryKey(campaignId),
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              items: old.items.filter((pj) => pj.id !== deletedId),
+              total: Math.max(0, old.total - 1),
+            };
+          },
+        );
+      }
     },
   });
 }

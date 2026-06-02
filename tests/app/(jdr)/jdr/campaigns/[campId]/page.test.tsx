@@ -279,13 +279,20 @@ describe("/jdr/campaigns/[campId] page", () => {
     expect(titles[1]).toHaveTextContent("Session 11 — Le pacte rompu");
   });
 
-  test("renders the PJs placeholder text", async () => {
+  test("no longer renders the legacy PJs placeholder text", async () => {
+    stubFetch({ sessions: [session1] });
+    renderPage();
+    await screen.findByRole("heading", { level: 1 });
+    expect(
+      screen.queryByText("Les PJs liés à cette campagne arrivent bientôt."),
+    ).not.toBeInTheDocument();
+  });
+
+  test("renders the <CampaignPjsCard> with its 'PJs' heading", async () => {
     stubFetch({ sessions: [session1] });
     renderPage();
     expect(
-      await screen.findByText(
-        "Les PJs liés à cette campagne arrivent bientôt.",
-      ),
+      await screen.findByRole("heading", { level: 2, name: "PJs" }),
     ).toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@ import {
   canCreateCampaignSession,
   canDeleteCampaign,
   canEditCampaign,
+  canManageCampaignPjs,
 } from "@/lib/jdr/campaigns/permissions";
 
 describe("canCreateCampaignSession", () => {
@@ -32,5 +33,15 @@ describe("canDeleteCampaign", () => {
 
   test("returns false when role is pj", () => {
     expect(canDeleteCampaign({ role: "pj" })).toBe(false);
+  });
+});
+
+describe("canManageCampaignPjs", () => {
+  test("returns true when role is gm", () => {
+    expect(canManageCampaignPjs({ role: "gm" })).toBe(true);
+  });
+
+  test("returns false when role is pj", () => {
+    expect(canManageCampaignPjs({ role: "pj" })).toBe(false);
   });
 });

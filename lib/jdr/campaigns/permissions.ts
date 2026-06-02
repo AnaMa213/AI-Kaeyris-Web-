@@ -17,3 +17,9 @@ export function canDeleteCampaign(
 ): boolean {
   return campaign.role === "gm";
 }
+
+export function canManageCampaignPjs(
+  campaign: Pick<CampaignOut, "role">,
+): boolean {
+  return campaign.role === "gm";
+}
