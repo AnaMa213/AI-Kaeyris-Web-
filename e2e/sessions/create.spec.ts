@@ -117,9 +117,11 @@ test("GM creates a session inside a campaign and lands on the new session detail
     }),
   ).toBeVisible();
   await expect(page.getByText("Créée")).toBeVisible();
+  // Story 3.1 replaces the disabled "Uploader l'audio" button with the
+  // <SessionAudioUploadCard> dropzone for GM on a 'created' session.
   await expect(
-    page.getByRole("button", { name: "Uploader l'audio de la séance" }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: /Glisse ton M4A/ }),
+  ).toBeVisible();
 });
 
 test("the new-session form is reachable via direct URL and exposes the campaign breadcrumb", async ({

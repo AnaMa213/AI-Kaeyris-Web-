@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Upload, Volume2 } from "lucide-react";
+import { Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
+import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
@@ -76,6 +77,7 @@ export default function SessionDetailPage() {
   const canEdit = campaignQuery.data
     ? canEditCampaignSession(campaignQuery.data)
     : false;
+  const canUploadAudio = canEdit && session.state === "created";
 
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
@@ -111,7 +113,7 @@ export default function SessionDetailPage() {
                 Modifier
               </Button>
             )}
-            {audioReady ? (
+            {audioReady && (
               <Button
                 type="button"
                 variant="outline"
@@ -122,20 +124,16 @@ export default function SessionDetailPage() {
                 <Volume2 className="h-4 w-4" aria-hidden="true" />
                 Lire l&apos;audio
               </Button>
-            ) : (
-              <Button
-                type="button"
-                disabled
-                title={AUDIO_DISABLED_HINT}
-                aria-label="Uploader l'audio de la séance"
-              >
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                Uploader l&apos;audio
-              </Button>
             )}
           </div>
         </div>
       </header>
+
+      {canUploadAudio && (
+        <div className="mb-7">
+          <SessionAudioUploadCard session={session} />
+        </div>
+      )}
 
       <SessionEditDialog
         open={editing}

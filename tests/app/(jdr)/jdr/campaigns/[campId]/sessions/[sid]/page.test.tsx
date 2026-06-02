@@ -117,17 +117,28 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(screen.getByText("Créée")).toBeInTheDocument();
   });
 
-  test("shows the 'Uploader l'audio' CTA disabled when state is 'created'", async () => {
+  test("renders the SessionAudioUploadCard dropzone for a GM on a session in 'created' state (Story 3.1)", async () => {
     stubFetch({});
     renderPage();
-    const uploadCta = await screen.findByRole("button", {
-      name: "Uploader l'audio de la séance",
-    });
-    expect(uploadCta).toBeDisabled();
-    expect(uploadCta.getAttribute("title")).toMatch(/Epic 3/);
+    await screen.findByRole("heading", { level: 1 });
+    expect(
+      screen.getByRole("button", { name: /Glisse ton M4A/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Uploader l'audio de la séance" }),
+    ).not.toBeInTheDocument();
   });
 
-  test("swaps the CTA to 'Lire l'audio' (disabled) once state >= audio_uploaded", async () => {
+  test("does NOT render the dropzone for a PJ on a session in 'created' state (Story 3.1)", async () => {
+    stubFetch({ campaign: { ...baseCampaign, role: "pj" } });
+    renderPage();
+    await screen.findByRole("heading", { level: 1 });
+    expect(
+      screen.queryByRole("button", { name: /Glisse ton M4A/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("swaps to the 'Lire l'audio' (disabled) CTA once state >= audio_uploaded, hides the dropzone", async () => {
     stubFetch({ session: { ...baseSession, state: "audio_uploaded" } });
     renderPage();
     const playCta = await screen.findByRole("button", {
@@ -136,7 +147,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(playCta).toBeDisabled();
     expect(playCta.getAttribute("title")).toMatch(/Epic 3/);
     expect(
-      screen.queryByRole("button", { name: "Uploader l'audio de la séance" }),
+      screen.queryByRole("button", { name: /Glisse ton M4A/ }),
     ).not.toBeInTheDocument();
   });
 
