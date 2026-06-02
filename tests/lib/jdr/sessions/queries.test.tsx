@@ -18,9 +18,12 @@ const {
   useGetSession,
   useListSessions,
   useUpdateSession,
+  useUploadSessionAudio,
   sessionQueryKey,
   sessionsListQueryKey,
 } = await import("@/lib/jdr/sessions/queries");
+const { jobQueryKey } = await import("@/lib/jdr/jobs/queries");
+const { ApiError } = await import("@/lib/core/api/errors");
 
 const sampleSession = {
   id: "00000000-0000-0000-0000-000000000abc",
@@ -337,6 +340,210 @@ describe("useUpdateSession", () => {
     });
     expect(calls).toContainEqual({
       queryKey: sessionsListQueryKey("camp-uuid"),
+    });
+  });
+});
+
+describe("useUploadSessionAudio", () => {
+  const sessionId = "ses-upload-1";
+  const audioResponse = {
+    session_id: sessionId,
+    path: "data/audio/ses-upload-1.m4a",
+    sha256: "a".repeat(64),
+    size_bytes: 12345,
+    duration_seconds: null,
+    uploaded_at: "2026-05-31T19:00:00+00:00",
+    job_id: "job-uuid-7",
+  };
+
+  test("POSTs FormData and on success seeds the job cache + invalidates the session", async () => {
+    let capturedRequest: Request | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith(`/services/jdr/sessions/${sessionId}/audio`)) {
+          if (typeof input !== "string") capturedRequest = input;
+          else {
+            capturedRequest = new Request(url, init);
+          }
+          return new Response(JSON.stringify(audioResponse), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const setSpy = vi.spyOn(client, "setQueryData");
+
+    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+      wrapper: wrapper(client),
+    });
+    const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
+    await result.current.mutateAsync(file);
+
+    expect((capturedRequest as Request | null)?.method).toBe("POST");
+    expect((capturedRequest as Request | null)?.credentials).toBe("include");
+
+    expect(setSpy).toHaveBeenCalledWith(
+      jobQueryKey(audioResponse.job_id),
+      expect.objectContaining({
+        id: audioResponse.job_id,
+        kind: "transcription",
+        session_id: sessionId,
+        status: "queued",
+      }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: sessionQueryKey(sessionId),
+    });
+  });
+
+  test("optimistically marks the cached session as audio_uploaded after upload success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith(`/services/jdr/sessions/${sessionId}/audio`)) {
+          return new Response(JSON.stringify(audioResponse), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    client.setQueryData(sessionQueryKey(sessionId), {
+      ...sampleSession,
+      id: sessionId,
+      state: "created",
+    });
+
+    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+      wrapper: wrapper(client),
+    });
+    const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
+    await result.current.mutateAsync(file);
+
+    expect(client.getQueryData(sessionQueryKey(sessionId))).toMatchObject({
+      id: sessionId,
+      state: "audio_uploaded",
+      updated_at: audioResponse.uploaded_at,
+    });
+  });
+
+  test("propagates a 413 payload-too-large as ApiError with status preserved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Payload too large",
+            status: 413,
+          }),
+          {
+            status: 413,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+      wrapper: wrapper(client),
+    });
+    const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
+    await expect(result.current.mutateAsync(file)).rejects.toBeInstanceOf(
+      ApiError,
+    );
+  });
+
+  test("propagates a 422 validation error as ApiError with status preserved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Validation Error",
+            status: 422,
+          }),
+          {
+            status: 422,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+      wrapper: wrapper(client),
+    });
+    const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
+    await expect(result.current.mutateAsync(file)).rejects.toMatchObject({
+      problem: { status: 422 },
+    });
+  });
+
+  test("propagates a 403 forbidden as ApiError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Forbidden",
+            status: 403,
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+      wrapper: wrapper(client),
+    });
+    const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
+    await expect(result.current.mutateAsync(file)).rejects.toMatchObject({
+      problem: { status: 403 },
     });
   });
 });

@@ -8,6 +8,16 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+vi.mock("@/lib/core/env", () => ({
+  env: {
+    NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000",
+    NEXT_PUBLIC_MOCK_AUDIO: false,
+    NEXT_PUBLIC_MOCK_PJ_DELETE: false,
+    NEXT_PUBLIC_AUDIO_REDUCER_REQUIRED: false,
+  },
+}));
 
 const toastErrorMock = vi.fn();
 vi.mock("sonner", () => ({
@@ -45,6 +55,38 @@ const sampleSession = {
   updated_at: "2026-05-30T20:00:00+00:00",
 };
 
+function renderCard(props: {
+  session?: typeof sampleSession;
+  onUploadSuccess?: (jobId: string) => void;
+  fetchImpl?: (
+    input: Request | string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+} = {}) {
+  if (props.fetchImpl) {
+    vi.stubGlobal("fetch", vi.fn(props.fetchImpl));
+  } else {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
+  }
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <SessionAudioUploadCard
+          session={props.session ?? sampleSession}
+          onUploadSuccess={props.onUploadSuccess}
+        />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
 function makeDataTransfer(file: File): DataTransfer {
   return {
     files: [file] as unknown as FileList,
@@ -71,7 +113,7 @@ afterEach(() => {
 
 describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered)", () => {
   test("initial render shows the dropzone (no file selected)", () => {
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     expect(
       screen.getByRole("button", { name: /Glisse ton M4A/ }),
     ).toBeInTheDocument();
@@ -81,7 +123,7 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
   });
 
   test("dropping a valid M4A transitions to the preparing panel with filename + MB", () => {
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x".repeat(2_097_152)], "demo.m4a", {
       type: "audio/mp4",
@@ -99,7 +141,7 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
   });
 
   test("dropping a non-M4A file fires toast.error and stays on the dropzone", () => {
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x"], "demo.txt", { type: "text/plain" });
 
@@ -114,7 +156,7 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
   });
 
   test("clicking Annuler from the preparing panel returns to the dropzone", async () => {
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
@@ -131,15 +173,125 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
     ).toBeInTheDocument();
   });
 
-  test("the Envoyer button is disabled with the Story 3.3 hint", () => {
-    render(<SessionAudioUploadCard session={sampleSession} />);
+  test("the Envoyer button is enabled once a file is selected (Story 3.3)", () => {
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
 
     const sendButton = screen.getByRole("button", { name: "Envoyer" });
-    expect(sendButton).toBeDisabled();
-    expect(sendButton.getAttribute("title")).toBe("Disponible avec Story 3.3");
+    expect(sendButton).not.toBeDisabled();
+  });
+});
+
+describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
+  const audioResponse = {
+    session_id: "ses-1",
+    path: "data/audio/ses-1.m4a",
+    sha256: "a".repeat(64),
+    size_bytes: 1024,
+    duration_seconds: null,
+    uploaded_at: "2026-05-30T20:01:00+00:00",
+    job_id: "job-uuid-42",
+  };
+
+  test("clicking Envoyer triggers the POST and calls onUploadSuccess with the job_id", async () => {
+    const onUploadSuccess = vi.fn();
+    const { queryClient } = renderCard({
+      onUploadSuccess,
+      fetchImpl: async () =>
+        new Response(JSON.stringify(audioResponse), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+    const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
+    fireEvent.drop(dropzone, {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "demo.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+
+    await waitFor(() => {
+      expect(onUploadSuccess).toHaveBeenCalledWith("job-uuid-42");
+    });
+    // The mutation seeded the job cache.
+    const cached = queryClient.getQueryData(["jdr", "job", "job-uuid-42"]);
+    expect(cached).toMatchObject({
+      id: "job-uuid-42",
+      status: "queued",
+      kind: "transcription",
+    });
+  });
+
+  test("during uploading both Envoyer and Annuler are disabled and the label shows 'Envoi en cours…'", async () => {
+    let resolveResp: ((r: Response) => void) | null = null;
+    renderCard({
+      fetchImpl: () =>
+        new Promise<Response>((resolve) => {
+          resolveResp = resolve;
+        }),
+    });
+    const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
+    fireEvent.drop(dropzone, {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "demo.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Envoi en cours/ }),
+      ).toBeDisabled(),
+    );
+    expect(screen.getByRole("button", { name: "Annuler" })).toBeDisabled();
+
+    (resolveResp as ((r: Response) => void) | null)?.(
+      new Response(JSON.stringify(audioResponse), {
+        status: 202,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  });
+
+  test("on 413 the rejection toast surfaces the reducer hint", async () => {
+    renderCard({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Payload too large",
+            status: 413,
+          }),
+          {
+            status: 413,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+    });
+    const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
+    fireEvent.drop(dropzone, {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "demo.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining("Fichier trop volumineux"),
+      );
+    });
+    // The card stays in the preparing phase (file kept for retry).
+    expect(screen.getByText(/Fichier prêt/)).toBeInTheDocument();
   });
 });
 
@@ -158,7 +310,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
         }),
     );
 
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const large = new File(["x".repeat(1024)], "big.m4a", {
       type: "audio/mp4",
@@ -186,7 +338,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
       return new Promise<File>(() => {});
     });
 
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const large = new File(["x"], "big.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });
@@ -222,7 +374,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
           }),
       );
 
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const firstDropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     fireEvent.drop(firstDropzone, {
       dataTransfer: makeDataTransfer(
@@ -261,7 +413,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
     audioMocks.shouldReduce.mockReturnValue(true);
     audioMocks.reduceAudio.mockRejectedValueOnce(new Error("boom"));
 
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const large = new File(["x"], "big.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });
@@ -282,7 +434,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
       new DOMException("Aborted", "AbortError"),
     );
 
-    render(<SessionAudioUploadCard session={sampleSession} />);
+    renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const large = new File(["x"], "big.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });

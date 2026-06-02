@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
-import { ApiError } from "@/lib/core/api/errors";
+import { env } from "@/lib/core/env";
+import { ApiError, AuthError } from "@/lib/core/api/errors";
+import { parseProblemDetails } from "@/lib/core/api/problemDetails";
+import { jobQueryKey } from "@/lib/jdr/jobs/queries";
 import {
   toIsoUtc,
   type SessionCreateInput,
@@ -12,6 +15,8 @@ import type { components } from "@/types/api";
 
 type SessionOut = components["schemas"]["SessionOut"];
 type PageOfSessionOut = components["schemas"]["Page_SessionOut_"];
+type AudioUploadOut = components["schemas"]["AudioUploadOut"];
+type JobOut = components["schemas"]["JobOut"];
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
   if (result.error !== undefined) {
@@ -111,6 +116,72 @@ export function useUpdateSession(sessionId: string, campaignId?: string) {
   });
 }
 
+export function useUploadSessionAudio(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File): Promise<AudioUploadOut> => {
+      // openapi-fetch types the multipart body as { audio: string }, which
+      // does not match a FormData payload — we use plain fetch here and
+      // re-parse problem+json responses ourselves (same shape as the
+      // openapi-fetch error middleware).
+      // Local dev shortcut: when NEXT_PUBLIC_MOCK_AUDIO is on we synthesize
+      // an AudioUploadOut without hitting the backend. The GET audio mock
+      // middleware (lib/core/api/mocks/audio.ts) does not apply here because
+      // this hook bypasses the openapi-fetch client (see Dev Notes 4.2).
+      if (env.NEXT_PUBLIC_MOCK_AUDIO) {
+        return {
+          session_id: sessionId,
+          path: `mock/${sessionId}.m4a`,
+          sha256: "0".repeat(64),
+          size_bytes: file.size,
+          duration_seconds: null,
+          uploaded_at: new Date().toISOString(),
+          job_id: crypto.randomUUID(),
+        };
+      }
+      const formData = new FormData();
+      formData.append("audio", file);
+      const url = `${env.NEXT_PUBLIC_API_BASE_URL}/services/jdr/sessions/${sessionId}/audio`;
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (response.status >= 400) {
+        const problem = await parseProblemDetails(response);
+        if (response.status === 401) throw new AuthError(problem);
+        throw new ApiError(problem);
+      }
+      return (await response.json()) as AudioUploadOut;
+    },
+    onSuccess: (data) => {
+      const initialJob: JobOut = {
+        id: data.job_id,
+        kind: "transcription",
+        session_id: sessionId,
+        status: "queued",
+        failure_reason: null,
+        queued_at: data.uploaded_at,
+        started_at: null,
+        ended_at: null,
+      };
+      queryClient.setQueryData(jobQueryKey(data.job_id), initialJob);
+      queryClient.setQueryData<SessionOut | undefined>(
+        sessionQueryKey(sessionId),
+        (current) =>
+          current
+            ? {
+                ...current,
+                state: "audio_uploaded",
+                updated_at: data.uploaded_at,
+              }
+            : current,
+      );
+      queryClient.invalidateQueries({ queryKey: sessionQueryKey(sessionId) });
+    },
+  });
+}
+
 export function useGetSession(id: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   return useQuery({
@@ -126,4 +197,4 @@ export function useGetSession(id: string) {
   });
 }
 
-export type { SessionOut, PageOfSessionOut };
+export type { SessionOut, PageOfSessionOut, AudioUploadOut };

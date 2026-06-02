@@ -205,6 +205,69 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("after upload success the JobStateBadge 'En file' appears in the header (Story 3.3)", async () => {
+    const audioResponse = {
+      session_id: sessionIdFixture,
+      path: "data/audio/x.m4a",
+      sha256: "a".repeat(64),
+      size_bytes: 1024,
+      duration_seconds: null,
+      uploaded_at: "2026-05-31T19:00:00+00:00",
+      job_id: "job-uuid-3-3",
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+          return new Response(JSON.stringify(baseCampaign), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (
+          url.includes(`/services/jdr/sessions/${sessionIdFixture}/audio`) &&
+          method?.toUpperCase() === "POST"
+        ) {
+          return new Response(JSON.stringify(audioResponse), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+          return new Response(JSON.stringify(baseSession), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("heading", { level: 1 });
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    Object.defineProperty(fileInput, "files", {
+      value: [new File(["x"], "demo.m4a", { type: "audio/mp4" })],
+      configurable: true,
+    });
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await screen.findByText(/Fichier prêt/);
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+
+    expect(
+      await screen.findByLabelText("État de la transcription : En file"),
+    ).toBeInTheDocument();
+  });
+
   test("clicking Modifier opens the SessionEditDialog (Story 2.8)", async () => {
     stubFetch({});
     const user = userEvent.setup();

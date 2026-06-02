@@ -8,6 +8,7 @@ import { Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
+import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
@@ -38,6 +39,7 @@ export default function SessionDetailPage() {
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
   const [editing, setEditing] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
   if (sessionQuery.isPending) {
     return <FantasyLoader message="Consultation du grimoire..." />;
@@ -93,6 +95,7 @@ export default function SessionDetailPage() {
                 {session.title}
               </h1>
               <Badge variant="outline">{STATE_LABEL[session.state]}</Badge>
+              {currentJobId && <JobStateBadge jobId={currentJobId} />}
             </div>
             <time
               dateTime={session.recorded_at}
@@ -131,7 +134,10 @@ export default function SessionDetailPage() {
 
       {canUploadAudio && (
         <div className="mb-7">
-          <SessionAudioUploadCard session={session} />
+          <SessionAudioUploadCard
+            session={session}
+            onUploadSuccess={(jobId) => setCurrentJobId(jobId)}
+          />
         </div>
       )}
 

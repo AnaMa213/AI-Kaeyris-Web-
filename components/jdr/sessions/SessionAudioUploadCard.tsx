@@ -5,12 +5,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { UploadDropzone } from "@/components/common/UploadDropzone";
+import { ApiError } from "@/lib/core/api/errors";
 import { shouldReduce } from "@/lib/audio/provider";
 import { reduceAudio } from "@/lib/audio/reduce";
-import type { SessionOut } from "@/lib/jdr/sessions/queries";
+import {
+  useUploadSessionAudio,
+  type SessionOut,
+} from "@/lib/jdr/sessions/queries";
 
 interface SessionAudioUploadCardProps {
   session: SessionOut;
+  onUploadSuccess?: (jobId: string) => void;
 }
 
 type Phase = "idle" | "reducing" | "preparing";
@@ -22,7 +27,22 @@ const DROPZONE_LABEL = "Glisse ton M4A ici ou clique pour choisir";
 const REJECTION_MESSAGE = "Format non supporté. Glisse un fichier .m4a.";
 const REDUCE_ERROR_MESSAGE =
   "La réduction audio a échoué. Réessaie ou choisis un fichier plus petit.";
-const SEND_HINT = "Disponible avec Story 3.3";
+
+function formatUploadError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const status = error.problem.status;
+    if (status === 403) {
+      return "Tu n'as pas les permissions pour uploader l'audio.";
+    }
+    if (status === 413) {
+      return "Fichier trop volumineux. Active la réduction (NEXT_PUBLIC_AUDIO_REDUCER_REQUIRED=true) ou choisis un fichier plus petit.";
+    }
+    if (status === 422) {
+      return "Le fichier audio n'est pas valide. Vérifie le format M4A.";
+    }
+  }
+  return "L'upload a échoué. Réessaie.";
+}
 
 const SECTION_CARD_CLASSES =
   "bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)";
@@ -33,6 +53,7 @@ function formatSizeMB(bytes: number): string {
 
 export function SessionAudioUploadCard({
   session,
+  onUploadSuccess,
 }: SessionAudioUploadCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -40,6 +61,8 @@ export function SessionAudioUploadCard({
   const [progress, setProgress] = useState<number>(0);
   const abortRef = useRef<AbortController | null>(null);
   const operationRef = useRef(0);
+  const uploadMutation = useUploadSessionAudio(session.id);
+  const uploading = uploadMutation.isPending;
 
   const resetToIdle = (operationId?: number) => {
     if (operationId === undefined || operationRef.current === operationId) {
@@ -99,6 +122,18 @@ export function SessionAudioUploadCard({
     resetToIdle();
   };
 
+  const handleSend = () => {
+    if (!selectedFile || uploading) return;
+    uploadMutation.mutate(selectedFile, {
+      onSuccess: (data) => {
+        onUploadSuccess?.(data.job_id);
+      },
+      onError: (err) => {
+        toast.error(formatUploadError(err));
+      },
+    });
+  };
+
   if (phase === "reducing") {
     return (
       <section
@@ -144,11 +179,17 @@ export function SessionAudioUploadCard({
             type="button"
             variant="ghost"
             onClick={() => resetToIdle()}
+            disabled={uploading}
           >
             Annuler
           </Button>
-          <Button type="button" disabled title={SEND_HINT}>
-            Envoyer
+          <Button
+            type="button"
+            onClick={handleSend}
+            disabled={uploading}
+            className={uploading ? "animate-pulse" : undefined}
+          >
+            {uploading ? "Envoi en cours…" : "Envoyer"}
           </Button>
         </div>
       </section>

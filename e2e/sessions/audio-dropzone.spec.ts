@@ -88,9 +88,10 @@ test("GM picks an M4A via the dropzone and the preparing panel shows filename + 
   await expect(page.getByText(/1\.0 MB/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Annuler" })).toBeVisible();
 
+  // Story 3.3 enabled the Envoyer button — assert it is now usable.
   const sendButton = page.getByRole("button", { name: "Envoyer" });
   await expect(sendButton).toBeVisible();
-  await expect(sendButton).toBeDisabled();
+  await expect(sendButton).not.toBeDisabled();
 });
 
 test("Picking a non-M4A file triggers the rejection toast and stays on the dropzone", async ({
