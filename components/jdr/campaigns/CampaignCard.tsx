@@ -42,7 +42,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
   return (
     <Link
       href={`/jdr/campaigns/${campaign.id}`}
-      className="bg-surface-card border-border-card hover:border-border-card-hover focus-visible:outline-accent-gold group flex min-h-50 flex-col gap-3 rounded-[10px] border p-6 shadow-(--shadow-card-inset) transition-all duration-180 hover:-translate-y-0.5 hover:shadow-(--shadow-card-hover) focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="bg-surface-card border-border-card hover:border-border-card-hover focus-visible:outline-accent-gold group flex min-h-50 flex-col gap-3 rounded-[10px] border p-6 shadow-(--shadow-card-inset) transition-all duration-180 motion-safe:hover:-translate-y-0.5 hover:shadow-(--shadow-card-hover) focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       <div className="flex items-start justify-between gap-4">
         <h2 className="font-display group-hover:text-accent-gold text-2xl leading-tight transition-colors">

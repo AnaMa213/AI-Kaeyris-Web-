@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy dense table surface: Story 2.7 leaves `/jdr/pjs` chrome as-is.
+// UI polish will come with the future scoped-PJs functional refactor.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
