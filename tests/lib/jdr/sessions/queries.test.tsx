@@ -17,6 +17,7 @@ const {
   useCreateSession,
   useGetSession,
   useListSessions,
+  useUpdateSession,
   sessionQueryKey,
   sessionsListQueryKey,
 } = await import("@/lib/jdr/sessions/queries");
@@ -207,5 +208,135 @@ describe("useListSessions", () => {
       "list",
       { campaignId: "camp-uuid" },
     ]);
+  });
+});
+
+describe("useUpdateSession", () => {
+  test("PATCHes /sessions/{id} with the right body when title + campaign_context are set", async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes("/services/jdr/sessions/") &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          if (typeof input !== "string") {
+            patchBody = await input.clone().json();
+          }
+          return new Response(
+            JSON.stringify({
+              ...sampleSession,
+              title: "Session 12 (updated)",
+              campaign_context: "Une bibliothèque oubliée.",
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useUpdateSession(sampleSession.id, "camp-uuid"),
+      { wrapper: wrapper(queryClient) },
+    );
+
+    result.current.mutate({
+      title: "Session 12 (updated)",
+      campaign_context: "Une bibliothèque oubliée.",
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(patchBody).toEqual({
+      title: "Session 12 (updated)",
+      campaign_context: "Une bibliothèque oubliée.",
+    });
+  });
+
+  test("PATCH body has campaign_context: null when the input string is empty (clear semantic)", async () => {
+    let patchBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes("/services/jdr/sessions/") &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          if (typeof input !== "string") {
+            patchBody = await input.clone().json();
+          }
+          return new Response(
+            JSON.stringify({ ...sampleSession, campaign_context: null }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useUpdateSession(sampleSession.id),
+      { wrapper: wrapper(queryClient) },
+    );
+
+    result.current.mutate({ title: "OK", campaign_context: "   " });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(patchBody).toEqual({ title: "OK", campaign_context: null });
+  });
+
+  test("invalidates both sessionQueryKey and sessionsListQueryKey on success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes("/services/jdr/sessions/") &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          return new Response(JSON.stringify(sampleSession), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const queryClient = makeClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(
+      () => useUpdateSession(sampleSession.id, "camp-uuid"),
+      { wrapper: wrapper(queryClient) },
+    );
+
+    result.current.mutate({ title: "Updated" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const calls = invalidateSpy.mock.calls.map((args) => args[0]);
+    expect(calls).toContainEqual({
+      queryKey: sessionQueryKey(sampleSession.id),
+    });
+    expect(calls).toContainEqual({
+      queryKey: sessionsListQueryKey("camp-uuid"),
+    });
   });
 });

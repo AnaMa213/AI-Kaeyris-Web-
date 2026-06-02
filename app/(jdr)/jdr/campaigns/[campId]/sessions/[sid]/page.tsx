@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -7,9 +8,12 @@ import { Upload, Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
+import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
+import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
+import { canEditCampaignSession } from "@/lib/jdr/sessions/permissions";
 import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
 
 const STATE_LABEL: Record<SessionOut["state"], string> = {
@@ -31,6 +35,8 @@ export default function SessionDetailPage() {
   const campId = typeof params.campId === "string" ? params.campId : "";
   const sid = typeof params.sid === "string" ? params.sid : "";
   const sessionQuery = useGetSession(sid);
+  const campaignQuery = useGetCampaign(campId);
+  const [editing, setEditing] = useState(false);
 
   if (sessionQuery.isPending) {
     return <FantasyLoader message="Consultation du grimoire..." />;
@@ -67,6 +73,9 @@ export default function SessionDetailPage() {
     locale: fr,
   });
   const audioReady = hasAudio(session.state);
+  const canEdit = campaignQuery.data
+    ? canEditCampaignSession(campaignQuery.data)
+    : false;
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
@@ -92,7 +101,16 @@ export default function SessionDetailPage() {
             </time>
           </div>
 
-          <div className="shrink-0">
+          <div className="flex shrink-0 gap-2">
+            {canEdit && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditing(true)}
+              >
+                Modifier
+              </Button>
+            )}
             {audioReady ? (
               <Button
                 type="button"
@@ -118,6 +136,13 @@ export default function SessionDetailPage() {
           </div>
         </div>
       </header>
+
+      <SessionEditDialog
+        open={editing}
+        onOpenChange={setEditing}
+        session={session}
+        campaignId={campId}
+      />
     </section>
   );
 }

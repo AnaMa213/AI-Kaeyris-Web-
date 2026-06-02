@@ -71,6 +71,46 @@ export function useCreateSession() {
   });
 }
 
+export interface UpdateSessionInput {
+  title?: string;
+  /** undefined = no change, null = clear, string = set */
+  campaign_context?: string | null;
+}
+
+export function useUpdateSession(sessionId: string, campaignId?: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateSessionInput) => {
+      // Build a sparse PATCH body. transcription_mode is immutable backend-side
+      // (PRD FR-6 V1 lock) and never goes on the wire.
+      const body: components["schemas"]["SessionUpdate"] = {};
+      if (input.title !== undefined) body.title = input.title;
+      if (input.campaign_context !== undefined) {
+        if (input.campaign_context === null) {
+          body.campaign_context = null;
+        } else {
+          const trimmed = input.campaign_context.trim();
+          body.campaign_context = trimmed === "" ? null : trimmed;
+        }
+      }
+      const result = await apiClient.PATCH(
+        "/services/jdr/sessions/{session_id}",
+        { params: { path: { session_id: sessionId } }, body },
+      );
+      return unwrap<SessionOut>(result);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionQueryKey(sessionId) });
+      if (campaignId) {
+        queryClient.invalidateQueries({
+          queryKey: sessionsListQueryKey(campaignId),
+        });
+      }
+    },
+  });
+}
+
 export function useGetSession(id: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   return useQuery({

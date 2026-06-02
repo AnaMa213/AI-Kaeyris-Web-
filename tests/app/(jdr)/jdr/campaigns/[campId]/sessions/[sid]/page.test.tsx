@@ -2,6 +2,7 @@
 
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/lib/core/env", () => ({
@@ -61,16 +62,17 @@ const renderPage = () => {
 function stubFetch(opts: {
   session?: typeof baseSession;
   sessionStatus?: number;
+  campaign?: typeof baseCampaign;
 }) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
       if (url.includes(`/services/jdr/campaigns/${campId}`)) {
-        return new Response(JSON.stringify(baseCampaign), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify(opts.campaign ?? baseCampaign),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       }
       if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
         if (opts.sessionStatus && opts.sessionStatus >= 400) {
@@ -172,5 +174,35 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(
       await screen.findByText("Session introuvable."),
     ).toBeInTheDocument();
+  });
+
+  test("renders the Modifier button when the campaign role is gm (Story 2.8)", async () => {
+    stubFetch({});
+    renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Modifier" }),
+    ).toBeInTheDocument();
+  });
+
+  test("does NOT render the Modifier button when the campaign role is pj (Story 2.8)", async () => {
+    stubFetch({ campaign: { ...baseCampaign, role: "pj" } });
+    renderPage();
+    // Wait for the page to settle (h1 rendered)
+    await screen.findByRole("heading", { level: 1 });
+    expect(
+      screen.queryByRole("button", { name: "Modifier" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking Modifier opens the SessionEditDialog (Story 2.8)", async () => {
+    stubFetch({});
+    const user = userEvent.setup();
+    renderPage();
+    const editButton = await screen.findByRole("button", { name: "Modifier" });
+    await user.click(editButton);
+    expect(
+      await screen.findByRole("heading", { name: "Modifier la session" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Titre")).toBeInTheDocument();
   });
 });
