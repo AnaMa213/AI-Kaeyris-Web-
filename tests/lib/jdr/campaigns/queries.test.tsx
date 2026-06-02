@@ -18,6 +18,8 @@ const {
   useListCampaigns,
   useCreateCampaign,
   useGetCampaign,
+  useUpdateCampaign,
+  useDeleteCampaign,
   CAMPAIGNS_QUERY_KEY,
   campaignQueryKey,
 } = await import("@/lib/jdr/campaigns/queries");
@@ -243,5 +245,226 @@ describe("useCreateCampaign", () => {
     result.current.mutate({ name: "Royaumes" });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(ApiError);
+  });
+});
+
+type PatchBody = { name?: string; description?: string | null };
+
+describe("useUpdateCampaign", () => {
+  test("PATCHes a sparse body with name only and invalidates both query keys", async () => {
+    let patchBody: PatchBody | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes(`/services/jdr/campaigns/${sampleCampaign.id}`) &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          if (typeof input !== "string") {
+            patchBody = (await input.clone().json()) as PatchBody;
+          }
+          return new Response(
+            JSON.stringify({ ...sampleCampaign, name: "Royaumes V2" }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = makeClient();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+    const { result } = renderHook(
+      () => useUpdateCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate({ name: "Royaumes V2" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(patchBody).toEqual({ name: "Royaumes V2" });
+    expect(patchBody && "description" in patchBody).toBe(false);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: campaignQueryKey(sampleCampaign.id),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: CAMPAIGNS_QUERY_KEY,
+    });
+  });
+
+  test("PATCHes description: null when input.description is null", async () => {
+    let patchBody: PatchBody | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes(`/services/jdr/campaigns/${sampleCampaign.id}`) &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          if (typeof input !== "string") {
+            patchBody = (await input.clone().json()) as PatchBody;
+          }
+          return new Response(
+            JSON.stringify({ ...sampleCampaign, description: null }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(
+      () => useUpdateCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate({ description: null });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(patchBody).toEqual({ description: null });
+  });
+
+  test("PATCHes description: null when input.description is empty string", async () => {
+    let patchBody: PatchBody | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes(`/services/jdr/campaigns/${sampleCampaign.id}`) &&
+          method?.toUpperCase() === "PATCH"
+        ) {
+          if (typeof input !== "string") {
+            patchBody = (await input.clone().json()) as PatchBody;
+          }
+          return new Response(
+            JSON.stringify({ ...sampleCampaign, description: null }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(
+      () => useUpdateCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate({ description: "   " });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(patchBody).toEqual({ description: null });
+  });
+});
+
+describe("useDeleteCampaign", () => {
+  test("DELETEs the campaign, removes its detail cache and invalidates the list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? init?.method : (input.method ?? "GET");
+        if (
+          url.includes(`/services/jdr/campaigns/${sampleCampaign.id}`) &&
+          method?.toUpperCase() === "DELETE"
+        ) {
+          return new Response(null, { status: 204 });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const client = makeClient();
+    const removeSpy = vi.spyOn(client, "removeQueries");
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+    const { result } = renderHook(
+      () => useDeleteCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(removeSpy).toHaveBeenCalledWith({
+      queryKey: campaignQueryKey(sampleCampaign.id),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: CAMPAIGNS_QUERY_KEY,
+    });
+  });
+
+  test("propagates a 409 conflict as ApiError with status preserved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Cannot delete: campaign has sessions",
+            status: 409,
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(
+      () => useDeleteCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate();
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect((result.current.error as ApiError).problem.status).toBe(409);
+  });
+
+  test("propagates a 403 forbidden as ApiError with status preserved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            type: "about:blank",
+            title: "Forbidden",
+            status: 403,
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+
+    const client = makeClient();
+    const { result } = renderHook(
+      () => useDeleteCampaign(sampleCampaign.id),
+      { wrapper: wrapper(client) },
+    );
+    result.current.mutate();
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect((result.current.error as ApiError).problem.status).toBe(403);
   });
 });

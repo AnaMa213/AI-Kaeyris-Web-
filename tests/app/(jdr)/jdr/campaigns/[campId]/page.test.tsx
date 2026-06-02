@@ -155,7 +155,7 @@ describe("/jdr/campaigns/[campId] page", () => {
     ).toBeInTheDocument();
   });
 
-  test("renders the header with name, description, meta + Modifier + Nouvelle session buttons", async () => {
+  test("renders the header with name, description, meta + Modifier + Supprimer + Nouvelle session buttons for GM", async () => {
     stubFetch({ sessions: [session1] });
     renderPage();
     expect(
@@ -166,10 +166,67 @@ describe("/jdr/campaigns/[campId] page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Une trahison ancienne.")).toBeInTheDocument();
     expect(screen.getByText(/sessions · démarrée le/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Modifier" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Modifier" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Supprimer" }),
+    ).not.toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Nouvelle session" }),
     ).toBeInTheDocument();
+  });
+
+  test("hides Modifier and Supprimer buttons for a player campaign role", async () => {
+    stubFetch({
+      campaign: { ...campaign, role: "pj", session_count: 0 },
+      sessions: [],
+    });
+    renderPage();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Modifier" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Supprimer" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking Modifier opens the edit dialog with the campaign name pre-filled", async () => {
+    stubFetch({ sessions: [session1] });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: campaign.name });
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    expect(
+      await screen.findByRole("heading", { name: "Modifier la campagne" }),
+    ).toBeInTheDocument();
+    expect((screen.getByLabelText("Nom") as HTMLInputElement).value).toBe(
+      campaign.name,
+    );
+  });
+
+  test("clicking Supprimer opens the delete confirmation dialog", async () => {
+    stubFetch({ sessions: [session1] });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: campaign.name });
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+    expect(
+      await screen.findByRole("heading", {
+        name: `Supprimer ${campaign.name} ?`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("does NOT render the placeholder 'Contexte de campagne / Story 2.9' aside anymore", async () => {
+    stubFetch({ sessions: [session1] });
+    renderPage();
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText(/Story 2\.9/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Contexte de campagne/i }),
+    ).not.toBeInTheDocument();
   });
 
   test("renders the EmptyState when no sessions are returned", async () => {

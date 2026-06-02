@@ -71,4 +71,62 @@ export function useCreateCampaign() {
   });
 }
 
+export interface UpdateCampaignInput {
+  name?: string;
+  /** undefined = no change, null = clear, string = set */
+  description?: string | null;
+}
+
+export function useUpdateCampaign(campaignId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateCampaignInput) => {
+      const body: components["schemas"]["CampaignPatch"] = {};
+      if (input.name !== undefined) body.name = input.name;
+      if (input.description !== undefined) {
+        if (input.description === null) {
+          body.description = null;
+        } else {
+          const trimmed = input.description.trim();
+          body.description = trimmed === "" ? null : trimmed;
+        }
+      }
+      const result = await apiClient.PATCH(
+        "/services/jdr/campaigns/{campaign_id}",
+        { params: { path: { campaign_id: campaignId } }, body },
+      );
+      return unwrap<CampaignOut>(result);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: campaignQueryKey(campaignId) });
+      queryClient.invalidateQueries({ queryKey: CAMPAIGNS_QUERY_KEY });
+    },
+  });
+}
+
+export function useDeleteCampaign(campaignId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.DELETE(
+        "/services/jdr/campaigns/{campaign_id}",
+        { params: { path: { campaign_id: campaignId } } },
+      );
+      if (result.error !== undefined) {
+        throw new ApiError({
+          type: "about:blank",
+          title: "Request failed",
+          status: 0,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: campaignQueryKey(campaignId) });
+      queryClient.invalidateQueries({ queryKey: CAMPAIGNS_QUERY_KEY });
+    },
+  });
+}
+
 export type { CampaignOut, PageOfCampaignOut };

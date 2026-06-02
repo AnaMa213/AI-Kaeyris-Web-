@@ -2,16 +2,26 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
+import { CampaignDeleteConfirm } from "@/components/jdr/campaigns/CampaignDeleteConfirm";
+import { CampaignEditDialog } from "@/components/jdr/campaigns/CampaignEditDialog";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
-import { canCreateCampaignSession } from "@/lib/jdr/campaigns/permissions";
-import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
+import {
+  canCreateCampaignSession,
+  canDeleteCampaign,
+  canEditCampaign,
+} from "@/lib/jdr/campaigns/permissions";
+import {
+  useDeleteCampaign,
+  useGetCampaign,
+} from "@/lib/jdr/campaigns/queries";
 import {
   useListSessions,
   type SessionOut,
@@ -43,6 +53,9 @@ export default function CampaignDetailPage() {
 
   const campaignQuery = useGetCampaign(campId);
   const sessionsQuery = useListSessions({ campaignId: campId });
+  const deleteMutation = useDeleteCampaign(campId);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (campaignQuery.isPending) {
     return <FantasyLoader message="Consultation du grimoire..." />;
@@ -70,8 +83,19 @@ export default function CampaignDetailPage() {
   const createdAt = parseBackendDate(campaign.created_at);
   const createdLabel = format(createdAt, "dd/MM/yyyy", { locale: fr });
   const canCreateSession = canCreateCampaignSession(campaign);
+  const canEdit = canEditCampaign(campaign);
+  const canDelete = canDeleteCampaign(campaign);
   const sessions = sessionsQuery.data?.items ?? [];
   const sortedSessions = sortByRecordedAtDesc(sessions);
+
+  const handleConfirmDelete = () => {
+    deleteMutation.mutate(undefined, {
+      onSuccess: () => {
+        setDeleting(false);
+        router.push("/jdr/campaigns");
+      },
+    });
+  };
 
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
@@ -105,14 +129,25 @@ export default function CampaignDetailPage() {
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled
-              title="Disponible avec Story 2.9"
-            >
-              Modifier
-            </Button>
+            {canEdit && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditing(true)}
+              >
+                Modifier
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setDeleting(true)}
+                className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
+              >
+                Supprimer
+              </Button>
+            )}
             {canCreateSession && (
               <Button
                 type="button"
@@ -217,22 +252,25 @@ export default function CampaignDetailPage() {
               Les PJs liés à cette campagne arrivent bientôt.
             </p>
           </section>
-
-          <section className={`${SECTION_CARD_CLASSES} opacity-55`}>
-            <h2 className="font-display mb-2 flex items-center justify-between text-xl">
-              <span>Contexte de campagne</span>
-              <span className="text-text-chrome-muted text-xs tracking-wide uppercase">
-                Story 2.9
-              </span>
-            </h2>
-            <p className="text-text-chrome-muted text-sm leading-relaxed">
-              Le bloc d&apos;orientation narrative envoyé au LLM lors de la
-              génération des artefacts apparaîtra ici. Éditable depuis &laquo;
-              Modifier &raquo;.
-            </p>
-          </section>
         </aside>
       </div>
+
+      <CampaignEditDialog
+        open={editing}
+        onOpenChange={setEditing}
+        campaign={campaign}
+      />
+      <CampaignDeleteConfirm
+        open={deleting}
+        onOpenChange={(open) => {
+          setDeleting(open);
+          if (!open) deleteMutation.reset();
+        }}
+        campaign={campaign}
+        onConfirm={handleConfirmDelete}
+        submitting={deleteMutation.isPending}
+        error={deleteMutation.error}
+      />
     </section>
   );
 }

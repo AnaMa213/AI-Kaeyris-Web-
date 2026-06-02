@@ -5,3 +5,15 @@ export function canCreateCampaignSession(
 ): boolean {
   return campaign.role === "gm";
 }
+
+export function canEditCampaign(
+  campaign: Pick<CampaignOut, "role">,
+): boolean {
+  return campaign.role === "gm";
+}
+
+export function canDeleteCampaign(
+  campaign: Pick<CampaignOut, "role">,
+): boolean {
+  return campaign.role === "gm";
+}
