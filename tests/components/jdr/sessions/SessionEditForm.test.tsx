@@ -171,6 +171,42 @@ describe("<SessionEditDialog>", () => {
     expect((patchBody as PatchBody | null)?.campaign_context).toBeNull();
   });
 
+  test("double submit while pending sends a single PATCH", async () => {
+    let resolvePatch!: () => void;
+    const patchGate = new Promise<void>((resolve) => {
+      resolvePatch = resolve;
+    });
+    const onOpenChange = vi.fn();
+    const fetchMock = vi.fn(async (input: Request | string, init?: RequestInit) => {
+      const method =
+        typeof input === "string" ? init?.method : (input.method ?? "GET");
+      if (method?.toUpperCase() === "PATCH") {
+        await patchGate;
+        return new Response(JSON.stringify(updatedSession), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+
+    renderDialog({ onOpenChange, fetchImpl: fetchMock });
+
+    const user = userEvent.setup();
+    await user.dblClick(screen.getByRole("button", { name: "Enregistrer" }));
+
+    const patchCallsBeforeResolve = fetchMock.mock.calls.filter((args) => {
+      const request = args[0] as Request;
+      return request.method === "PATCH";
+    });
+    expect(patchCallsBeforeResolve).toHaveLength(1);
+
+    resolvePatch();
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   test("Annuler closes the dialog without submitting", async () => {
     const onOpenChange = vi.fn();
     renderDialog({ onOpenChange });

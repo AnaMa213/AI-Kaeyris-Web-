@@ -44,13 +44,13 @@ export default function SessionDetailPage() {
 
   if (sessionQuery.isError) {
     return (
-      <section className="bg-background text-foreground min-h-full p-8">
-        <div className="mx-auto mb-4 max-w-3xl">
+      <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
+        <div className="mb-4">
           <CampaignBreadcrumb campaignId={campId} />
         </div>
         <div
           role="alert"
-          className="text-state-error border-state-error/30 bg-state-error/10 mx-auto max-w-3xl rounded-md border p-4 text-sm"
+          className="text-state-error border-state-error/30 bg-state-error/10 rounded-md border p-4 text-sm"
         >
           <p className="font-medium">Session introuvable.</p>
           {sessionQuery.error instanceof ApiError && (
@@ -78,16 +78,16 @@ export default function SessionDetailPage() {
     : false;
 
   return (
-    <section className="bg-background text-foreground min-h-full p-8">
-      <div className="mx-auto mb-4 max-w-3xl">
+    <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
+      <div className="mb-4">
         <CampaignBreadcrumb campaignId={campId} />
       </div>
 
-      <header className="mx-auto max-w-3xl">
+      <header className="bg-surface-card border-border-card mb-7 rounded-[10px] border p-6 shadow-(--shadow-card-inset) lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-3">
-              <h1 className="font-display text-3xl font-semibold">
+              <h1 className="font-display text-3xl font-semibold leading-tight">
                 {session.title}
               </h1>
               <Badge variant="outline">{STATE_LABEL[session.state]}</Badge>

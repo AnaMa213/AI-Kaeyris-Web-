@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, type FormEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ function SessionEditFormInner({
   onClose,
 }: SessionEditFormInnerProps) {
   const updateMutation = useUpdateSession(session.id, campaignId);
+  const updateInFlightRef = useRef(false);
 
   const form = useForm<SessionUpdateInput>({
     resolver: zodResolver(sessionUpdateSchema),
@@ -69,30 +71,31 @@ function SessionEditFormInner({
   const submitting = updateMutation.isPending;
   const errorMessage = formatEditError(updateMutation.error);
 
-  // Double-submit safety relies on two complementary checks:
-  // 1. The form-level `submitting ? preventDefault` short-circuits any submit
-  //    event while a mutation is in flight (isPending stays true until
-  //    onSettled).
-  // 2. `updateMutation.mutate` is itself idempotent against multiple calls
-  //    from the same micro-tick — TanStack queues the second call and the
-  //    `submitting` flag will be true on its re-evaluation.
-  const onSubmit = (values: SessionUpdateInput) => {
-    if (updateMutation.isPending) return;
-    updateMutation.mutate(values, {
-      onSuccess: () => {
-        onClose();
-      },
-    });
+  // Double-submit safety needs a synchronous guard because React Query's
+  // isPending flag only flips after React has had a chance to rerender.
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (submitting) {
+      event.preventDefault();
+      return;
+    }
+    void form.handleSubmit((values) => {
+      if (updateInFlightRef.current) return;
+      updateInFlightRef.current = true;
+      updateMutation.mutate(values, {
+        onSuccess: () => {
+          onClose();
+        },
+        onSettled: () => {
+          updateInFlightRef.current = false;
+        },
+      });
+    })(event);
   };
 
   return (
     <form
       noValidate
-      onSubmit={
-        submitting
-          ? (event) => event.preventDefault()
-          : form.handleSubmit(onSubmit)
-      }
+      onSubmit={handleFormSubmit}
       className="flex flex-col gap-4"
     >
       <div className="flex flex-col gap-2">
