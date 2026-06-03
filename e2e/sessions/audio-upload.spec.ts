@@ -105,6 +105,28 @@ test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzo
     },
   );
 
+  // Live job polling (wildcard id, mode-agnostic): echo the requested id and
+  // return a queued job. Works whether the upload ran for real (job_id = jobId)
+  // or short-circuited in mock mode (random uuid) — the page polls whatever
+  // current_job_id the refetched session carries.
+  await page.route("**/services/jdr/jobs/*", async (route) => {
+    const id = route.request().url().split("/").pop() ?? "job";
+    await route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id,
+        kind: "transcription",
+        session_id: sessionId,
+        status: "queued",
+        failure_reason: null,
+        queued_at: "2026-05-30T20:01:00+00:00",
+        started_at: null,
+        ended_at: null,
+      }),
+    });
+  });
+
   await page.goto(`/jdr/campaigns/${campId}/sessions/${sessionId}`);
   await expect(
     page.getByRole("heading", { level: 1, name: sessionCreated.title }),
@@ -129,7 +151,7 @@ test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzo
     page.getByRole("button", { name: /Glisse ton M4A/ }),
   ).not.toBeVisible();
 
-  // The job badge populated by the mutation onSuccess shows "En file".
+  // The job (current_job_id on the refetched session) polls as queued → badge.
   await expect(
     page.getByLabel("État de la transcription : En file"),
   ).toBeVisible();
