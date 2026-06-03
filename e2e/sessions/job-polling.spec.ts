@@ -4,6 +4,7 @@ import { createSessionState, installAuthMocks } from "../helpers/mocks";
 
 const campId = "campaign-default-uuid";
 const sessionId = "00000000-0000-0000-0000-000000000abc";
+const jobId = "11111111-2222-3333-4444-555555555555";
 
 // Note: in mock mode (NEXT_PUBLIC_MOCK_AUDIO=true) the upload short-circuits and
 // generates a random job_id, so we intercept /jobs/* by wildcard (mode-agnostic)
@@ -31,7 +32,13 @@ const sessionCreated = {
   updated_at: "2026-05-30T20:00:00+00:00",
 };
 
-const sessionTranscribing = { ...sessionCreated, state: "transcribing" };
+// Story 3.4 (BD-8) : le refetch post-upload porte current_job_id pour que le
+// polling live démarre (sinon useJob reste désactivé).
+const sessionTranscribing = {
+  ...sessionCreated,
+  state: "transcribing",
+  current_job_id: jobId,
+};
 
 async function mockCampaign(page: Page) {
   await page.route(`**/services/jdr/campaigns/${campId}`, async (route) => {
@@ -85,7 +92,7 @@ test("the job polls live from running (with %) to succeeded, surfaces the final 
             size_bytes: 1024,
             duration_seconds: 600,
             uploaded_at: nowIso,
-            job_id: "11111111-2222-3333-4444-555555555555",
+            job_id: jobId,
           }),
         });
         return;

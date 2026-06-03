@@ -31,7 +31,13 @@ const sessionCreated = {
   updated_at: "2026-05-30T20:00:00+00:00",
 };
 
-const sessionUploaded = { ...sessionCreated, state: "audio_uploaded" };
+// Story 3.4 (BD-8) : le job se récupère via SessionOut.current_job_id, donc le
+// refetch post-upload doit le porter (sinon il écrase l'update optimiste).
+const sessionUploaded = {
+  ...sessionCreated,
+  state: "audio_uploaded",
+  current_job_id: jobId,
+};
 
 async function mockCampaign(page: Page) {
   await page.route(`**/services/jdr/campaigns/${campId}`, async (route) => {
