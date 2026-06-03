@@ -94,15 +94,16 @@ test("the ritual tracker shows Acte I on drop (no technical jargon) then advance
     page.getByRole("heading", { level: 1, name: sessionCreated.title }),
   ).toBeVisible();
 
-  // Drop an M4A → Acte I « Le parchemin se prépare ».
+  // Drop an M4A → carte de confirmation (nom du fichier), pas encore de rituel.
   await page.locator('input[type="file"]').setInputFiles({
     name: "demo.m4a",
     mimeType: "audio/mp4",
     buffer: Buffer.from([0, 0, 0, 0]),
   });
-  await expect(page.getByText("Le parchemin se prépare")).toBeVisible();
+  await expect(page.getByText("demo.m4a")).toBeVisible();
+  await expect(page.getByText("Le parchemin se prépare")).toHaveCount(0);
 
-  // The reduce is transparent: no technical vocabulary leaks into the UI.
+  // No technical vocabulary leaks into the UI.
   await expect(page.getByText(/Réduction audio/i)).toHaveCount(0);
   await expect(page.getByText("%")).toHaveCount(0);
 

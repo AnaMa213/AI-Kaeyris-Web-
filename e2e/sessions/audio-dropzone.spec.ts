@@ -61,7 +61,7 @@ async function mockCampaignAndSession(page: Page) {
   );
 }
 
-test("GM picks an M4A via the dropzone and the uploading ritual act (Acte I) appears", async ({
+test("GM picks an M4A via the dropzone and the selected-file card appears (filename + Envoyer)", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
@@ -82,12 +82,13 @@ test("GM picks an M4A via the dropzone and the uploading ritual act (Acte I) app
     buffer: Buffer.alloc(1024 * 1024),
   });
 
-  // Story 3.3.1: the fantasy tracker replaces the filename/MB panel; the reduce
-  // is transparent so no technical metadata leaks into the UI.
-  await expect(page.getByText("Le parchemin se prépare")).toBeVisible();
-  await expect(page.getByText("demo.m4a")).toHaveCount(0);
-  await expect(page.getByText(/MB/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Annuler" })).toBeVisible();
+  // Amend 2026-06-03: the selected file is confirmed before sending — the
+  // filename shows and the loading ritual does NOT appear until Envoyer.
+  await expect(page.getByText("demo.m4a")).toBeVisible();
+  await expect(page.getByText("Le parchemin se prépare")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Changer de fichier" }),
+  ).toBeVisible();
 
   // Story 3.3 enabled the Envoyer button — assert it is now usable.
   const sendButton = page.getByRole("button", { name: "Envoyer" });
