@@ -35,7 +35,7 @@ function formatUploadError(error: unknown): string {
       return "Tu n'as pas les permissions pour uploader l'audio.";
     }
     if (status === 413) {
-      return "Fichier trop volumineux. Active la réduction (NEXT_PUBLIC_AUDIO_REDUCER_REQUIRED=true) ou choisis un fichier plus petit.";
+      return "Fichier trop volumineux pour le backend actuel. La réduction côté serveur arrive (BD-9) ; en attendant, choisis un fichier plus court.";
     }
     if (status === 422) {
       return "Le fichier audio n'est pas valide. Vérifie le format M4A.";
