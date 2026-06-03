@@ -174,6 +174,7 @@ export function useUploadSessionAudio(sessionId: string) {
             ? {
                 ...current,
                 state: "audio_uploaded",
+                current_job_id: data.job_id,
                 updated_at: data.uploaded_at,
               }
             : current,

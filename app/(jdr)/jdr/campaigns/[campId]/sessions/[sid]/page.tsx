@@ -20,6 +20,10 @@ import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
 import { useJob } from "@/lib/jdr/jobs/queries";
 import { estimateJobProgress } from "@/lib/jdr/jobs/progress";
+import {
+  readAudioDuration,
+  writeAudioDuration,
+} from "@/lib/jdr/sessions/audioDuration";
 import { canEditCampaignSession } from "@/lib/jdr/sessions/permissions";
 import {
   useSessionPipelineState,
@@ -68,10 +72,15 @@ export default function SessionDetailPage() {
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
   const [editing, setEditing] = useState(false);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(() =>
+    readAudioDuration(sid),
+  );
   const [nowTick, setNowTick] = useState(() => Date.now());
   const notifiedJobRef = useRef<string | null>(null);
+
+  // Story 3.4 : `current_job_id` est porté par SessionOut (BD-8). Plus aucun
+  // useState local — au refresh, le polling reprend dès que la session arrive.
+  const currentJobId = sessionQuery.data?.current_job_id ?? null;
 
   // Story 3.4 : polling live + back-off (stoppé à l'état terminal).
   const jobQuery = useJob(currentJobId, { live: true });
@@ -205,9 +214,9 @@ export default function SessionDetailPage() {
         <div className="mb-7">
           <SessionAudioUploadCard
             session={session}
-            onUploadSuccess={(jobId, duration) => {
-              setCurrentJobId(jobId);
+            onUploadSuccess={(duration) => {
               setDurationSeconds(duration);
+              writeAudioDuration(sid, duration);
             }}
           />
         </div>

@@ -444,6 +444,9 @@ describe("useUploadSessionAudio", () => {
     expect(client.getQueryData(sessionQueryKey(sessionId))).toMatchObject({
       id: sessionId,
       state: "audio_uploaded",
+      // Story 3.4 : le pointeur backend (BD-8) est peuplé tout de suite côté
+      // cache pour que le polling se réarme sans attendre le refetch.
+      current_job_id: audioResponse.job_id,
       updated_at: audioResponse.uploaded_at,
     });
   });
