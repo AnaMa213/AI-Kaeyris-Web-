@@ -16,7 +16,12 @@ import {
 
 interface SessionAudioUploadCardProps {
   session: SessionOut;
-  onUploadSuccess?: (jobId: string, durationSeconds: number | null) => void;
+  /**
+   * Story 3.4 : le `job_id` n'est plus remonté — le polling se réarme depuis
+   * `session.current_job_id` (cf. patch optimiste de `useUploadSessionAudio`).
+   * Seule la durée audio reste un signal client-only (non exposé par le backend).
+   */
+  onUploadSuccess?: (durationSeconds: number | null) => void;
 }
 
 type Phase = "idle" | "reducing" | "preparing";
@@ -125,7 +130,7 @@ export function SessionAudioUploadCard({
     if (!selectedFile || uploading) return;
     uploadMutation.mutate(selectedFile, {
       onSuccess: (data) => {
-        onUploadSuccess?.(data.job_id, data.duration_seconds ?? null);
+        onUploadSuccess?.(data.duration_seconds ?? null);
       },
       onError: (err) => {
         toast.error(formatUploadError(err));

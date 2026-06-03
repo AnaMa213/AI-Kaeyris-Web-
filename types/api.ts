@@ -132,7 +132,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Retrieve the source audio for a session. */
+        get: operations["get_audio_services_jdr_sessions__session_id__audio_get"];
         put?: never;
         /** Upload the audio of a session and enqueue its transcription. */
         post: operations["post_audio_services_jdr_sessions__session_id__audio_post"];
@@ -140,16 +141,12 @@ export interface paths {
          * Purge a session's audio file and reset the session so a new upload can be sent.
          * @description Drop the audio file on disk and reset the session to ``created``.
          *
-         *     Use cases (matches data-model.md §3 retry arrow
-         *     ``transcription_failed → audio_uploaded`` and the analogous
-         *     cancel-before-transcription path):
+         *     Use cases:
          *
-         *     - The MJ uploaded the wrong file and wants to re-upload before the
-         *       worker picks it up.
-         *     - Transcription failed and the MJ wants to try again with a different
-         *       audio (or after the upstream provider has recovered).
+         *     - The MJ uploaded the wrong file and wants to replace it.
+         *     - The MJ wants to restart from a clean audio/transcription state.
          *
-         *     Refused (409) when ``state ∈ {transcribing, transcribed}``: see
+         *     Refused (409) when ``state == transcribing``: see
          *     ``logic.purge_audio_for_session`` for the rationale.
          */
         delete: operations["delete_audio_services_jdr_sessions__session_id__audio_delete"];
@@ -1449,6 +1446,8 @@ export interface components {
             transcription_mode: components["schemas"]["TranscriptionMode"];
             /** Campaign Context */
             campaign_context?: string | null;
+            /** Current Job Id */
+            current_job_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1904,6 +1903,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audio_services_jdr_sessions__session_id__audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

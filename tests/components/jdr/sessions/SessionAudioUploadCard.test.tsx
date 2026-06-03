@@ -57,7 +57,7 @@ const sampleSession = {
 
 function renderCard(props: {
   session?: typeof sampleSession;
-  onUploadSuccess?: (jobId: string) => void;
+  onUploadSuccess?: (durationSeconds: number | null) => void;
   fetchImpl?: (
     input: Request | string,
     init?: RequestInit,
@@ -201,7 +201,7 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
     job_id: "job-uuid-42",
   };
 
-  test("clicking Envoyer triggers the POST and calls onUploadSuccess with the job_id", async () => {
+  test("clicking Envoyer triggers the POST and calls onUploadSuccess with the audio duration (Story 3.4)", async () => {
     const onUploadSuccess = vi.fn();
     const { queryClient } = renderCard({
       onUploadSuccess,
@@ -222,7 +222,7 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
     await user.click(screen.getByRole("button", { name: "Envoyer" }));
 
     await waitFor(() => {
-      expect(onUploadSuccess).toHaveBeenCalledWith("job-uuid-42", null);
+      expect(onUploadSuccess).toHaveBeenCalledWith(null);
     });
     // The mutation seeded the job cache.
     const cached = queryClient.getQueryData(["jdr", "job", "job-uuid-42"]);

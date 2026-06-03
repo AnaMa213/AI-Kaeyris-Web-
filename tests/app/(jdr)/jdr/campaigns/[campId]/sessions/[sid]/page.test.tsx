@@ -224,6 +224,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       uploaded_at: "2026-05-31T19:00:00+00:00",
       job_id: "job-uuid-3-3",
     };
+    let audioUploaded = false;
 
     vi.stubGlobal(
       "fetch",
@@ -241,6 +242,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
           url.includes(`/services/jdr/sessions/${sessionIdFixture}/audio`) &&
           method?.toUpperCase() === "POST"
         ) {
+          audioUploaded = true;
           return new Response(JSON.stringify(audioResponse), {
             status: 202,
             headers: { "content-type": "application/json" },
@@ -263,7 +265,16 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
           );
         }
         if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
-          return new Response(JSON.stringify(baseSession), {
+          // BD-8: avant POST audio la session est `created` (dropzone visible) ;
+          // après, refetch renvoie l'état post-upload avec `current_job_id`.
+          const sessionPayload = audioUploaded
+            ? {
+                ...baseSession,
+                state: "audio_uploaded",
+                current_job_id: audioResponse.job_id,
+              }
+            : baseSession;
+          return new Response(JSON.stringify(sessionPayload), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
@@ -306,6 +317,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       uploaded_at: recentUploadedAt,
       job_id: "job-uuid-3-4",
     };
+    let audioUploaded = false;
 
     vi.stubGlobal(
       "fetch",
@@ -323,6 +335,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
           url.includes(`/services/jdr/sessions/${sessionIdFixture}/audio`) &&
           method?.toUpperCase() === "POST"
         ) {
+          audioUploaded = true;
           return new Response(JSON.stringify(audioResponse), {
             status: 202,
             headers: { "content-type": "application/json" },
@@ -345,7 +358,16 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
           );
         }
         if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
-          return new Response(JSON.stringify(baseSession), {
+          // BD-8: avant POST audio la session est `created` (dropzone visible) ;
+          // après, refetch renvoie l'état post-upload avec `current_job_id`.
+          const sessionPayload = audioUploaded
+            ? {
+                ...baseSession,
+                state: "transcribing",
+                current_job_id: audioResponse.job_id,
+              }
+            : baseSession;
+          return new Response(JSON.stringify(sessionPayload), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
@@ -381,6 +403,62 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     );
     // Dedup: the terminal toast fires exactly once even as polling settles.
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("resumes job polling after refresh when SessionOut exposes current_job_id (Story 3.4 / BD-8)", async () => {
+    const resumedJobId = "job-uuid-refresh";
+    const sessionFixture = {
+      ...baseSession,
+      state: "transcribing" as const,
+      current_job_id: resumedJobId,
+    };
+
+    let jobFetchCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+          return new Response(JSON.stringify(baseCampaign), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.includes(`/services/jdr/jobs/${resumedJobId}`)) {
+          jobFetchCount += 1;
+          return new Response(
+            JSON.stringify({
+              id: resumedJobId,
+              kind: "transcription",
+              session_id: sessionIdFixture,
+              status: "running",
+              failure_reason: null,
+              queued_at: "2026-05-31T19:00:00+00:00",
+              started_at: "2026-05-31T19:00:05+00:00",
+              ended_at: null,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+          return new Response(JSON.stringify(sessionFixture), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPage();
+    // Le badge polled apparaît sans aucune interaction : preuve que le polling
+    // s'arme depuis `session.current_job_id` au lieu d'un useState perdu au reload.
+    expect(
+      await screen.findByLabelText(
+        "État de la transcription : Transcription en cours",
+      ),
+    ).toBeInTheDocument();
+    expect(jobFetchCount).toBeGreaterThan(0);
   });
 
   test("renders the RitualProgress transcribing act when the session is 'transcribing' (Story 3.3.1)", async () => {
