@@ -38,6 +38,16 @@ export function jobRefetchInterval(job: JobOut | undefined): number | false {
   return 5000;
 }
 
+/**
+ * Un 404 `job-not-found` est définitif : le job n'existe pas (ou plus) côté
+ * backend. Sans cette garde, `data` reste `undefined` et le back-off poll en
+ * boucle toutes les secondes sur un job introuvable. On stoppe le polling et on
+ * laisse l'erreur remonter au consommateur (Story 3.4 / dev-notes job-polling-404).
+ */
+export function isJobNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.problem.status === 404;
+}
+
 interface UseJobOptions {
   /** Active le polling live + back-off. Par défaut read-only (cache seul). */
   live?: boolean;
@@ -62,8 +72,13 @@ export function useJob(jobId: string | null, { live = false }: UseJobOptions = {
     // Polling : on neutralise le staleTime global (60 s) pour que le refetch
     // initial parte dès l'activation, et que chaque tick d'intervalle refetch.
     staleTime: live ? 0 : undefined,
+    // Un 404 ne doit jamais être retenté : c'est un état d'arrêt, pas un retard.
+    retry: (_failureCount, error) => !isJobNotFound(error),
     refetchInterval: live
-      ? (query) => jobRefetchInterval(query.state.data as JobOut | undefined)
+      ? (query) => {
+          if (isJobNotFound(query.state.error)) return false;
+          return jobRefetchInterval(query.state.data as JobOut | undefined);
+        }
       : false,
     // Le MJ peut "partir de l'onglet" : on continue de poller en arrière-plan
     // pour pouvoir le notifier à la fin (Story 3.4).

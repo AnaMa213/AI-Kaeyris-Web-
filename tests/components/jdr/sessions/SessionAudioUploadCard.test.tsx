@@ -122,7 +122,7 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
     ).not.toBeInTheDocument();
   });
 
-  test("dropping a valid M4A transitions to the uploading ritual act (Acte I) with an Envoyer action", () => {
+  test("dropping a valid M4A shows the selected-file card (filename + Envoyer), NOT the loading ritual", () => {
     renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x".repeat(2_097_152)], "demo.m4a", {
@@ -131,14 +131,15 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
 
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
 
-    // Story 3.3.1: the fantasy tracker replaces the filename/MB panel.
-    expect(screen.getByText("Le parchemin se prépare")).toBeInTheDocument();
+    // The selected filename is shown so the MJ confirms before sending.
+    expect(screen.getByText("demo.m4a")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Envoyer" }),
     ).toBeInTheDocument();
-    // No technical metadata leaks (filename / MB).
-    expect(screen.queryByText("demo.m4a")).not.toBeInTheDocument();
-    expect(screen.queryByText(/MB/)).not.toBeInTheDocument();
+    // The loading ritual must NOT appear before the user clicks Envoyer.
+    expect(
+      screen.queryByText("Le parchemin se prépare"),
+    ).not.toBeInTheDocument();
     // shouldReduce was consulted with the file size and returned false.
     expect(audioMocks.shouldReduce).toHaveBeenCalledWith(2_097_152);
     // reduceAudio must NOT be called on the neutral path.
@@ -160,19 +161,19 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
     ).not.toBeInTheDocument();
   });
 
-  test("clicking Annuler from the uploading act returns to the dropzone", async () => {
+  test("clicking 'Changer de fichier' from the selected-file card returns to the dropzone", async () => {
     renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
-    expect(screen.getByText("Le parchemin se prépare")).toBeInTheDocument();
+    expect(screen.getByText("demo.m4a")).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    await user.click(
+      screen.getByRole("button", { name: "Changer de fichier" }),
+    );
 
-    expect(
-      screen.queryByText("Le parchemin se prépare"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("demo.m4a")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Glisse ton M4A/ }),
     ).toBeInTheDocument();

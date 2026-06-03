@@ -13,9 +13,16 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useJob, jobQueryKey, JOBS_QUERY_KEY, jobRefetchInterval } = await import(
-  "@/lib/jdr/jobs/queries"
-);
+const { useJob, jobQueryKey, JOBS_QUERY_KEY, jobRefetchInterval, isJobNotFound } =
+  await import("@/lib/jdr/jobs/queries");
+
+const { ApiError } = await import("@/lib/core/api/errors");
+
+const notFoundError = new ApiError({
+  type: "https://kaeyris.local/errors/job-not-found",
+  title: "Job not found",
+  status: 404,
+});
 
 const ageFrom = (ms: number) => new Date(Date.now() - ms).toISOString();
 
@@ -119,5 +126,26 @@ describe("jobRefetchInterval — back-off", () => {
         queued_at: ageFrom(60_000),
       }),
     ).toBe(5000);
+  });
+});
+
+describe("isJobNotFound — garde anti-boucle 404", () => {
+  test("ApiError 404 → true (stoppe le polling)", () => {
+    expect(isJobNotFound(notFoundError)).toBe(true);
+  });
+
+  test("autre ApiError (ex. 500) → false (le polling continue)", () => {
+    const serverError = new ApiError({
+      type: "about:blank",
+      title: "Server error",
+      status: 500,
+    });
+    expect(isJobNotFound(serverError)).toBe(false);
+  });
+
+  test("erreur non-ApiError ou absente → false", () => {
+    expect(isJobNotFound(new Error("network"))).toBe(false);
+    expect(isJobNotFound(undefined)).toBe(false);
+    expect(isJobNotFound(null)).toBe(false);
   });
 });

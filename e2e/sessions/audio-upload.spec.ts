@@ -112,7 +112,9 @@ test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzo
     mimeType: "audio/mp4",
     buffer: Buffer.from([0, 0, 0, 0]),
   });
-  await expect(page.getByText("Le parchemin se prépare")).toBeVisible();
+  // Le nom du fichier sélectionné s'affiche AVANT l'envoi (pas de rituel).
+  await expect(page.getByText("demo.m4a")).toBeVisible();
+  await expect(page.getByText("Le parchemin se prépare")).not.toBeVisible();
 
   await page.getByRole("button", { name: "Envoyer" }).click();
 

@@ -285,7 +285,8 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     });
     fileInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-    await screen.findByText("Le parchemin se prépare");
+    // Le rituel ne s'affiche plus avant l'envoi : on confirme d'abord le fichier.
+    await screen.findByText("demo.m4a");
     await user.click(screen.getByRole("button", { name: "Envoyer" }));
 
     expect(
@@ -366,7 +367,8 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     });
     fileInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-    await screen.findByText("Le parchemin se prépare");
+    // Le rituel ne s'affiche plus avant l'envoi : on confirme d'abord le fichier.
+    await screen.findByText("demo.m4a");
     await user.click(screen.getByRole("button", { name: "Envoyer" }));
 
     await waitFor(
