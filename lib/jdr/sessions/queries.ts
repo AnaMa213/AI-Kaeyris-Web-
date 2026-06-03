@@ -134,7 +134,8 @@ export function useUploadSessionAudio(sessionId: string) {
           path: `mock/${sessionId}.m4a`,
           sha256: "0".repeat(64),
           size_bytes: file.size,
-          duration_seconds: null,
+          // Mock dev : durée factice (10 min) pour tester l'estimation du % (Story 3.4).
+          duration_seconds: 600,
           uploaded_at: new Date().toISOString(),
           job_id: crypto.randomUUID(),
         };

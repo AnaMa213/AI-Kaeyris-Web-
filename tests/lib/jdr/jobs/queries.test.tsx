@@ -13,9 +13,11 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useJob, jobQueryKey, JOBS_QUERY_KEY } = await import(
+const { useJob, jobQueryKey, JOBS_QUERY_KEY, jobRefetchInterval } = await import(
   "@/lib/jdr/jobs/queries"
 );
+
+const ageFrom = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const sampleJob = {
   id: "job-uuid-1",
@@ -77,5 +79,45 @@ describe("useJob", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("jobRefetchInterval — back-off", () => {
+  test("undefined job (no data yet) → fast poll (1000ms)", () => {
+    expect(jobRefetchInterval(undefined)).toBe(1000);
+  });
+
+  test("terminal job (succeeded/failed) → stops polling (false)", () => {
+    expect(
+      jobRefetchInterval({ ...sampleJob, status: "succeeded" }),
+    ).toBe(false);
+    expect(jobRefetchInterval({ ...sampleJob, status: "failed" })).toBe(false);
+  });
+
+  test("young running job (<10s) → 1000ms", () => {
+    expect(
+      jobRefetchInterval({
+        ...sampleJob,
+        status: "running",
+        queued_at: ageFrom(3_000),
+      }),
+    ).toBe(1000);
+  });
+
+  test("mid-age job (<30s) → 3000ms; old job (>30s) → 5000ms", () => {
+    expect(
+      jobRefetchInterval({
+        ...sampleJob,
+        status: "running",
+        queued_at: ageFrom(20_000),
+      }),
+    ).toBe(3000);
+    expect(
+      jobRefetchInterval({
+        ...sampleJob,
+        status: "running",
+        queued_at: ageFrom(60_000),
+      }),
+    ).toBe(5000);
   });
 });

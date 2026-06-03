@@ -122,7 +122,7 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
     ).not.toBeInTheDocument();
   });
 
-  test("dropping a valid M4A transitions to the preparing panel with filename + MB", () => {
+  test("dropping a valid M4A transitions to the uploading ritual act (Acte I) with an Envoyer action", () => {
     renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x".repeat(2_097_152)], "demo.m4a", {
@@ -131,9 +131,14 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
 
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
 
-    expect(screen.getByText(/Fichier prêt/)).toBeInTheDocument();
-    expect(screen.getByText("demo.m4a")).toBeInTheDocument();
-    expect(screen.getByText(/2\.0 MB/)).toBeInTheDocument();
+    // Story 3.3.1: the fantasy tracker replaces the filename/MB panel.
+    expect(screen.getByText("Le parchemin se prépare")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Envoyer" }),
+    ).toBeInTheDocument();
+    // No technical metadata leaks (filename / MB).
+    expect(screen.queryByText("demo.m4a")).not.toBeInTheDocument();
+    expect(screen.queryByText(/MB/)).not.toBeInTheDocument();
     // shouldReduce was consulted with the file size and returned false.
     expect(audioMocks.shouldReduce).toHaveBeenCalledWith(2_097_152);
     // reduceAudio must NOT be called on the neutral path.
@@ -151,22 +156,22 @@ describe("<SessionAudioUploadCard> — Story 3.1 baseline (reducer not triggered
       "Format non supporté. Glisse un fichier .m4a.",
     );
     expect(
-      screen.queryByText(/Fichier prêt/),
+      screen.queryByText("Le parchemin se prépare"),
     ).not.toBeInTheDocument();
   });
 
-  test("clicking Annuler from the preparing panel returns to the dropzone", async () => {
+  test("clicking Annuler from the uploading act returns to the dropzone", async () => {
     renderCard();
     const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(file) });
-    expect(screen.getByText(/Fichier prêt/)).toBeInTheDocument();
+    expect(screen.getByText("Le parchemin se prépare")).toBeInTheDocument();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Annuler" }));
 
     expect(
-      screen.queryByText(/Fichier prêt/),
+      screen.queryByText("Le parchemin se prépare"),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Glisse ton M4A/ }),
@@ -216,7 +221,7 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
     await user.click(screen.getByRole("button", { name: "Envoyer" }));
 
     await waitFor(() => {
-      expect(onUploadSuccess).toHaveBeenCalledWith("job-uuid-42");
+      expect(onUploadSuccess).toHaveBeenCalledWith("job-uuid-42", null);
     });
     // The mutation seeded the job cache.
     const cached = queryClient.getQueryData(["jdr", "job", "job-uuid-42"]);
@@ -290,13 +295,13 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
         expect.stringContaining("Fichier trop volumineux"),
       );
     });
-    // The card stays in the preparing phase (file kept for retry).
-    expect(screen.getByText(/Fichier prêt/)).toBeInTheDocument();
+    // The card stays in the preparing phase (file kept for retry) → Envoyer present.
+    expect(screen.getByRole("button", { name: "Envoyer" })).toBeInTheDocument();
   });
 });
 
-describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
-  test("large file with reducer required → enters reducing phase then preparing", async () => {
+describe("<SessionAudioUploadCard> — Story 3.2 reducer paths (transparent reduce)", () => {
+  test("large file with reducer required → reducing act (no Envoyer) then preparing (Envoyer appears)", async () => {
     audioMocks.shouldReduce.mockReturnValue(true);
     const reducedFile = new File(["small"], "demo.reduced.m4a", {
       type: "audio/mp4",
@@ -317,17 +322,45 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
     });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });
 
+    // Reducing: the fantasy act shows, but Envoyer is not offered yet.
     expect(
-      await screen.findByRole("heading", { name: "Réduction audio" }),
+      await screen.findByText("Le parchemin se prépare"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/50%/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Envoyer" }),
+    ).not.toBeInTheDocument();
+    // The reduce is transparent: no percentage leaks into the DOM.
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
 
     resolveReduce(reducedFile);
 
+    // Preparing: Envoyer is now offered (no filename shown).
     await waitFor(() =>
-      expect(screen.getByText(/Fichier prêt/)).toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: "Envoyer" })).toBeInTheDocument(),
     );
-    expect(screen.getByText("demo.reduced.m4a")).toBeInTheDocument();
+    expect(screen.queryByText("demo.reduced.m4a")).not.toBeInTheDocument();
+  });
+
+  test("reducing act renders no technical vocabulary (ffmpeg / réduction / %)", async () => {
+    audioMocks.shouldReduce.mockReturnValue(true);
+    audioMocks.reduceAudio.mockImplementation((_file, onProgress) => {
+      onProgress?.(42);
+      return new Promise<File>(() => {});
+    });
+
+    const { container } = renderCard();
+    const dropzone = screen.getByRole("button", { name: /Glisse ton M4A/ });
+    fireEvent.drop(dropzone, {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "big.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    await screen.findByText("Le parchemin se prépare");
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/ffmpeg/i);
+    expect(text).not.toMatch(/réduction/i);
+    expect(text).not.toMatch(/%/);
   });
 
   test("Annuler during reducing returns to idle without firing an error toast", async () => {
@@ -343,7 +376,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
     const large = new File(["x"], "big.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });
 
-    await screen.findByRole("heading", { name: "Réduction audio" });
+    await screen.findByText("Le parchemin se prépare");
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Annuler" }));
@@ -367,9 +400,8 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
           }),
       )
       .mockImplementationOnce(
-        (_file, onProgress) =>
+        () =>
           new Promise<File>((resolve) => {
-            onProgress?.(75);
             resolveSecond = resolve;
           }),
       );
@@ -381,7 +413,7 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
         new File(["x"], "first.m4a", { type: "audio/mp4" }),
       ),
     });
-    await screen.findByRole("heading", { name: "Réduction audio" });
+    await screen.findByText("Le parchemin se prépare");
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Annuler" }));
@@ -392,20 +424,22 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
         new File(["y"], "second.m4a", { type: "audio/mp4" }),
       ),
     });
-    await screen.findByText(/75%/);
+    await screen.findByText("Le parchemin se prépare");
 
+    // Resolving the cancelled (stale) reduction must be ignored: still reducing,
+    // Envoyer not offered.
     resolveFirst(new File(["old"], "first.reduced.m4a", { type: "audio/mp4" }));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.queryByText("first.reduced.m4a")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Réduction audio" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Envoyer" }),
+    ).not.toBeInTheDocument();
 
+    // Resolving the current reduction advances to preparing → Envoyer appears.
     resolveSecond(
       new File(["new"], "second.reduced.m4a", { type: "audio/mp4" }),
     );
     await waitFor(() =>
-      expect(screen.getByText("second.reduced.m4a")).toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: "Envoyer" })).toBeInTheDocument(),
     );
   });
 
@@ -439,9 +473,9 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths", () => {
     const large = new File(["x"], "big.m4a", { type: "audio/mp4" });
     fireEvent.drop(dropzone, { dataTransfer: makeDataTransfer(large) });
 
-    // Reducing panel rendered first, then since reduceAudio rejects with AbortError
+    // Reducing act rendered first; since reduceAudio rejects with AbortError
     // we stay on the reducing screen (no resetToIdle, no toast).
-    await screen.findByRole("heading", { name: "Réduction audio" });
+    await screen.findByText("Le parchemin se prépare");
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(toastErrorMock).not.toHaveBeenCalled();
   });

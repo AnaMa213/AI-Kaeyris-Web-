@@ -1,9 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import {
-  createSessionState,
-  installAuthMocks,
-} from "../helpers/mocks";
+import { createSessionState, installAuthMocks } from "../helpers/mocks";
 
 const campId = "campaign-default-uuid";
 const sessionId = "00000000-0000-0000-0000-000000000abc";
@@ -47,35 +44,28 @@ async function mockCampaign(page: Page) {
   });
 }
 
-test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzone disappears", async ({
+test("the ritual tracker shows Acte I on drop (no technical jargon) then advances to the scribes act", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
   await installAuthMocks(page, session);
   await mockCampaign(page);
 
-  // GET /sessions/{id}: first call returns "created", subsequent calls (after
-  // upload-triggered invalidation) return "audio_uploaded".
   let sessionGetCount = 0;
-  await page.route(
-    `**/services/jdr/sessions/${sessionId}`,
-    async (route) => {
-      const method = route.request().method();
-      if (method === "GET") {
-        sessionGetCount += 1;
-        const payload = sessionGetCount === 1 ? sessionCreated : sessionUploaded;
-        await route.fulfill({
-          status: 200,
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        return;
-      }
-      await route.continue();
-    },
-  );
+  await page.route(`**/services/jdr/sessions/${sessionId}`, async (route) => {
+    if (route.request().method() === "GET") {
+      sessionGetCount += 1;
+      const payload = sessionGetCount === 1 ? sessionCreated : sessionUploaded;
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return;
+    }
+    await route.continue();
+  });
 
-  // POST /sessions/{id}/audio: returns 202 with a fake job_id.
   await page.route(
     `**/services/jdr/sessions/${sessionId}/audio`,
     async (route) => {
@@ -103,10 +93,8 @@ test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzo
   await expect(
     page.getByRole("heading", { level: 1, name: sessionCreated.title }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Glisse ton M4A/ }),
-  ).toBeVisible();
 
+  // Drop an M4A → Acte I « Le parchemin se prépare ».
   await page.locator('input[type="file"]').setInputFiles({
     name: "demo.m4a",
     mimeType: "audio/mp4",
@@ -114,15 +102,11 @@ test("GM uploads an M4A and the JobStateBadge 'En file' appears while the dropzo
   });
   await expect(page.getByText("Le parchemin se prépare")).toBeVisible();
 
+  // The reduce is transparent: no technical vocabulary leaks into the UI.
+  await expect(page.getByText(/Réduction audio/i)).toHaveCount(0);
+  await expect(page.getByText("%")).toHaveCount(0);
+
+  // Confirm → upload → session refetches as audio_uploaded → Acte II « scribes ».
   await page.getByRole("button", { name: "Envoyer" }).click();
-
-  // The session refetched returns audio_uploaded so the dropzone unmounts.
-  await expect(
-    page.getByRole("button", { name: /Glisse ton M4A/ }),
-  ).not.toBeVisible();
-
-  // The job badge populated by the mutation onSuccess shows "En file".
-  await expect(
-    page.getByLabel("État de la transcription : En file"),
-  ).toBeVisible();
+  await expect(page.getByText("Les scribes transcrivent")).toBeVisible();
 });

@@ -161,6 +161,27 @@
   }
 }
 
+/* RitualProgress animations (Story 3.3.1) — SVG-native + CSS keyframes, zéro
+ * dépendance. Toutes neutralisées par le bloc prefers-reduced-motion ci-dessus
+ * (et `motion-reduce:animate-none` au point d'usage, défense en profondeur). */
+@keyframes ink-writing {
+  from { stroke-dashoffset: 56; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes wax-seal {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes gold-particle {
+  0% { transform: translate(-50%, -50%) rotate(var(--angle, 0deg)) translateY(0) scale(1); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle, 0deg)) translateY(-34px) scale(0.2); opacity: 0; }
+}
+@keyframes shimmer-bar {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

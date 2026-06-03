@@ -1,21 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Volume2 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
+import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
+import { env } from "@/lib/core/env";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
+import { useJob } from "@/lib/jdr/jobs/queries";
+import { estimateJobProgress } from "@/lib/jdr/jobs/progress";
 import { canEditCampaignSession } from "@/lib/jdr/sessions/permissions";
+import {
+  useSessionPipelineState,
+  type PipelineUIState,
+} from "@/lib/jdr/sessions/pipelineState";
 import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
 
 const STATE_LABEL: Record<SessionOut["state"], string> = {
@@ -28,8 +37,28 @@ const STATE_LABEL: Record<SessionOut["state"], string> = {
 
 const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
 
+const VALID_RITUAL_OVERRIDES: PipelineUIState[] = [
+  "uploading",
+  "transcribing",
+  "transcribed",
+  "failed",
+];
+
 function hasAudio(state: SessionOut["state"]): boolean {
   return state !== "created";
+}
+
+/**
+ * Override dev (Story 3.3.1) : `?ritual=transcribed|failed|…` force un acte du
+ * tracker pour démonstration locale. Strictement derrière `NEXT_PUBLIC_MOCK_AUDIO`,
+ * aucun impact prod. Lecture non-réactive volontaire (dev only).
+ */
+function readRitualOverride(): PipelineUIState | null {
+  if (!env.NEXT_PUBLIC_MOCK_AUDIO || typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("ritual");
+  return value && VALID_RITUAL_OVERRIDES.includes(value as PipelineUIState)
+    ? (value as PipelineUIState)
+    : null;
 }
 
 export default function SessionDetailPage() {
@@ -40,6 +69,37 @@ export default function SessionDetailPage() {
   const campaignQuery = useGetCampaign(campId);
   const [editing, setEditing] = useState(false);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const notifiedJobRef = useRef<string | null>(null);
+
+  // Story 3.4 : polling live + back-off (stoppé à l'état terminal).
+  const jobQuery = useJob(currentJobId, { live: true });
+  const job = jobQuery.data;
+  const pipeline = useSessionPipelineState({
+    sessionState: sessionQuery.data?.state ?? "created",
+    cardPhase: "idle",
+    jobStatus: job?.status,
+  });
+
+  // Ticker 1 s pour faire avancer le % estimé entre deux polls (gated transcribing).
+  useEffect(() => {
+    if (pipeline.uiState !== "transcribing") return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [pipeline.uiState]);
+
+  // Notification de fin, dédupliquée par job.id terminal.
+  useEffect(() => {
+    if (!job) return;
+    if (job.status === "succeeded" && notifiedJobRef.current !== job.id) {
+      notifiedJobRef.current = job.id;
+      toast.success("Transcription terminée — ton récit est consigné.");
+    } else if (job.status === "failed" && notifiedJobRef.current !== job.id) {
+      notifiedJobRef.current = job.id;
+      toast.error(job.failure_reason ?? "La transcription a échoué.");
+    }
+  }, [job]);
 
   if (sessionQuery.isPending) {
     return <FantasyLoader message="Consultation du grimoire..." />;
@@ -80,6 +140,15 @@ export default function SessionDetailPage() {
     ? canEditCampaignSession(campaignQuery.data)
     : false;
   const canUploadAudio = canEdit && session.state === "created";
+  const ritualState = readRitualOverride() ?? pipeline.uiState;
+  // Le tracker page-level couvre les états ≥ audio_uploaded. L'acte `uploading`
+  // (reduce + envoi) est porté par la card tant que la session est `created`.
+  const showRitual = ritualState !== "idle" && ritualState !== "uploading";
+  const ritualProgress = estimateJobProgress({
+    job,
+    durationSeconds,
+    now: nowTick,
+  });
 
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
@@ -136,7 +205,20 @@ export default function SessionDetailPage() {
         <div className="mb-7">
           <SessionAudioUploadCard
             session={session}
-            onUploadSuccess={(jobId) => setCurrentJobId(jobId)}
+            onUploadSuccess={(jobId, duration) => {
+              setCurrentJobId(jobId);
+              setDurationSeconds(duration);
+            }}
+          />
+        </div>
+      )}
+
+      {showRitual && (
+        <div className="mb-7">
+          <RitualProgress
+            uiState={ritualState}
+            sessionTitle={session.title}
+            progress={ritualProgress}
           />
         </div>
       )}

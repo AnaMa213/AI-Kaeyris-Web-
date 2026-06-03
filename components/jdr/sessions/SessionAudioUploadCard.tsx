@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { UploadDropzone } from "@/components/common/UploadDropzone";
+import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { ApiError } from "@/lib/core/api/errors";
 import { shouldReduce } from "@/lib/audio/provider";
 import { reduceAudio } from "@/lib/audio/reduce";
@@ -15,7 +15,7 @@ import {
 
 interface SessionAudioUploadCardProps {
   session: SessionOut;
-  onUploadSuccess?: (jobId: string) => void;
+  onUploadSuccess?: (jobId: string, durationSeconds: number | null) => void;
 }
 
 type Phase = "idle" | "reducing" | "preparing";
@@ -44,21 +44,12 @@ function formatUploadError(error: unknown): string {
   return "L'upload a échoué. Réessaie.";
 }
 
-const SECTION_CARD_CLASSES =
-  "bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)";
-
-function formatSizeMB(bytes: number): string {
-  return (bytes / (1024 * 1024)).toFixed(1);
-}
-
 export function SessionAudioUploadCard({
   session,
   onUploadSuccess,
 }: SessionAudioUploadCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [originalSize, setOriginalSize] = useState<number>(0);
-  const [progress, setProgress] = useState<number>(0);
   const abortRef = useRef<AbortController | null>(null);
   const operationRef = useRef(0);
   const uploadMutation = useUploadSessionAudio(session.id);
@@ -70,8 +61,6 @@ export function SessionAudioUploadCard({
     }
     setPhase("idle");
     setSelectedFile(null);
-    setOriginalSize(0);
-    setProgress(0);
   };
 
   const handleFileSelected = async (file: File) => {
@@ -85,21 +74,15 @@ export function SessionAudioUploadCard({
       return;
     }
 
-    setOriginalSize(file.size);
-    setProgress(0);
     setPhase("reducing");
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
-      const reduced = await reduceAudio(
-        file,
-        (percent) => {
-          if (operationRef.current === operationId) setProgress(percent);
-        },
-        controller.signal,
-      );
+      // Le reduce est transparent (Story 3.3.1) : on ne remonte plus le % au
+      // DOM (pas d'`onProgress`), pour ne pas fuiter de jargon technique.
+      const reduced = await reduceAudio(file, undefined, controller.signal);
       if (controller.signal.aborted || operationRef.current !== operationId) {
         return;
       }
@@ -126,7 +109,7 @@ export function SessionAudioUploadCard({
     if (!selectedFile || uploading) return;
     uploadMutation.mutate(selectedFile, {
       onSuccess: (data) => {
-        onUploadSuccess?.(data.job_id);
+        onUploadSuccess?.(data.job_id, data.duration_seconds ?? null);
       },
       onError: (err) => {
         toast.error(formatUploadError(err));
@@ -134,65 +117,39 @@ export function SessionAudioUploadCard({
     });
   };
 
-  if (phase === "reducing") {
+  if (phase === "reducing" || (phase === "preparing" && selectedFile)) {
+    // Acte I « Le parchemin se prépare » : le reduce ffmpeg est transparent,
+    // absorbé dans l'état `uploading` du tracker (aucun % ni jargon au DOM).
     return (
-      <section
-        className={SECTION_CARD_CLASSES}
-        aria-label="Réduction audio en cours"
-        data-session-id={session.id}
-      >
-        <h2 className="font-display mb-3 text-xl">Réduction audio</h2>
-        <p className="text-text-chrome mb-3 text-sm">
-          Réduction en cours… <strong>{progress}%</strong>
-        </p>
-        <Progress value={progress} className="mb-3" />
-        <p className="text-text-chrome-muted mb-4 text-xs">
-          Fichier d&apos;origine : {formatSizeMB(originalSize)} MB
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleCancelReducing}
-        >
-          Annuler
-        </Button>
-      </section>
-    );
-  }
-
-  if (phase === "preparing" && selectedFile) {
-    return (
-      <section
-        className={SECTION_CARD_CLASSES}
-        aria-label="Audio prêt à envoyer"
-        data-session-id={session.id}
-      >
-        <h2 className="font-display mb-3 text-xl">Audio sélectionné</h2>
-        <p className="text-text-chrome mb-4 text-sm">
-          Fichier prêt : <strong>{selectedFile.name}</strong>{" "}
-          <span className="text-text-chrome-muted">
-            ({formatSizeMB(selectedFile.size)} MB)
-          </span>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => resetToIdle()}
-            disabled={uploading}
-          >
-            Annuler
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSend}
-            disabled={uploading}
-            className={uploading ? "animate-pulse" : undefined}
-          >
-            {uploading ? "Envoi en cours…" : "Envoyer"}
-          </Button>
+      <div data-session-id={session.id}>
+        <RitualProgress uiState="uploading" sessionTitle={session.title} />
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          {phase === "reducing" ? (
+            <Button type="button" variant="ghost" onClick={handleCancelReducing}>
+              Annuler
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => resetToIdle()}
+                disabled={uploading}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSend}
+                disabled={uploading}
+                className={uploading ? "animate-pulse" : undefined}
+              >
+                {uploading ? "Envoi en cours…" : "Envoyer"}
+              </Button>
+            </>
+          )}
         </div>
-      </section>
+      </div>
     );
   }
 

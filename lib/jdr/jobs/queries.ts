@@ -22,9 +22,33 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 export const JOBS_QUERY_KEY = ["jdr", "jobs"] as const;
 export const jobQueryKey = (id: string) => ["jdr", "job", id] as const;
 
-// Story 3.3: read-only consumer of the cache populated by useUploadSessionAudio.
-// Story 3.4 will flip `enabled` and add `refetchInterval` for live polling.
-export function useJob(jobId: string | null) {
+const TERMINAL_STATUSES: JobOut["status"][] = ["succeeded", "failed"];
+
+/**
+ * Back-off du polling (Story 3.4) : job terminal → stop (`false`) ; sinon
+ * intervalle dégressif dérivé de l'âge du job (`queued_at`) — 1 s (jeune) →
+ * 3 s (<30 s) → 5 s (au-delà). Pas d'intervalle constant : évite de spammer un
+ * job long. Un job sans data encore (`undefined`) poll vite pour démarrer.
+ */
+export function jobRefetchInterval(job: JobOut | undefined): number | false {
+  if (job && TERMINAL_STATUSES.includes(job.status)) return false;
+  const ageMs = job ? Date.now() - new Date(job.queued_at).getTime() : 0;
+  if (ageMs < 10_000) return 1000;
+  if (ageMs < 30_000) return 3000;
+  return 5000;
+}
+
+interface UseJobOptions {
+  /** Active le polling live + back-off. Par défaut read-only (cache seul). */
+  live?: boolean;
+}
+
+/**
+ * Story 3.3 : consommateur read-only du cache (`live:false`, le `<JobStateBadge>`
+ * ne déclenche aucun réseau). Story 3.4 : `live:true` active le polling live
+ * avec back-off, stoppé automatiquement à l'état terminal.
+ */
+export function useJob(jobId: string | null, { live = false }: UseJobOptions = {}) {
   const apiClient = useMemo(() => createApiClient(), []);
   return useQuery({
     queryKey: jobQueryKey(jobId ?? ""),
@@ -34,7 +58,16 @@ export function useJob(jobId: string | null) {
       });
       return unwrap<JobOut>(result);
     },
-    enabled: false,
+    enabled: live && jobId !== null,
+    // Polling : on neutralise le staleTime global (60 s) pour que le refetch
+    // initial parte dès l'activation, et que chaque tick d'intervalle refetch.
+    staleTime: live ? 0 : undefined,
+    refetchInterval: live
+      ? (query) => jobRefetchInterval(query.state.data as JobOut | undefined)
+      : false,
+    // Le MJ peut "partir de l'onglet" : on continue de poller en arrière-plan
+    // pour pouvoir le notifier à la fin (Story 3.4).
+    refetchIntervalInBackground: live,
   });
 }
 

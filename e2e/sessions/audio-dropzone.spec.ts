@@ -61,7 +61,7 @@ async function mockCampaignAndSession(page: Page) {
   );
 }
 
-test("GM picks an M4A via the dropzone and the preparing panel shows filename + MB", async ({
+test("GM picks an M4A via the dropzone and the uploading ritual act (Acte I) appears", async ({
   page,
 }) => {
   const session = createSessionState("authenticated");
@@ -79,13 +79,14 @@ test("GM picks an M4A via the dropzone and the preparing panel shows filename + 
   await fileInput.setInputFiles({
     name: "demo.m4a",
     mimeType: "audio/mp4",
-    // 1 MiB of zeros so the panel displays "1.0 MB".
     buffer: Buffer.alloc(1024 * 1024),
   });
 
-  await expect(page.getByText("Fichier prêt :")).toBeVisible();
-  await expect(page.getByText("demo.m4a")).toBeVisible();
-  await expect(page.getByText(/1\.0 MB/)).toBeVisible();
+  // Story 3.3.1: the fantasy tracker replaces the filename/MB panel; the reduce
+  // is transparent so no technical metadata leaks into the UI.
+  await expect(page.getByText("Le parchemin se prépare")).toBeVisible();
+  await expect(page.getByText("demo.m4a")).toHaveCount(0);
+  await expect(page.getByText(/MB/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Annuler" })).toBeVisible();
 
   // Story 3.3 enabled the Envoyer button — assert it is now usable.
@@ -119,5 +120,5 @@ test("Picking a non-M4A file triggers the rejection toast and stays on the dropz
   await expect(
     page.getByRole("button", { name: /Glisse ton M4A/ }),
   ).toBeVisible();
-  await expect(page.getByText("Fichier prêt :")).not.toBeVisible();
+  await expect(page.getByText("Le parchemin se prépare")).not.toBeVisible();
 });
