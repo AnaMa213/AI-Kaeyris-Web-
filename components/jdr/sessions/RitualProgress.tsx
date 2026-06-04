@@ -3,12 +3,23 @@
 import { Button } from "@/components/ui/button";
 import { useRotatingText } from "@/lib/jdr/sessions/useRotatingText";
 import type { PipelineUIState } from "@/lib/jdr/sessions/pipelineState";
+import {
+  phaseToTranscribingAct,
+  type TranscribingActVariant,
+} from "@/lib/jdr/sessions/transcriptionPhase";
+import type { JobOut } from "@/lib/jdr/jobs/queries";
 
 interface RitualProgressProps {
   uiState: PipelineUIState;
   sessionTitle: string;
   /** % de transcription (Story 3.4). `null`/absent → barre indéterminée. */
   progress?: number | null;
+  /**
+   * Phase backend (BD-10, Story 3.6). Raffine l'habillage DANS l'acte
+   * `transcribing` (`reducing` → préparation, sinon scribes). Ne pilote jamais
+   * la FSM. `null`/absent → dégradation vers l'acte des scribes.
+   */
+  phase?: JobOut["phase"];
   /** Navigation vers le récit (Story 3.5). Bouton désactivé si absent. */
   onOpenStory?: () => void;
   /** Relancer la transcription (Story 3.4). Bouton inerte si absent. */
@@ -32,6 +43,12 @@ const TRANSCRIBING_LINES = [
   "Le silence entre deux phrases est noté lui aussi.",
   "Les noms propres résistent encore un peu…",
 ];
+// Phase `reducing` (BD-10) : on prépare le vélin avant que les scribes écrivent.
+const REDUCING_LINES = [
+  "On apprête le grimoire…",
+  "Le vélin est lissé, l'encre chauffée.",
+  "Les voix attendent leur tour d'être consignées.",
+];
 
 // Annonce concise pour lecteurs d'écran — distincte du titre décoratif.
 const STATUS_ANNOUNCE: Record<
@@ -53,16 +70,21 @@ export function RitualProgress({
   uiState,
   sessionTitle,
   progress,
+  phase,
   onOpenStory,
   onRetry,
   onReplace,
 }: RitualProgressProps) {
+  // Sous-acte de `transcribing` raffiné par la phase backend (Story 3.6).
+  const transcribingVariant = phaseToTranscribingAct(phase);
   // Hooks appelés inconditionnellement (avant tout early-return).
   const lines =
     uiState === "uploading"
       ? UPLOADING_LINES
       : uiState === "transcribing"
-        ? TRANSCRIBING_LINES
+        ? transcribingVariant === "reducing"
+          ? REDUCING_LINES
+          : TRANSCRIBING_LINES
         : [];
   const { current: rotatingSubtext } = useRotatingText(lines, {
     intervalMs: 4000,
@@ -83,6 +105,7 @@ export function RitualProgress({
       {uiState === "uploading" && <UploadingAct subtext={rotatingSubtext} />}
       {uiState === "transcribing" && (
         <TranscribingAct
+          variant={transcribingVariant}
           subtext={rotatingSubtext}
           progress={progress}
           onReplace={onReplace}
@@ -173,36 +196,67 @@ function DeterminateBar({ value }: { value: number }) {
   );
 }
 
+function ParchmentScene() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+      className="text-accent-gold h-full w-full drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
+      fill="none"
+      stroke="currentColor"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      {/* Parchemin qui se déroule */}
+      <rect x="28" y="20" width="44" height="60" rx="3" strokeWidth="2.5" />
+      <path d="M28 30 H72 M28 42 H64 M28 54 H68 M28 66 H58" strokeWidth="1.4" opacity="0.55" />
+      <circle
+        cx="50"
+        cy="50"
+        r="40"
+        strokeWidth="1"
+        opacity="0.25"
+        className="animate-[spin_6s_linear_infinite] motion-reduce:animate-none"
+        strokeDasharray="6 10"
+      />
+    </svg>
+  );
+}
+
+function QuillScene() {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+      className="text-accent-gold h-full w-full drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
+      fill="none"
+      stroke="currentColor"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      {/* Plume */}
+      <path d="M70 22 L40 62 L34 70 L44 64 Z" strokeWidth="2.5" />
+      <path d="M40 62 L48 54" strokeWidth="1.4" opacity="0.6" />
+      {/* Lignes d'écriture, tracé animé (ink-writing) */}
+      <path
+        d="M22 76 H78"
+        strokeWidth="2"
+        strokeDasharray="56"
+        className="animate-[ink-writing_2.2s_ease-in-out_infinite] motion-reduce:animate-none"
+      />
+      <path d="M22 84 H64" strokeWidth="1.4" opacity="0.5" />
+    </svg>
+  );
+}
+
 function UploadingAct({ subtext }: { subtext: string }) {
   return (
     <ActShell
       title="Le parchemin se prépare"
       subtext={subtext}
-      scene={
-        <svg
-          viewBox="0 0 100 100"
-          xmlns="http://www.w3.org/2000/svg"
-          className="text-accent-gold h-full w-full drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
-          fill="none"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          {/* Parchemin qui se déroule */}
-          <rect x="28" y="20" width="44" height="60" rx="3" strokeWidth="2.5" />
-          <path d="M28 30 H72 M28 42 H64 M28 54 H68 M28 66 H58" strokeWidth="1.4" opacity="0.55" />
-          <circle
-            cx="50"
-            cy="50"
-            r="40"
-            strokeWidth="1"
-            opacity="0.25"
-            className="animate-[spin_6s_linear_infinite] motion-reduce:animate-none"
-            strokeDasharray="6 10"
-          />
-        </svg>
-      }
+      scene={<ParchmentScene />}
     >
       <CredibleBar />
     </ActShell>
@@ -210,42 +264,25 @@ function UploadingAct({ subtext }: { subtext: string }) {
 }
 
 function TranscribingAct({
+  variant,
   subtext,
   progress,
   onReplace,
 }: {
+  variant: TranscribingActVariant;
   subtext: string;
   progress?: number | null;
   onReplace?: () => void;
 }) {
+  // Phase `reducing` (BD-10) : préparation du grimoire (réutilise le parchemin).
+  // Sinon : les scribes écrivent (plume). La barre/% et le bouton remplacer
+  // restent identiques dans les deux sous-actes.
+  const isReducing = variant === "reducing";
   return (
     <ActShell
-      title="Les scribes transcrivent"
+      title={isReducing ? "Le grimoire se prépare" : "Les scribes transcrivent"}
       subtext={subtext}
-      scene={
-        <svg
-          viewBox="0 0 100 100"
-          xmlns="http://www.w3.org/2000/svg"
-          className="text-accent-gold h-full w-full drop-shadow-[0_0_8px_rgba(212,175,55,0.3)]"
-          fill="none"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          {/* Plume */}
-          <path d="M70 22 L40 62 L34 70 L44 64 Z" strokeWidth="2.5" />
-          <path d="M40 62 L48 54" strokeWidth="1.4" opacity="0.6" />
-          {/* Lignes d'écriture, tracé animé (ink-writing) */}
-          <path
-            d="M22 76 H78"
-            strokeWidth="2"
-            strokeDasharray="56"
-            className="animate-[ink-writing_2.2s_ease-in-out_infinite] motion-reduce:animate-none"
-          />
-          <path d="M22 84 H64" strokeWidth="1.4" opacity="0.5" />
-        </svg>
-      }
+      scene={isReducing ? <ParchmentScene /> : <QuillScene />}
     >
       {typeof progress === "number" ? (
         <DeterminateBar value={progress} />

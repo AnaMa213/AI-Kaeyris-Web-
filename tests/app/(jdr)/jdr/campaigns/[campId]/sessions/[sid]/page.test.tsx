@@ -613,4 +613,78 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  describe("Story 3.6 — Live phases & real progress (BD-10)", () => {
+    function stubWithLiveJob(job: {
+      status: string;
+      phase?: string | null;
+      progress_percent?: number | null;
+    }) {
+      const jobId = "job-bd10";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: job.status,
+                phase: job.phase ?? null,
+                progress_percent: job.progress_percent ?? null,
+                failure_reason: null,
+                queued_at: "2026-05-31T19:00:00+00:00",
+                started_at: "2026-05-31T19:00:05+00:00",
+                ended_at: null,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "transcribing",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("drives the determinate bar from the real progress_percent", async () => {
+      stubWithLiveJob({
+        status: "running",
+        phase: "transcribing",
+        progress_percent: 40,
+      });
+      renderPage();
+      const bar = await screen.findByRole("progressbar");
+      expect(bar).toHaveAttribute("aria-valuenow", "40");
+      expect(screen.getByText("Les scribes transcrivent")).toBeInTheDocument();
+    });
+
+    test("phase 'reducing' shows the preparation habillage", async () => {
+      stubWithLiveJob({
+        status: "running",
+        phase: "reducing",
+        progress_percent: 5,
+      });
+      renderPage();
+      expect(
+        await screen.findByText("Le grimoire se prépare"),
+      ).toBeInTheDocument();
+    });
+  });
 });
