@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -25,14 +25,17 @@ vi.mock("sonner", () => ({
 
 const sessionIdFixture = "00000000-0000-0000-0000-000000000abc";
 const campId = "11111111-1111-1111-1111-111111111111";
+const currentPathname = `/jdr/campaigns/${campId}/sessions/${sessionIdFixture}`;
+const seenKey = `kaeyris:jdr:session-transcription-seen:${sessionIdFixture}`;
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ campId, sid: sessionIdFixture }),
+  usePathname: () => currentPathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
-const { default: SessionDetailPage } = await import(
-  "@/app/(jdr)/jdr/campaigns/[campId]/sessions/[sid]/page"
-);
+const { default: SessionDetailPage } =
+  await import("@/app/(jdr)/jdr/campaigns/[campId]/sessions/[sid]/page");
 
 const baseSession = {
   id: sessionIdFixture,
@@ -60,12 +63,12 @@ const renderPage = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  render(
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <SessionDetailPage />
     </QueryClientProvider>,
   );
-  return queryClient;
+  return { queryClient, ...result };
 };
 
 function stubFetch(opts: {
@@ -78,10 +81,10 @@ function stubFetch(opts: {
     vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
       if (url.includes(`/services/jdr/campaigns/${campId}`)) {
-        return new Response(
-          JSON.stringify(opts.campaign ?? baseCampaign),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return new Response(JSON.stringify(opts.campaign ?? baseCampaign), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
         if (opts.sessionStatus && opts.sessionStatus >= 400) {
@@ -108,8 +111,18 @@ function stubFetch(opts: {
 }
 
 describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
+  beforeEach(() => {
+    toastSuccessMock.mockClear();
+    toastErrorMock.mockClear();
+    window.localStorage.clear();
+    window.history.replaceState(null, "", currentPathname);
+  });
+
   test("renders the FantasyLoader while pending", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
     renderPage();
     expect(document.querySelector('[aria-busy="true"]')).toBeInTheDocument();
   });
@@ -166,10 +179,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     const breadcrumbLink = await screen.findByRole("link", {
       name: /Campagne par défaut/,
     });
-    expect(breadcrumbLink).toHaveAttribute(
-      "href",
-      `/jdr/campaigns/${campId}`,
-    );
+    expect(breadcrumbLink).toHaveAttribute("href", `/jdr/campaigns/${campId}`);
   });
 
   test("never exposes the session UUID anywhere in the visible DOM text", async () => {
@@ -191,9 +201,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
   test("surfaces 'Session introuvable.' on session error", async () => {
     stubFetch({ sessionStatus: 404 });
     renderPage();
-    expect(
-      await screen.findByText("Session introuvable."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Session introuvable.")).toBeInTheDocument();
   });
 
   test("renders the Modifier button when the campaign role is gm (Story 2.8)", async () => {
@@ -689,10 +697,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
   });
 
   describe("Story 4.1 — Declare PJ presence", () => {
-    function stubFor(opts: {
-      state: string;
-      role?: "gm" | "pj";
-    }) {
+    function stubFor(opts: { state: string; role?: "gm" | "pj" }) {
       vi.stubGlobal(
         "fetch",
         vi.fn(async (input: Request | string) => {
@@ -741,6 +746,12 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     }
 
     test("shows <PjPresenceForm> for a GM on a transcribed session", async () => {
+      window.localStorage.setItem(seenKey, "1");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentPathname}?tab=artefacts&sub=summary`,
+      );
       stubFor({ state: "transcribed", role: "gm" });
       renderPage();
       expect(
@@ -751,7 +762,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     test("hides the form for a PJ", async () => {
       stubFor({ state: "transcribed", role: "pj" });
       renderPage();
-      await screen.findByText("Le récit est consigné");
+      await screen.findByRole("tab", { name: "Artefacts" });
       expect(
         screen.queryByRole("heading", { name: "Qui était présent ?" }),
       ).not.toBeInTheDocument();
@@ -764,6 +775,140 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       expect(
         screen.queryByRole("heading", { name: "Qui était présent ?" }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Story 4.2 - Tabbed session page", () => {
+    function stubForTabs(opts: { state: string; role?: "gm" | "pj" }) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: "pj-1",
+                    name: "Eldrin",
+                    campaign_id: campId,
+                    created_at: "2026-05-30T10:00:00Z",
+                  },
+                ],
+                total: 1,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(
+              JSON.stringify({ ...baseCampaign, role: opts.role ?? "gm" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                pj_ids: [],
+                updated_at: "2026-06-01T10:00:00Z",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: opts.state }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("renders top tabs and defaults an unfinished session to Transcription", async () => {
+      stubForTabs({ state: "created", role: "gm" });
+      renderPage();
+
+      const transcriptionTab = await screen.findByRole("tab", {
+        name: "Transcription",
+      });
+      expect(transcriptionTab).toHaveAttribute("aria-selected", "true");
+      expect(transcriptionTab.className).toContain("after:bg-accent-gold");
+      expect(
+        screen.getByRole("tab", { name: "Artefacts" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Glisse ton M4A/ }),
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(window.location.search).toBe("?tab=transcription");
+      });
+    });
+
+    test("clicking Artefacts writes tab and sub in the URL while preserving other params", async () => {
+      window.history.replaceState(null, "", `${currentPathname}?ritual=failed`);
+      stubForTabs({ state: "transcribed", role: "gm" });
+      const user = userEvent.setup();
+      renderPage();
+
+      await screen.findByRole("tab", { name: "Transcription" });
+      await user.click(screen.getByRole("tab", { name: "Artefacts" }));
+
+      await waitFor(() => {
+        expect(window.location.search).toContain("ritual=failed");
+        expect(window.location.search).toContain("tab=artefacts");
+        expect(window.location.search).toContain("sub=summary");
+      });
+      expect(
+        await screen.findByRole("heading", { name: "Qui était présent ?" }),
+      ).toBeInTheDocument();
+    });
+
+    test("disabled artifact sub-tabs expose the required tooltip copy", async () => {
+      window.localStorage.setItem(seenKey, "1");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentPathname}?tab=artefacts&sub=summary`,
+      );
+      stubForTabs({ state: "transcribed", role: "gm" });
+      renderPage();
+
+      expect(
+        await screen.findByRole("tab", { name: "Résumé" }),
+      ).toHaveAttribute("aria-selected", "true");
+      for (const name of ["Récit", "Éléments", "POVs"]) {
+        const tab = screen.getByRole("tab", { name });
+        expect(tab).toHaveAttribute("aria-disabled", "true");
+        expect(tab).toHaveAttribute("title", "Génère cet artefact d'abord");
+      }
+    });
+
+    test("auto-opens the completed transcription only once per session", async () => {
+      stubForTabs({ state: "transcribed", role: "gm" });
+      const firstVisit = renderPage();
+
+      expect(
+        await screen.findByRole("tab", { name: "Transcription" }),
+      ).toHaveAttribute("aria-selected", "true");
+      await waitFor(() => {
+        expect(window.localStorage.getItem(seenKey)).toBe("1");
+        expect(window.location.search).toBe("?tab=transcription");
+      });
+
+      firstVisit.unmount();
+      window.history.replaceState(null, "", currentPathname);
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole("tab", { name: "Artefacts" })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        expect(window.location.search).toBe("?tab=artefacts&sub=summary");
+      });
     });
   });
 });

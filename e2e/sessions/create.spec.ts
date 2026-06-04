@@ -107,7 +107,7 @@ test("GM creates a session inside a campaign and lands on the new session detail
 
   await expect(page).toHaveURL(
     new RegExp(
-      `/jdr/campaigns/${campId}/sessions/${createdSession.id}$`,
+      `/jdr/campaigns/${campId}/sessions/${createdSession.id}\\?tab=transcription$`,
     ),
   );
   await expect(
