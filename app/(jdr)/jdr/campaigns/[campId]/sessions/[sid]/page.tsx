@@ -24,7 +24,10 @@ import {
   readAudioDuration,
   writeAudioDuration,
 } from "@/lib/jdr/sessions/audioDuration";
-import { canEditCampaignSession } from "@/lib/jdr/sessions/permissions";
+import {
+  canEditCampaignSession,
+  canReplaceAudio,
+} from "@/lib/jdr/sessions/permissions";
 import {
   useSessionPipelineState,
   type PipelineUIState,
@@ -72,6 +75,8 @@ export default function SessionDetailPage() {
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
   const [editing, setEditing] = useState(false);
+  // Story 3.5 : mode remplacement (dropzone re-montée) déclenché par le MJ.
+  const [replacing, setReplacing] = useState(false);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(() =>
     readAudioDuration(sid),
   );
@@ -149,10 +154,16 @@ export default function SessionDetailPage() {
     ? canEditCampaignSession(campaignQuery.data)
     : false;
   const canUploadAudio = canEdit && session.state === "created";
+  // Story 3.5 : remplacement permis sur `audio_uploaded`/`transcription_failed`
+  // (gaté sur l'état brut, pas l'uiState FSM). `replacing` monte la dropzone.
+  const canReplace = canEdit && canReplaceAudio(session.state);
+  const showReplaceCard = replacing && canReplace;
   const ritualState = readRitualOverride() ?? pipeline.uiState;
   // Le tracker page-level couvre les états ≥ audio_uploaded. L'acte `uploading`
   // (reduce + envoi) est porté par la card tant que la session est `created`.
-  const showRitual = ritualState !== "idle" && ritualState !== "uploading";
+  // Masqué pendant le remplacement (la dropzone prend le relais).
+  const showRitual =
+    !showReplaceCard && ritualState !== "idle" && ritualState !== "uploading";
   const ritualProgress = estimateJobProgress({
     job,
     durationSeconds,
@@ -222,12 +233,39 @@ export default function SessionDetailPage() {
         </div>
       )}
 
+      {/* Story 3.5 : la dropzone de remplacement remplace le tracker le temps
+          de re-déposer un fichier (DELETE → POST avec confirmation). */}
+      {showReplaceCard && (
+        <div className="mb-7">
+          <SessionAudioUploadCard
+            session={session}
+            variant="replace"
+            onCancel={() => setReplacing(false)}
+            onUploadSuccess={(duration) => {
+              setDurationSeconds(duration);
+              writeAudioDuration(sid, duration);
+              setReplacing(false);
+            }}
+          />
+        </div>
+      )}
+
       {showRitual && (
         <div className="mb-7">
           <RitualProgress
             uiState={ritualState}
             sessionTitle={session.title}
             progress={ritualProgress}
+            // Story 3.5 : l'affordance de remplacement est portée par l'acte
+            // affiché (`transcribing` pour `audio_uploaded`, `failed` pour un
+            // échec). Gaté sur `ritualState` → masqué dès que le job est terminal
+            // (transcribed/failed-handled), jamais dupliqué ni affiché sur un récit.
+            onReplace={
+              canReplace &&
+              (ritualState === "failed" || ritualState === "transcribing")
+                ? () => setReplacing(true)
+                : undefined
+            }
           />
         </div>
       )}

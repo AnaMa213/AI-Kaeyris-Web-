@@ -1,4 +1,7 @@
 import type { CampaignOut } from "@/lib/jdr/campaigns/queries";
+import type { components } from "@/types/api";
+
+type SessionState = components["schemas"]["SessionState"];
 
 /**
  * Story 2.8 — Only the gm of a campaign can edit its sessions metadata
@@ -10,4 +13,17 @@ export function canEditCampaignSession(
   campaign: Pick<CampaignOut, "role">,
 ): boolean {
   return campaign.role === "gm";
+}
+
+/**
+ * Story 3.5 — The "Replace audio" affordance is offered only on states where an
+ * audio exists and is not locked by transcription: `audio_uploaded` (job queued,
+ * not yet running) and `transcription_failed` (recovery). It is hidden on
+ * `transcribing`/`transcribed` (locked) and on `created` (no prior audio — the
+ * plain upload dropzone applies). Gated on raw `session.state`, NOT the FSM
+ * `uiState` (which collapses `audio_uploaded` into the `transcribing` act).
+ * Compose with `canEditCampaignSession` (gm role) at the call site.
+ */
+export function canReplaceAudio(state: SessionState): boolean {
+  return state === "audio_uploaded" || state === "transcription_failed";
 }

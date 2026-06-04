@@ -1,15 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/core/api/errors";
@@ -41,32 +33,37 @@ function formatDeleteError(error: unknown, sessionCount: number): string | null 
   return null;
 }
 
-function DeleteConfirmContent({
+export function CampaignDeleteConfirm({
+  open,
+  onOpenChange,
   campaign,
-  onCancel,
   onConfirm,
   submitting,
   error,
-}: {
-  campaign: CampaignOut;
-  onCancel: () => void;
-  onConfirm: () => void;
-  submitting: boolean;
-  error?: unknown;
-}) {
+}: CampaignDeleteConfirmProps) {
   const [typed, setTyped] = useState("");
   const matches = typed.trim() === campaign.name;
   const errorMessage = formatDeleteError(error, campaign.session_count);
 
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Supprimer {campaign.name} ?</DialogTitle>
-        <DialogDescription>
-          Cette action est irréversible. La campagne sera retirée de ta liste.
-        </DialogDescription>
-      </DialogHeader>
+  // Reset the typed name on close so a reopen starts blank (no setState-in-effect).
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setTyped("");
+    onOpenChange(next);
+  };
 
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={`Supprimer ${campaign.name} ?`}
+      description="Cette action est irréversible. La campagne sera retirée de ta liste."
+      confirmLabel="Supprimer la campagne"
+      pendingLabel="Suppression..."
+      onConfirm={onConfirm}
+      submitting={submitting}
+      confirmDisabled={!matches}
+      destructive
+    >
       <div className="flex flex-col gap-2">
         <Label htmlFor="campaign-delete-confirm">
           Tape <span className="font-mono">{campaign.name}</span> pour confirmer
@@ -89,51 +86,6 @@ function DeleteConfirmContent({
           <p>{errorMessage}</p>
         </div>
       )}
-
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          disabled={submitting}
-        >
-          Annuler
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={!matches || submitting}
-          onClick={onConfirm}
-          className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
-        >
-          {submitting ? "Suppression..." : "Supprimer la campagne"}
-        </Button>
-      </DialogFooter>
-    </>
-  );
-}
-
-export function CampaignDeleteConfirm({
-  open,
-  onOpenChange,
-  campaign,
-  onConfirm,
-  submitting,
-  error,
-}: CampaignDeleteConfirmProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        {open && (
-          <DeleteConfirmContent
-            campaign={campaign}
-            onCancel={() => onOpenChange(false)}
-            onConfirm={onConfirm}
-            submitting={submitting}
-            error={error}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    </ConfirmDialog>
   );
 }

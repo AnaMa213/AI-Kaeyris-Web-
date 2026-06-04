@@ -82,7 +82,11 @@ export function RitualProgress({
 
       {uiState === "uploading" && <UploadingAct subtext={rotatingSubtext} />}
       {uiState === "transcribing" && (
-        <TranscribingAct subtext={rotatingSubtext} progress={progress} />
+        <TranscribingAct
+          subtext={rotatingSubtext}
+          progress={progress}
+          onReplace={onReplace}
+        />
       )}
       {uiState === "transcribed" && <TranscribedAct onOpenStory={onOpenStory} />}
       {uiState === "failed" && (
@@ -208,9 +212,11 @@ function UploadingAct({ subtext }: { subtext: string }) {
 function TranscribingAct({
   subtext,
   progress,
+  onReplace,
 }: {
   subtext: string;
   progress?: number | null;
+  onReplace?: () => void;
 }) {
   return (
     <ActShell
@@ -245,6 +251,11 @@ function TranscribingAct({
         <DeterminateBar value={progress} />
       ) : (
         <CredibleBar />
+      )}
+      {onReplace && (
+        <Button type="button" variant="ghost" onClick={onReplace}>
+          Remplacer l&apos;enregistrement
+        </Button>
       )}
     </ActShell>
   );
@@ -333,6 +344,8 @@ function FailedAct({
       }
     >
       <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* Re-transcription endpoint is not built yet (Story 3.5 §5.4) — the
+            retry CTA stays inert with a "coming soon" hint. */}
         <Button
           type="button"
           onClick={onRetry}
@@ -341,15 +354,13 @@ function FailedAct({
         >
           Relancer la transcription
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onReplace}
-          disabled={!onReplace}
-          title={onReplace ? undefined : "Disponible bientôt"}
-        >
-          Remplacer l&apos;enregistrement
-        </Button>
+        {/* Replace ships in Story 3.5 and is gm-gated: hide it entirely when the
+            caller can't replace, rather than advertising a disabled control. */}
+        {onReplace && (
+          <Button type="button" variant="ghost" onClick={onReplace}>
+            Remplacer l&apos;enregistrement
+          </Button>
+        )}
       </div>
     </ActShell>
   );
