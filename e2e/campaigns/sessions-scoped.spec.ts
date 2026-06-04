@@ -151,7 +151,9 @@ test("GM navigates from campaign detail into a session detail via row click", as
   await page.getByRole("link", { name: /Session 12/ }).click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/jdr/campaigns/${campId}/sessions/${session12.id}$`),
+    new RegExp(
+      `/jdr/campaigns/${campId}/sessions/${session12.id}\\?tab=transcription$`,
+    ),
   );
   await expect(
     page.getByRole("link", { name: /Les Royaumes Brisés/ }),
