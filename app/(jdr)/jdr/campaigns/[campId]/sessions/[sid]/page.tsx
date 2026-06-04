@@ -12,6 +12,7 @@ import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrum
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
+import { PjPresenceForm } from "@/components/jdr/sessions/PjPresenceForm";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
@@ -295,6 +296,14 @@ export default function SessionDetailPage() {
                 : undefined
             }
           />
+        </div>
+      )}
+
+      {/* Story 4.1 : déclaration des PJs présents — GM, une fois la séance
+          transcrite (prérequis aux artefacts / POVs). */}
+      {canEdit && session.state === "transcribed" && (
+        <div className="mb-7">
+          <PjPresenceForm sessionId={session.id} campaignId={campId} />
         </div>
       )}
 

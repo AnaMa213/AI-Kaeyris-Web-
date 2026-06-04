@@ -687,4 +687,83 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("Story 4.1 — Declare PJ presence", () => {
+    function stubFor(opts: {
+      state: string;
+      role?: "gm" | "pj";
+    }) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: "pj-1",
+                    name: "Eldrin",
+                    campaign_id: campId,
+                    created_at: "2026-05-30T10:00:00Z",
+                  },
+                ],
+                total: 1,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(
+              JSON.stringify({ ...baseCampaign, role: opts.role ?? "gm" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                pj_ids: [],
+                updated_at: "2026-06-01T10:00:00Z",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: opts.state }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("shows <PjPresenceForm> for a GM on a transcribed session", async () => {
+      stubFor({ state: "transcribed", role: "gm" });
+      renderPage();
+      expect(
+        await screen.findByRole("heading", { name: "Qui était présent ?" }),
+      ).toBeInTheDocument();
+    });
+
+    test("hides the form for a PJ", async () => {
+      stubFor({ state: "transcribed", role: "pj" });
+      renderPage();
+      await screen.findByText("Le récit est consigné");
+      expect(
+        screen.queryByRole("heading", { name: "Qui était présent ?" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("hides the form while still transcribing", async () => {
+      stubFor({ state: "transcribing", role: "gm" });
+      renderPage();
+      await screen.findByText("Les scribes transcrivent");
+      expect(
+        screen.queryByRole("heading", { name: "Qui était présent ?" }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
