@@ -6,11 +6,12 @@ import { FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/common/UploadDropzone";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
+import { ReplaceAudioConfirm } from "@/components/jdr/sessions/ReplaceAudioConfirm";
 import { ApiError } from "@/lib/core/api/errors";
 import { shouldReduce } from "@/lib/audio/provider";
 import { reduceAudio } from "@/lib/audio/reduce";
 import {
-  useUploadSessionAudio,
+  useSessionAudioMutation,
   type SessionOut,
 } from "@/lib/jdr/sessions/queries";
 
@@ -22,6 +23,14 @@ interface SessionAudioUploadCardProps {
    * Seule la durée audio reste un signal client-only (non exposé par le backend).
    */
   onUploadSuccess?: (durationSeconds: number | null) => void;
+  /**
+   * Story 3.5 : `"replace"` route l'envoi vers `useReplaceSessionAudio`
+   * (DELETE → POST) précédé d'un Dialog de confirmation destructive. Défaut
+   * `"upload"` (Story 3.1, sans Dialog).
+   */
+  variant?: "upload" | "replace";
+  /** Story 3.5 : sortir du mode remplacement sans envoyer (replace only). */
+  onCancel?: () => void;
 }
 
 type Phase = "idle" | "reducing" | "preparing";
@@ -56,23 +65,32 @@ function formatUploadError(error: unknown): string {
     if (status === 422) {
       return "Le fichier audio n'est pas valide. Vérifie le format M4A.";
     }
+    if (status === 409) {
+      return "L'enregistrement ne peut plus être remplacé dans cet état (transcription en cours ou terminée).";
+    }
   }
-  return "L'upload a échoué. Réessaie.";
+  return "L'envoi a échoué. Réessaie.";
 }
 
 export function SessionAudioUploadCard({
   session,
   onUploadSuccess,
+  variant = "upload",
+  onCancel,
 }: SessionAudioUploadCardProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   // Nom affiché = celui choisi par le MJ. On le fige à la sélection pour ne pas
   // exposer un nom interne (`*.reduced.m4a`) si le reduce client se déclenche.
   const [selectedName, setSelectedName] = useState<string>("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const operationRef = useRef(0);
-  const uploadMutation = useUploadSessionAudio(session.id);
-  const uploading = uploadMutation.isPending;
+  // Une seule mutation, paramétrée : replace = DELETE → POST (Story 3.5).
+  const mutation = useSessionAudioMutation(session.id, {
+    replace: variant === "replace",
+  });
+  const uploading = mutation.isPending;
 
   const resetToIdle = (operationId?: number) => {
     if (operationId === undefined || operationRef.current === operationId) {
@@ -126,9 +144,9 @@ export function SessionAudioUploadCard({
     resetToIdle();
   };
 
-  const handleSend = () => {
+  const doSend = () => {
     if (!selectedFile || uploading) return;
-    uploadMutation.mutate(selectedFile, {
+    mutation.mutate(selectedFile, {
       onSuccess: (data) => {
         onUploadSuccess?.(data.duration_seconds ?? null);
       },
@@ -136,6 +154,22 @@ export function SessionAudioUploadCard({
         toast.error(formatUploadError(err));
       },
     });
+  };
+
+  // Replace : on confirme la suppression destructive avant DELETE → POST.
+  // Upload : envoi direct (pas de Dialog).
+  const handleSend = () => {
+    if (!selectedFile || uploading) return;
+    if (variant === "replace") {
+      setConfirmOpen(true);
+      return;
+    }
+    doSend();
+  };
+
+  const handleConfirmReplace = () => {
+    setConfirmOpen(false);
+    doSend();
   };
 
   // Acte I « Le parchemin se prépare » : réservé à un VRAI traitement —
@@ -195,15 +229,31 @@ export function SessionAudioUploadCard({
             Envoyer
           </Button>
         </div>
+        {variant === "replace" && (
+          <ReplaceAudioConfirm
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            onConfirm={handleConfirmReplace}
+          />
+        )}
       </section>
     );
   }
 
   return (
     <section
-      aria-label="Zone d'upload audio"
+      aria-label={
+        variant === "replace"
+          ? "Remplacer l'enregistrement audio"
+          : "Zone d'upload audio"
+      }
       data-session-id={session.id}
     >
+      {variant === "replace" && (
+        <p className="text-text-chrome-muted mb-2 text-sm">
+          Glisse un nouveau fichier pour remplacer l&apos;enregistrement actuel.
+        </p>
+      )}
       <UploadDropzone
         accept={ACCEPT_ATTR}
         acceptedExtensions={ACCEPTED_EXTENSIONS}
@@ -213,6 +263,13 @@ export function SessionAudioUploadCard({
         label={DROPZONE_LABEL}
         rejectionMessage={REJECTION_MESSAGE}
       />
+      {variant === "replace" && onCancel && (
+        <div className="mt-3 flex justify-end">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Annuler
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

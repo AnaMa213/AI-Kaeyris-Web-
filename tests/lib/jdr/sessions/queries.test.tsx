@@ -18,7 +18,7 @@ const {
   useGetSession,
   useListSessions,
   useUpdateSession,
-  useUploadSessionAudio,
+  useSessionAudioMutation,
   sessionQueryKey,
   sessionsListQueryKey,
 } = await import("@/lib/jdr/sessions/queries");
@@ -119,6 +119,97 @@ describe("useCreateSession", () => {
     expect(body.recorded_at).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/,
     );
+  });
+});
+
+describe("useReplaceSessionAudio (Story 3.5)", () => {
+  const replaceResponse = {
+    session_id: sampleSession.id,
+    path: "data/audio/replaced.m4a",
+    sha256: "b".repeat(64),
+    size_bytes: 2048,
+    duration_seconds: 720,
+    uploaded_at: "2026-06-04T10:00:00.000Z",
+    job_id: "job-replace-1",
+  };
+
+  function stubReplaceFetch(
+    deleteResponse: () => Response,
+    calls: string[],
+  ) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method = (
+          typeof input === "string" ? init?.method : input.method
+        ) ?? "GET";
+        if (url.endsWith(`/sessions/${sampleSession.id}/audio`)) {
+          calls.push(method.toUpperCase());
+          if (method.toUpperCase() === "DELETE") return deleteResponse();
+          if (method.toUpperCase() === "POST") {
+            return new Response(JSON.stringify(replaceResponse), {
+              status: 202,
+              headers: { "content-type": "application/json" },
+            });
+          }
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+  }
+
+  test("DELETEs then POSTs (in order), seeds the job cache and patches the session optimistically", async () => {
+    const calls: string[] = [];
+    stubReplaceFetch(() => new Response(null, { status: 204 }), calls);
+
+    const queryClient = makeClient();
+    queryClient.setQueryData(sessionQueryKey(sampleSession.id), {
+      ...sampleSession,
+      state: "transcription_failed",
+    });
+
+    const { result } = renderHook(
+      () => useSessionAudioMutation(sampleSession.id, { replace: true }),
+      { wrapper: wrapper(queryClient) },
+    );
+    await result.current.mutateAsync(
+      new File(["x"], "new.m4a", { type: "audio/mp4" }),
+    );
+
+    expect(calls).toEqual(["DELETE", "POST"]);
+    expect(queryClient.getQueryData(jobQueryKey("job-replace-1"))).toMatchObject(
+      { id: "job-replace-1", status: "queued", kind: "transcription" },
+    );
+    expect(
+      queryClient.getQueryData(sessionQueryKey(sampleSession.id)),
+    ).toMatchObject({
+      state: "audio_uploaded",
+      current_job_id: "job-replace-1",
+    });
+  });
+
+  test("a 409 from DELETE rejects and never attempts the POST", async () => {
+    const calls: string[] = [];
+    stubReplaceFetch(
+      () =>
+        new Response(
+          JSON.stringify({ type: "about:blank", title: "Conflict", status: 409 }),
+          { status: 409, headers: { "content-type": "application/problem+json" } },
+        ),
+      calls,
+    );
+
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useSessionAudioMutation(sampleSession.id, { replace: true }),
+      { wrapper: wrapper(queryClient) },
+    );
+
+    await expect(
+      result.current.mutateAsync(new File(["x"], "new.m4a", { type: "audio/mp4" })),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(calls).toEqual(["DELETE"]);
   });
 });
 
@@ -385,7 +476,7 @@ describe("useUploadSessionAudio", () => {
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const setSpy = vi.spyOn(client, "setQueryData");
 
-    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+    const { result } = renderHook(() => useSessionAudioMutation(sessionId), {
       wrapper: wrapper(client),
     });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
@@ -435,7 +526,7 @@ describe("useUploadSessionAudio", () => {
       state: "created",
     });
 
-    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+    const { result } = renderHook(() => useSessionAudioMutation(sessionId), {
       wrapper: wrapper(client),
     });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
@@ -475,7 +566,7 @@ describe("useUploadSessionAudio", () => {
         mutations: { retry: false },
       },
     });
-    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+    const { result } = renderHook(() => useSessionAudioMutation(sessionId), {
       wrapper: wrapper(client),
     });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
@@ -508,7 +599,7 @@ describe("useUploadSessionAudio", () => {
         mutations: { retry: false },
       },
     });
-    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+    const { result } = renderHook(() => useSessionAudioMutation(sessionId), {
       wrapper: wrapper(client),
     });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });
@@ -541,7 +632,7 @@ describe("useUploadSessionAudio", () => {
         mutations: { retry: false },
       },
     });
-    const { result } = renderHook(() => useUploadSessionAudio(sessionId), {
+    const { result } = renderHook(() => useSessionAudioMutation(sessionId), {
       wrapper: wrapper(client),
     });
     const file = new File(["x"], "demo.m4a", { type: "audio/mp4" });

@@ -58,6 +58,8 @@ const sampleSession = {
 function renderCard(props: {
   session?: typeof sampleSession;
   onUploadSuccess?: (durationSeconds: number | null) => void;
+  variant?: "upload" | "replace";
+  onCancel?: () => void;
   fetchImpl?: (
     input: Request | string,
     init?: RequestInit,
@@ -81,6 +83,8 @@ function renderCard(props: {
         <SessionAudioUploadCard
           session={props.session ?? sampleSession}
           onUploadSuccess={props.onUploadSuccess}
+          variant={props.variant}
+          onCancel={props.onCancel}
         />
       </QueryClientProvider>,
     ),
@@ -479,5 +483,99 @@ describe("<SessionAudioUploadCard> — Story 3.2 reducer paths (transparent redu
     await screen.findByText("Le parchemin se prépare");
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("<SessionAudioUploadCard> — Story 3.5 replace variant", () => {
+  const replaceResponse = {
+    session_id: "ses-1",
+    path: "data/audio/replaced.m4a",
+    sha256: "b".repeat(64),
+    size_bytes: 2048,
+    duration_seconds: 720,
+    uploaded_at: "2026-06-04T10:00:00+00:00",
+    job_id: "job-replace-7",
+  };
+
+  function replaceFetch(calls: string[]) {
+    return async (input: Request | string, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      const method =
+        (typeof input === "string" ? init?.method : input.method) ?? "GET";
+      if (url.endsWith("/audio")) {
+        calls.push(method.toUpperCase());
+        if (method.toUpperCase() === "DELETE") {
+          return new Response(null, { status: 204 });
+        }
+        if (method.toUpperCase() === "POST") {
+          return new Response(JSON.stringify(replaceResponse), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+      }
+      return new Response(null, { status: 200 });
+    };
+  }
+
+  test("Envoyer opens a confirmation dialog (no network yet); confirming runs DELETE then POST", async () => {
+    const calls: string[] = [];
+    const onUploadSuccess = vi.fn();
+    renderCard({
+      variant: "replace",
+      onUploadSuccess,
+      fetchImpl: replaceFetch(calls),
+    });
+
+    fireEvent.drop(screen.getByRole("button", { name: /Glisse ton M4A/ }), {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "new.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+
+    // The destructive confirm dialog is shown; nothing hit the network yet.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(calls).toEqual([]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
+    );
+
+    await waitFor(() => expect(onUploadSuccess).toHaveBeenCalledWith(720));
+    expect(calls).toEqual(["DELETE", "POST"]);
+  });
+
+  test("cancelling the dialog makes no network call and keeps the selected file", async () => {
+    const calls: string[] = [];
+    renderCard({ variant: "replace", fetchImpl: replaceFetch(calls) });
+
+    fireEvent.drop(screen.getByRole("button", { name: /Glisse ton M4A/ }), {
+      dataTransfer: makeDataTransfer(
+        new File(["x"], "new.m4a", { type: "audio/mp4" }),
+      ),
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+
+    expect(calls).toEqual([]);
+    // Still on the confirmation card (file kept, Envoyer available again).
+    expect(screen.getByText("new.m4a")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Envoyer" }),
+    ).toBeInTheDocument();
+  });
+
+  test("replace dropzone exposes an Annuler affordance wired to onCancel", async () => {
+    const onCancel = vi.fn();
+    renderCard({ variant: "replace", onCancel });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

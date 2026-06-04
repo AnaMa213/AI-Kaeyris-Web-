@@ -485,4 +485,132 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Titre")).toBeInTheDocument();
   });
+
+  describe("Story 3.5 — Replace audio affordance", () => {
+    test("offers 'Remplacer l'enregistrement' on audio_uploaded", async () => {
+      stubFetch({ session: { ...baseSession, state: "audio_uploaded" } });
+      renderPage();
+      await screen.findByRole("heading", { level: 1 });
+      expect(
+        await screen.findByRole("button", {
+          name: "Remplacer l'enregistrement",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    test("offers an enabled 'Remplacer l'enregistrement' on transcription_failed", async () => {
+      stubFetch({ session: { ...baseSession, state: "transcription_failed" } });
+      renderPage();
+      await screen.findByText("Le grimoire est resté muet");
+      const replace = screen.getByRole("button", {
+        name: "Remplacer l'enregistrement",
+      });
+      expect(replace).toBeEnabled();
+      // The retry button stays inert (no re-transcribe endpoint in V1).
+      expect(
+        screen.getByRole("button", { name: "Relancer la transcription" }),
+      ).toBeDisabled();
+    });
+
+    test("hides the replace affordance while transcribing (locked)", async () => {
+      stubFetch({ session: { ...baseSession, state: "transcribing" } });
+      renderPage();
+      await screen.findByText("Les scribes transcrivent");
+      expect(
+        screen.queryByRole("button", { name: "Remplacer l'enregistrement" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("hides the replace affordance once transcribed (locked)", async () => {
+      stubFetch({ session: { ...baseSession, state: "transcribed" } });
+      renderPage();
+      await screen.findByText("Le récit est consigné");
+      expect(
+        screen.queryByRole("button", { name: "Remplacer l'enregistrement" }),
+      ).not.toBeInTheDocument();
+    });
+
+    // Regression (code-review #1): the replace affordance is gated on the
+    // displayed act (ritualState), not the raw cached session.state. A session
+    // stuck at audio_uploaded in cache while the live job poll has gone terminal
+    // must NOT show a replace CTA over the success act, nor duplicate it on fail.
+    function stubWithPolledJob(jobStatus: "succeeded" | "failed") {
+      const jobId = "job-terminal-poll";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: jobStatus,
+                failure_reason: jobStatus === "failed" ? "boom" : null,
+                queued_at: "2026-05-31T19:00:00+00:00",
+                started_at: "2026-05-31T19:00:05+00:00",
+                ended_at: "2026-05-31T19:01:00+00:00",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "audio_uploaded",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("no replace CTA over the success act when the polled job succeeded (session cache stale at audio_uploaded)", async () => {
+      stubWithPolledJob("succeeded");
+      renderPage();
+      expect(
+        await screen.findByText("Le récit est consigné"),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Remplacer l'enregistrement" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("exactly one replace CTA when the polled job failed (no duplicate with the external button)", async () => {
+      stubWithPolledJob("failed");
+      renderPage();
+      await screen.findByText("Le grimoire est resté muet");
+      expect(
+        screen.getAllByRole("button", { name: "Remplacer l'enregistrement" }),
+      ).toHaveLength(1);
+    });
+
+    test("clicking 'Remplacer' reveals the replace dropzone and hides the ritual", async () => {
+      stubFetch({ session: { ...baseSession, state: "audio_uploaded" } });
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Remplacer l'enregistrement",
+        }),
+      );
+      expect(
+        await screen.findByRole("button", { name: /Glisse ton M4A/ }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Les scribes transcrivent"),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
