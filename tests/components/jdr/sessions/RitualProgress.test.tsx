@@ -34,6 +34,49 @@ describe("<RitualProgress>", () => {
     expect(screen.getByText("Les scribes transcrivent")).toBeInTheDocument();
   });
 
+  test("transcribing + phase 'reducing' → preparation habillage (BD-10)", () => {
+    render(
+      <RitualProgress
+        uiState="transcribing"
+        sessionTitle="Séance 12"
+        phase="reducing"
+        progress={12}
+      />,
+    );
+    expect(screen.getByText("Le grimoire se prépare")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Les scribes transcrivent"),
+    ).not.toBeInTheDocument();
+    // determinate bar still driven by the real percent during reduce
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "12",
+    );
+  });
+
+  test("transcribing + phase 'transcribing' → scribes habillage", () => {
+    render(
+      <RitualProgress
+        uiState="transcribing"
+        sessionTitle="Séance 12"
+        phase="transcribing"
+      />,
+    );
+    expect(screen.getByText("Les scribes transcrivent")).toBeInTheDocument();
+    expect(screen.queryByText("Le grimoire se prépare")).not.toBeInTheDocument();
+  });
+
+  test("transcribing without phase → scribes habillage (degradation)", () => {
+    render(
+      <RitualProgress
+        uiState="transcribing"
+        sessionTitle="Séance 12"
+        phase={null}
+      />,
+    );
+    expect(screen.getByText("Les scribes transcrivent")).toBeInTheDocument();
+  });
+
   test("transcribing with a numeric progress → determinate progressbar + '58 %'", () => {
     render(
       <RitualProgress

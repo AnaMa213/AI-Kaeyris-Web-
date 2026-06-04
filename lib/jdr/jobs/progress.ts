@@ -15,9 +15,10 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Progression de transcription (Story 3.4). **Adaptateur** : si le backend
- * expose un jour `job.progress`, il prime ; sinon estimation frontend dérivée
- * de la durée audio et du temps écoulé depuis `started_at`.
+ * Progression de transcription (Story 3.4 → 3.6). **Adaptateur** : le vrai
+ * `progress_percent` exposé par le backend (BD-10) prime ; à défaut (`null` —
+ * meta TTL expirée, vieux job, job non-transcription), estimation frontend
+ * dérivée de la durée audio et du temps écoulé depuis `started_at`.
  *
  * Retourne `null` quand aucune valeur fiable n'est calculable → le consommateur
  * affiche une barre indéterminée « crédible » (pas de chiffre).
@@ -30,10 +31,9 @@ export function estimateJobProgress({
 }: EstimateJobProgressArgs): number | null {
   if (!job) return null;
 
-  // Adaptateur : vrai % backend prioritaire (champ futur, absent de JobOut V1).
-  const backendProgress = (job as { progress?: number }).progress;
-  if (typeof backendProgress === "number") {
-    return clamp(Math.round(backendProgress), 0, 100);
+  // BD-10 (Story 3.6) : le % réel du backend prime sur l'estimation client.
+  if (typeof job.progress_percent === "number") {
+    return clamp(Math.round(job.progress_percent), 0, 100);
   }
 
   if (job.status === "succeeded") return 100;
@@ -49,4 +49,41 @@ export function estimateJobProgress({
   const estimatedTotalSec = durationSeconds * factor;
   const pct = (elapsedSec / estimatedTotalSec) * 100;
   return clamp(Math.round(pct), 0, 95);
+}
+
+/** Repère « high-water » du % affiché, porté par l'appelant (ref), par job. */
+export interface DisplayProgressState {
+  jobId: string | null;
+  value: number;
+}
+
+/**
+ * Story 3.6 (AC3) — clamp d'affichage **monotone** de la barre :
+ * - jamais de régression intra-job (un poll qui retombe — null, estimation
+ *   plus basse, hoquet backend — ne fait pas reculer la barre) ;
+ * - jamais `100` avant l'état terminal (réservé à `done`/`transcribed`).
+ *
+ * `state` est réinitialisé au changement de `jobId`. Fonction pure : l'appelant
+ * stocke le `floor` retourné dans une ref et réinjecte `value` dans l'UI.
+ */
+export function resolveDisplayProgress(
+  state: DisplayProgressState,
+  jobId: string | null,
+  computed: number | null,
+  isTerminal: boolean,
+): { value: number | null; floor: DisplayProgressState } {
+  const floor = state.jobId === jobId ? state.value : 0;
+  if (isTerminal) {
+    // Terminal : on peut atteindre 100 ; le plancher n'a plus à grandir.
+    return {
+      value: typeof computed === "number" ? computed : 100,
+      floor: { jobId, value: floor },
+    };
+  }
+  if (typeof computed === "number") {
+    const value = Math.min(99, Math.max(floor, computed));
+    return { value, floor: { jobId, value } };
+  }
+  // Estimation indisponible : on garde le plancher acquis, sinon indéterminé.
+  return { value: floor > 0 ? floor : null, floor: { jobId, value: floor } };
 }

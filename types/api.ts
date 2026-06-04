@@ -1049,6 +1049,16 @@ export interface components {
              */
             session_id: string;
             status: components["schemas"]["JobStatus"];
+            /**
+             * Phase
+             * @description Best-effort transcription phase. ``null`` when unknown, not started, expired, or for non-transcription jobs. ``queued`` is intentionally absent — use ``status`` for that.
+             */
+            phase?: ("reducing" | "transcribing" | "done" | "failed") | null;
+            /**
+             * Progress Percent
+             * @description Best-effort transcription progress (0..100). ``null`` when unknown/not started/expired. ``100`` is reserved for terminal success paired with ``phase="done"``.
+             */
+            progress_percent?: number | null;
             /** Failure Reason */
             failure_reason?: string | null;
             /**

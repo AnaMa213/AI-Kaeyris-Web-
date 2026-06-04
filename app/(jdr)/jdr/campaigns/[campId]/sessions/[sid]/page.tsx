@@ -19,7 +19,11 @@ import { env } from "@/lib/core/env";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
 import { useJob } from "@/lib/jdr/jobs/queries";
-import { estimateJobProgress } from "@/lib/jdr/jobs/progress";
+import {
+  estimateJobProgress,
+  resolveDisplayProgress,
+  type DisplayProgressState,
+} from "@/lib/jdr/jobs/progress";
 import {
   readAudioDuration,
   writeAudioDuration,
@@ -82,6 +86,13 @@ export default function SessionDetailPage() {
   );
   const [nowTick, setNowTick] = useState(() => Date.now());
   const notifiedJobRef = useRef<string | null>(null);
+  // Story 3.6 : plancher monotone du % affiché (par job). State (et non ref)
+  // pour rester pur en render — ajusté via le pattern « setState pendant le
+  // render » avec garde d'égalité (cf. plus bas).
+  const [progressFloor, setProgressFloor] = useState<DisplayProgressState>({
+    jobId: null,
+    value: 0,
+  });
 
   // Story 3.4 : `current_job_id` est porté par SessionOut (BD-8). Plus aucun
   // useState local — au refresh, le polling reprend dès que la session arrive.
@@ -169,6 +180,22 @@ export default function SessionDetailPage() {
     durationSeconds,
     now: nowTick,
   });
+  // Story 3.6 : barre monotone + jamais 100 % avant l'acte terminal. Le vrai
+  // `progress_percent` (BD-10) est déjà prioritaire dans `estimateJobProgress`.
+  const { value: displayProgress, floor: nextFloor } = resolveDisplayProgress(
+    progressFloor,
+    job?.id ?? null,
+    ritualProgress,
+    ritualState === "transcribed",
+  );
+  if (
+    nextFloor.jobId !== progressFloor.jobId ||
+    nextFloor.value !== progressFloor.value
+  ) {
+    // setState pendant le render : React ré-rend immédiatement sans flash. La
+    // garde d'égalité ci-dessus garantit la convergence (pas de boucle).
+    setProgressFloor(nextFloor);
+  }
 
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
@@ -255,7 +282,8 @@ export default function SessionDetailPage() {
           <RitualProgress
             uiState={ritualState}
             sessionTitle={session.title}
-            progress={ritualProgress}
+            progress={displayProgress}
+            phase={job?.phase}
             // Story 3.5 : l'affordance de remplacement est portée par l'acte
             // affiché (`transcribing` pour `audio_uploaded`, `failed` pour un
             // échec). Gaté sur `ritualState` → masqué dès que le job est terminal
