@@ -14,6 +14,7 @@ import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { PjPresenceForm } from "@/components/jdr/sessions/PjPresenceForm";
+import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
@@ -39,6 +40,7 @@ import {
   type PipelineUIState,
 } from "@/lib/jdr/sessions/pipelineState";
 import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
+import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
 const STATE_LABEL: Record<SessionOut["state"], string> = {
   created: "Créée",
@@ -58,15 +60,11 @@ const TOP_TAB_TRIGGER_CLASS =
 type SessionTopTab = "transcription" | "artefacts";
 type ArtifactSubTab = "summary" | "narrative" | "elements" | "povs";
 
-const ARTIFACT_SUB_TABS: Array<{
-  value: ArtifactSubTab;
-  label: string;
-  disabled?: boolean;
-}> = [
+const ARTIFACT_SUB_TABS: Array<{ value: ArtifactSubTab; label: string }> = [
   { value: "summary", label: "Résumé" },
-  { value: "narrative", label: "Récit", disabled: true },
-  { value: "elements", label: "Éléments", disabled: true },
-  { value: "povs", label: "POVs", disabled: true },
+  { value: "narrative", label: "Récit" },
+  { value: "elements", label: "Éléments" },
+  { value: "povs", label: "POVs" },
 ];
 
 const VALID_RITUAL_OVERRIDES: PipelineUIState[] = [
@@ -184,6 +182,19 @@ function readRitualOverride(): PipelineUIState | null {
     : null;
 }
 
+// Story 4.3 : panneau d'attente pour un sous-tab d'artefact déverrouillé mais
+// dont le déclencheur de génération n'arrive qu'en Story 4.4.
+function ArtifactPlaceholder({ title }: { title: string }) {
+  return (
+    <section className="bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)">
+      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <p className="text-text-chrome-muted mt-2 text-sm">
+        La génération de cet artefact arrive prochainement.
+      </p>
+    </section>
+  );
+}
+
 export default function SessionDetailPage() {
   const params = useParams<{ campId: string; sid: string }>();
   const pathname = usePathname();
@@ -216,6 +227,14 @@ export default function SessionDetailPage() {
   // Story 3.4 : polling live + back-off (stoppé à l'état terminal).
   const jobQuery = useJob(currentJobId, { live: true });
   const job = jobQuery.data;
+  // Story 4.3 : un résumé existant ouvre les sous-tabs Récit/Éléments/POVs.
+  // Requête uniquement sur séance transcrite ; `data != null` (et non `isSuccess`)
+  // pour qu'une réponse 200/null d'un mock ne déverrouille pas par erreur.
+  const summaryQuery = useSummaryArtifact(
+    sessionQuery.data?.state === "transcribed" ? sid : "",
+  );
+  // Présence du `text` (et non `data != null`) : robuste à une réponse 200 vide.
+  const summaryExists = Boolean(summaryQuery.data?.text);
   const searchParamsKey = `${urlRevision}:${searchParams.toString()}`;
   const canEditResolved = campaignQuery.data
     ? canEditCampaignSession(campaignQuery.data)
@@ -508,22 +527,26 @@ export default function SessionDetailPage() {
               variant="line"
               className="bg-surface-raised border-border-chrome mb-6 flex-wrap rounded-md border px-3"
             >
-              {ARTIFACT_SUB_TABS.map((artifactTab) => (
-                <TabsTrigger
-                  key={artifactTab.value}
-                  value={artifactTab.value}
-                  disabled={artifactTab.disabled}
-                  title={
-                    artifactTab.disabled ? ARTIFACT_DISABLED_HINT : undefined
-                  }
-                  // Base UI rend `aria-disabled` (pas `disabled`) : on réactive
-                  // les pointer-events pour que le tooltip natif `title` (UX-DR14)
-                  // s'affiche au survol, et on porte le curseur sur `aria-disabled`.
-                  className="after:bg-accent-gold data-active:text-accent-gold aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed"
-                >
-                  {artifactTab.label}
-                </TabsTrigger>
-              ))}
+              {ARTIFACT_SUB_TABS.map((artifactTab) => {
+                // Story 4.3 : Résumé toujours ouvert ; les 3 autres se déverrouillent
+                // une fois le résumé généré (`summaryExists`).
+                const disabled =
+                  artifactTab.value !== "summary" && !summaryExists;
+                return (
+                  <TabsTrigger
+                    key={artifactTab.value}
+                    value={artifactTab.value}
+                    disabled={disabled}
+                    title={disabled ? ARTIFACT_DISABLED_HINT : undefined}
+                    // Base UI rend `aria-disabled` (pas `disabled`) : on réactive
+                    // les pointer-events pour que le tooltip natif `title` (UX-DR14)
+                    // s'affiche au survol, et on porte le curseur sur `aria-disabled`.
+                    className="after:bg-accent-gold data-active:text-accent-gold aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed"
+                  >
+                    {artifactTab.label}
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
 
             <TabsContent value="summary" className="space-y-6">
@@ -531,6 +554,14 @@ export default function SessionDetailPage() {
               transcrite (prérequis aux artefacts / POVs). */}
               {canEdit && session.state === "transcribed" && (
                 <PjPresenceForm sessionId={session.id} campaignId={campId} />
+              )}
+
+              {/* Story 4.3 : génération + affichage du Résumé (GM, séance transcrite). */}
+              {canEdit && session.state === "transcribed" && (
+                <SummaryArtifactPanel
+                  sessionId={session.id}
+                  campaignId={campId}
+                />
               )}
 
               {session.state !== "transcribed" && (
@@ -552,6 +583,18 @@ export default function SessionDetailPage() {
                   </p>
                 </section>
               )}
+            </TabsContent>
+
+            {/* Story 4.3 : les 3 sous-tabs s'activent une fois le résumé généré ;
+                leurs déclencheurs de génération arrivent en Story 4.4. */}
+            <TabsContent value="narrative">
+              <ArtifactPlaceholder title="Récit" />
+            </TabsContent>
+            <TabsContent value="elements">
+              <ArtifactPlaceholder title="Éléments" />
+            </TabsContent>
+            <TabsContent value="povs">
+              <ArtifactPlaceholder title="POVs" />
             </TabsContent>
           </Tabs>
         </TabsContent>

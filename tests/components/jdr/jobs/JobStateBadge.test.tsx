@@ -90,4 +90,31 @@ describe("<JobStateBadge>", () => {
     // generated CVA class; assert the variant flag presence via class fragment.
     expect(badge.className).toMatch(/destructive/);
   });
+
+  test("custom labels + aria prefix drive the wording (Story 4.3 artifact job)", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(jobQueryKey(baseJob.id), {
+      ...baseJob,
+      kind: "summary",
+      status: "running",
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <JobStateBadge
+          jobId={baseJob.id}
+          ariaLabelPrefix="État de la génération"
+          labels={{
+            queued: "En file",
+            running: "Génération en cours",
+            succeeded: "Généré",
+            failed: "Échec",
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    const badge = screen.getByLabelText("État de la génération : Génération en cours");
+    expect(badge.textContent).toBe("Génération en cours");
+  });
 });
