@@ -6,6 +6,13 @@ import { useJob, type JobOut } from "@/lib/jdr/jobs/queries";
 
 interface JobStateBadgeProps {
   jobId: string;
+  /**
+   * Story 4.3 : labels par statut. Défaut = vocabulaire transcription (Stories
+   * 3.3/3.4 — call sites inchangés) ; un job d'artefact passe ses propres labels.
+   */
+  labels?: Record<JobOut["status"], string>;
+  /** Préfixe ARIA — défaut « État de la transcription ». */
+  ariaLabelPrefix?: string;
 }
 
 const STATUS_LABEL: Record<JobOut["status"], string> = {
@@ -15,7 +22,11 @@ const STATUS_LABEL: Record<JobOut["status"], string> = {
   failed: "Échec",
 };
 
-export function JobStateBadge({ jobId }: JobStateBadgeProps) {
+export function JobStateBadge({
+  jobId,
+  labels = STATUS_LABEL,
+  ariaLabelPrefix = "État de la transcription",
+}: JobStateBadgeProps) {
   // Story 3.3: read-only consumer of the cache seeded by useUploadSessionAudio.
   // useJob ships with a queryFn so TanStack v5 stops yelling about missing
   // default functions; `enabled: false` keeps it from actually firing.
@@ -24,13 +35,13 @@ export function JobStateBadge({ jobId }: JobStateBadgeProps) {
 
   if (!job) return null;
 
-  const label = STATUS_LABEL[job.status];
+  const label = labels[job.status];
 
   if (job.status === "failed") {
     return (
       <Badge
         variant="destructive"
-        aria-label={`État de la transcription : ${label}`}
+        aria-label={`${ariaLabelPrefix} : ${label}`}
       >
         {label}
       </Badge>
@@ -40,7 +51,7 @@ export function JobStateBadge({ jobId }: JobStateBadgeProps) {
   return (
     <Badge
       variant="outline"
-      aria-label={`État de la transcription : ${label}`}
+      aria-label={`${ariaLabelPrefix} : ${label}`}
       className={cn(
         job.status === "running" && "animate-pulse",
         job.status === "succeeded" && "text-state-success border-state-success",

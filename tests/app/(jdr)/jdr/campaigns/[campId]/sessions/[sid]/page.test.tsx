@@ -911,4 +911,89 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       });
     });
   });
+
+  describe("Story 4.3 - Trigger Summary generation", () => {
+    function stubForSummary(opts: { summary?: boolean; declared?: string[] }) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            typeof input === "string" ? "GET" : (input.method ?? "GET");
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({ items: [{ id: "pj-1", name: "Eldrin", campaign_id: campId, created_at: "2026-05-30T10:00:00Z" }], total: 1 }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, pj_ids: opts.declared ?? [], updated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary") && method.toUpperCase() === "GET") {
+            if (!opts.summary) {
+              return new Response(JSON.stringify({ type: "about:blank", title: "absent", status: 404 }), {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              });
+            }
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, text: "Résumé de la séance.", model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    function gotoArtefacts() {
+      window.localStorage.setItem(seenKey, "1");
+      window.history.replaceState(null, "", `${currentPathname}?tab=artefacts&sub=summary`);
+    }
+
+    test("keeps Récit/Éléments/POVs disabled while no summary exists", async () => {
+      gotoArtefacts();
+      stubForSummary({ summary: false, declared: ["pj-1"] });
+      renderPage();
+      await screen.findByRole("tab", { name: "Résumé" });
+      for (const name of ["Récit", "Éléments", "POVs"]) {
+        expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-disabled", "true");
+      }
+    });
+
+    test("enables the 3 sub-tabs once a summary exists", async () => {
+      gotoArtefacts();
+      stubForSummary({ summary: true, declared: ["pj-1"] });
+      renderPage();
+      await waitFor(() => {
+        expect(screen.getByRole("tab", { name: "Récit" })).not.toHaveAttribute("aria-disabled", "true");
+      });
+      expect(screen.getByRole("tab", { name: "Éléments" })).not.toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("tab", { name: "POVs" })).not.toHaveAttribute("aria-disabled", "true");
+    });
+
+    test("shows the 'Générer le Résumé' trigger for a GM with a declared PJ", async () => {
+      gotoArtefacts();
+      stubForSummary({ summary: false, declared: ["pj-1"] });
+      renderPage();
+      expect(
+        await screen.findByRole("button", { name: /Générer le Résumé/i }),
+      ).toBeInTheDocument();
+    });
+  });
 });
