@@ -996,4 +996,124 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("Story 4.4 - Trigger derived artifacts", () => {
+    // Summary present → the 3 sub-tabs are unlocked; narrative/elements are
+    // absent (404) so each pane shows its generation trigger (no placeholder).
+    function stubFor44(opts: { declared?: string[]; summary?: boolean }) {
+      const summaryPresent = opts.summary ?? true;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            typeof input === "string" ? "GET" : (input.method ?? "GET");
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({ items: [{ id: "pj-1", name: "Eldrin", campaign_id: campId, created_at: "2026-05-30T10:00:00Z" }], total: 1 }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, pj_ids: opts.declared ?? [], updated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            if (!summaryPresent) {
+              return new Response(
+                JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+                { status: 404, headers: { "content-type": "application/problem+json" } },
+              );
+            }
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, text: "Résumé de la séance.", model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          // Récit / Éléments absents → 404 (l'UI les traite comme « à générer »).
+          if (
+            (url.includes("/artifacts/narrative") ||
+              url.includes("/artifacts/elements")) &&
+            method.toUpperCase() === "GET"
+          ) {
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              { status: 404, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    function gotoSub(sub: string) {
+      window.localStorage.setItem(seenKey, "1");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentPathname}?tab=artefacts&sub=${sub}`,
+      );
+    }
+
+    test("Récit sub-tab renders the 'Générer le Récit' trigger (not a placeholder)", async () => {
+      gotoSub("narrative");
+      stubFor44({ declared: ["pj-1"] });
+      renderPage();
+      expect(
+        await screen.findByRole("button", { name: /Générer le Récit/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("La génération de cet artefact arrive prochainement."),
+      ).not.toBeInTheDocument();
+    });
+
+    test("Éléments sub-tab renders the 'Générer les Éléments' trigger", async () => {
+      gotoSub("elements");
+      stubFor44({ declared: ["pj-1"] });
+      renderPage();
+      expect(
+        await screen.findByRole("button", { name: /Générer les Éléments/i }),
+      ).toBeInTheDocument();
+    });
+
+    test("POVs sub-tab renders an enabled 'Générer les POVs' trigger with a declared PJ", async () => {
+      gotoSub("povs");
+      stubFor44({ declared: ["pj-1"] });
+      renderPage();
+      const button = await screen.findByRole("button", {
+        name: /Générer les POVs/i,
+      });
+      await waitFor(() => expect(button).toBeEnabled());
+    });
+
+    // AC3 guard: a deep-link to a derived sub-tab with NO summary must not mount
+    // the trigger (no POST → 409 no-summary impossible).
+    test("deep-linking sub=narrative without a summary shows no trigger (read-only placeholder)", async () => {
+      gotoSub("narrative");
+      stubFor44({ declared: ["pj-1"], summary: false });
+      renderPage();
+      expect(
+        await screen.findByText(
+          "Les artefacts de cette séance seront publiés ici.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /Générer le Récit/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

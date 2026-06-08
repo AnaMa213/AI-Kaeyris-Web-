@@ -13,8 +13,18 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useSummaryArtifact, useGenerateSummary, summaryArtifactQueryKey } =
-  await import("@/lib/jdr/sessions/artifacts");
+const {
+  useSummaryArtifact,
+  useGenerateSummary,
+  summaryArtifactQueryKey,
+  useNarrativeArtifact,
+  useGenerateNarrative,
+  narrativeArtifactQueryKey,
+  useElementsArtifact,
+  useGenerateElements,
+  elementsArtifactQueryKey,
+  useGeneratePovs,
+} = await import("@/lib/jdr/sessions/artifacts");
 const { jobQueryKey } = await import("@/lib/jdr/jobs/queries");
 const { ApiError } = await import("@/lib/core/api/errors");
 
@@ -23,6 +33,23 @@ const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
 const summaryOut = {
   session_id: SESSION_ID,
   text: "Les héros entrent dans la crypte.",
+  model_used: "claude-x",
+  generated_at: "2026-06-01T10:00:00Z",
+};
+
+const narrativeOut = {
+  session_id: SESSION_ID,
+  text: "Au cœur de la nuit, les héros franchirent le seuil.",
+  model_used: "claude-x",
+  generated_at: "2026-06-01T10:00:00Z",
+};
+
+const elementsOut = {
+  session_id: SESSION_ID,
+  npcs: [{ name: "Grom", description: "Forgeron taciturne." }],
+  locations: [{ name: "La crypte", description: "Humide et oubliée." }],
+  items: [],
+  clues: [],
   model_used: "claude-x",
   generated_at: "2026-06-01T10:00:00Z",
 };
@@ -49,13 +76,67 @@ const makeClient = () =>
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
+function jobFor(id: string, kind: string) {
+  return {
+    id,
+    kind,
+    session_id: SESSION_ID,
+    status: "queued",
+    queued_at: "2026-06-01T10:00:00Z",
+  };
+}
+
 function stubFetch(opts: { getStatus?: number } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
       const method = typeof input === "string" ? "GET" : (input.method ?? "GET");
-      if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
+      const isPost = method.toUpperCase() === "POST";
+
+      if (url.includes("/artifacts/narrative")) {
+        if (isPost) {
+          return new Response(JSON.stringify(jobFor("job-narrative-1", "narrative")), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (opts.getStatus && opts.getStatus >= 400) {
+          return new Response(
+            JSON.stringify({ type: "about:blank", title: "absent", status: opts.getStatus }),
+            { status: opts.getStatus, headers: { "content-type": "application/problem+json" } },
+          );
+        }
+        return new Response(JSON.stringify(narrativeOut), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/artifacts/elements")) {
+        if (isPost) {
+          return new Response(JSON.stringify(jobFor("job-elements-1", "elements")), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (opts.getStatus && opts.getStatus >= 400) {
+          return new Response(
+            JSON.stringify({ type: "about:blank", title: "absent", status: opts.getStatus }),
+            { status: opts.getStatus, headers: { "content-type": "application/problem+json" } },
+          );
+        }
+        return new Response(JSON.stringify(elementsOut), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/artifacts/povs") && isPost) {
+        return new Response(JSON.stringify(jobFor("job-povs-1", "povs")), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/artifacts/summary") && isPost) {
         return new Response(JSON.stringify(jobQueued), {
           status: 202,
           headers: { "content-type": "application/json" },
@@ -147,4 +228,89 @@ describe("useGenerateSummary", () => {
     const cached = queryClient.getQueryData(jobQueryKey("job-summary-1"));
     expect(cached).toMatchObject({ id: "job-summary-1", kind: "summary" });
   });
+});
+
+describe("useNarrativeArtifact (Story 4.4)", () => {
+  test("GET narrative → unwraps the artifact under the scoped key", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useNarrativeArtifact(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.text).toBe(narrativeOut.text);
+    expect(narrativeArtifactQueryKey(SESSION_ID)).toEqual([
+      "jdr",
+      "artifact",
+      "narrative",
+      SESSION_ID,
+    ]);
+  });
+
+  test("a not-yet-generated narrative (404) surfaces as error, not data", async () => {
+    stubFetch({ getStatus: 404 });
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useNarrativeArtifact(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.error).toBeInstanceOf(ApiError);
+  });
+});
+
+describe("useElementsArtifact (Story 4.4)", () => {
+  test("GET elements → unwraps the four lists under the scoped key", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useElementsArtifact(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.npcs?.[0]?.name).toBe("Grom");
+    expect(result.current.data?.items).toEqual([]);
+    expect(elementsArtifactQueryKey(SESSION_ID)).toEqual([
+      "jdr",
+      "artifact",
+      "elements",
+      SESSION_ID,
+    ]);
+  });
+
+  test("a not-yet-generated elements card (422) surfaces as error, not data", async () => {
+    stubFetch({ getStatus: 422 });
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useElementsArtifact(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe("derived-artifact generators seed the job cache (Story 4.4)", () => {
+  test.each([
+    ["narrative", () => useGenerateNarrative(SESSION_ID), "job-narrative-1"],
+    ["elements", () => useGenerateElements(SESSION_ID), "job-elements-1"],
+    ["povs", () => useGeneratePovs(SESSION_ID), "job-povs-1"],
+  ] as const)(
+    "POST /artifacts/%s returns a JobQueuedOut and seeds jobQueryKey",
+    async (kind, hook, jobId) => {
+      const queryClient = makeClient();
+      const { result } = renderHook(hook, { wrapper: wrapper(queryClient) });
+      const job = await result.current.mutateAsync();
+      expect(job.id).toBe(jobId);
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const call = fetchMock.mock.calls.find((args) => {
+        const request = args[0] as Request;
+        return (
+          request.url.includes(`/artifacts/${kind}`) && request.method === "POST"
+        );
+      });
+      if (!call) throw new Error(`No POST /artifacts/${kind} call found`);
+      expect((call[0] as Request).credentials).toBe("include");
+
+      const cached = queryClient.getQueryData(jobQueryKey(jobId));
+      expect(cached).toMatchObject({ id: jobId, kind });
+    },
+  );
 });

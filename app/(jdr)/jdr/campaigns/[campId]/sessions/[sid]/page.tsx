@@ -15,6 +15,9 @@ import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { PjPresenceForm } from "@/components/jdr/sessions/PjPresenceForm";
 import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
+import { NarrativeArtifactPanel } from "@/components/jdr/sessions/NarrativeArtifactPanel";
+import { ElementsArtifactPanel } from "@/components/jdr/sessions/ElementsArtifactPanel";
+import { PovArtifactPanel } from "@/components/jdr/sessions/PovArtifactPanel";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
@@ -182,14 +185,14 @@ function readRitualOverride(): PipelineUIState | null {
     : null;
 }
 
-// Story 4.3 : panneau d'attente pour un sous-tab d'artefact déverrouillé mais
-// dont le déclencheur de génération n'arrive qu'en Story 4.4.
-function ArtifactPlaceholder({ title }: { title: string }) {
+// Story 4.4 : pour un lecteur non-MJ, un sous-tab d'artefact déverrouillé affiche
+// un cartouche en lecture seule (la lecture joueur arrive en Epic 5).
+function ReadOnlyArtifactPlaceholder({ title }: { title: string }) {
   return (
     <section className="bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)">
       <h2 className="font-display text-xl font-semibold">{title}</h2>
       <p className="text-text-chrome-muted mt-2 text-sm">
-        La génération de cet artefact arrive prochainement.
+        Les artefacts de cette séance seront publiés ici.
       </p>
     </section>
   );
@@ -585,16 +588,39 @@ export default function SessionDetailPage() {
               )}
             </TabsContent>
 
-            {/* Story 4.3 : les 3 sous-tabs s'activent une fois le résumé généré ;
-                leurs déclencheurs de génération arrivent en Story 4.4. */}
+            {/* Story 4.4 : déclencheurs indépendants Récit / Éléments / POVs
+                (gate « résumé existant » porté par les sous-tabs ci-dessus →
+                409 no-summary impossible). MJ + séance transcrite ; sinon
+                cartouche lecture seule. */}
+            {/* `summaryExists` est ajouté à la garde (en plus du sous-tab désactivé)
+                pour qu'un deep-link `?sub=…` sans résumé ne puisse pas monter le
+                déclencheur → POST `409 no-summary` rendu impossible (AC3). */}
             <TabsContent value="narrative">
-              <ArtifactPlaceholder title="Récit" />
+              {canEdit && session.state === "transcribed" && summaryExists ? (
+                <NarrativeArtifactPanel
+                  sessionId={session.id}
+                  campaignId={campId}
+                />
+              ) : (
+                <ReadOnlyArtifactPlaceholder title="Récit" />
+              )}
             </TabsContent>
             <TabsContent value="elements">
-              <ArtifactPlaceholder title="Éléments" />
+              {canEdit && session.state === "transcribed" && summaryExists ? (
+                <ElementsArtifactPanel
+                  sessionId={session.id}
+                  campaignId={campId}
+                />
+              ) : (
+                <ReadOnlyArtifactPlaceholder title="Éléments" />
+              )}
             </TabsContent>
             <TabsContent value="povs">
-              <ArtifactPlaceholder title="POVs" />
+              {canEdit && session.state === "transcribed" && summaryExists ? (
+                <PovArtifactPanel sessionId={session.id} campaignId={campId} />
+              ) : (
+                <ReadOnlyArtifactPlaceholder title="POVs" />
+              )}
             </TabsContent>
           </Tabs>
         </TabsContent>
