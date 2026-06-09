@@ -62,26 +62,16 @@ type PjDeleteMockOperation = {
   };
 };
 
-type ApiClientPaths = Omit<paths, AudioMockPath> & {
+type ApiClientPaths = Omit<paths, AudioMockPath | PjDeleteMockPath> & {
   [Path in AudioMockPath]: Omit<paths[AudioMockPath], "get"> & {
     get: AudioMockGetOperation;
   };
 } & {
-  [Path in PjDeleteMockPath]: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
+  // Depuis BD-12, le contrat réel expose `PATCH /pjs/{pj_id}` sur ce path :
+  // on conserve donc ses opérations réelles (dont le PATCH, pour la story 4.16)
+  // et on n'injecte que le `delete` mocké (BD-3 toujours en attente côté backend).
+  [Path in PjDeleteMockPath]: Omit<paths[PjDeleteMockPath], "delete"> & {
     delete: PjDeleteMockOperation;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
   };
 };
 
