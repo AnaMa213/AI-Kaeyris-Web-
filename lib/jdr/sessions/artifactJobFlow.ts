@@ -32,6 +32,12 @@ interface UseArtifactJobFlowOptions {
    * d'effet. Absente pour les POVs (aucun GET à rafraîchir ici).
    */
   keyFactory?: (sessionId: string) => readonly unknown[];
+  /**
+   * Version stable du contenu relu (ex. `generated_at`). Sur régénération, elle
+   * permet de continuer les invalidations tant que le GET renvoie l'ancien
+   * artefact, puis de s'arrêter dès que le remplacement est visible.
+   */
+  artifactVersion?: unknown;
 }
 
 /**
@@ -44,34 +50,77 @@ export function useArtifactJobFlow({
   sessionId,
   isPresent,
   keyFactory,
+  artifactVersion,
 }: UseArtifactJobFlowOptions) {
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
   const [settleRefetchAttempt, setSettleRefetchAttempt] = useState(0);
   const [artifactUnavailable, setArtifactUnavailable] = useState(false);
+  const [queuedArtifactVersion, setQueuedArtifactVersion] =
+    useState<unknown>(null);
   const jobQuery = useJob(jobId, { live: true });
   const job = jobQuery.data;
   const jobLookupFailed = jobQuery.isError;
   const jobFailed = job?.status === "failed" || jobLookupFailed;
   const jobSucceeded = job?.status === "succeeded";
   // Actif = job en vol OU terminé OK mais le contenu n'est pas encore relu.
+  // (Premier rendu uniquement : se replie sur `isPresent` pour éviter le flash
+  // du bouton entre `succeeded` et l'arrivée du GET.)
   const jobActive = jobId !== null && !jobFailed && !artifactUnavailable && !isPresent;
+  // Story 4.5 — job en file/en cours, indépendant de `isPresent`. Sert à la
+  // régénération (contenu déjà présent) : pilote le badge + la désactivation du
+  // bouton « Régénérer » pendant que le job tourne.
+  const jobInFlight = jobId !== null && !jobFailed && !jobSucceeded;
+  const artifactSettling =
+    jobSucceeded &&
+    keyFactory != null &&
+    isPresent &&
+    queuedArtifactVersion !== null &&
+    artifactVersion === queuedArtifactVersion &&
+    settleRefetchAttempt <= ARTIFACT_SETTLE_REFETCH_LIMIT;
 
   const refreshArtifact = useCallback(() => {
     if (!keyFactory) return;
     queryClient.invalidateQueries({ queryKey: keyFactory(sessionId) });
   }, [keyFactory, queryClient, sessionId]);
 
-  const onJobQueued = useCallback((nextJobId: string) => {
-    setJobId(nextJobId);
-    setSettleRefetchAttempt(0);
-    setArtifactUnavailable(false);
-  }, []);
+  const onJobQueued = useCallback(
+    (nextJobId: string) => {
+      setJobId(nextJobId);
+      setSettleRefetchAttempt(0);
+      setArtifactUnavailable(false);
+      setQueuedArtifactVersion(isPresent ? (artifactVersion ?? null) : null);
+    },
+    [artifactVersion, isPresent],
+  );
 
   // À la complétion, le contenu peut arriver avec une petite latence backend.
   // On retente quelques invalidations avant de rendre un état non bloquant.
   useEffect(() => {
-    if (!jobSucceeded || !keyFactory || isPresent || artifactUnavailable) return;
+    if (!jobSucceeded || !keyFactory) return;
+
+    // Story 4.5 — régénération : le contenu est déjà présent. On garde l'ancien
+    // contenu affiché, mais on ré-invalide brièvement tant que le GET relit
+    // encore la version connue au moment du POST.
+    if (isPresent) {
+      if (
+        queuedArtifactVersion !== null &&
+        artifactVersion !== queuedArtifactVersion
+      ) {
+        return;
+      }
+      if (settleRefetchAttempt > ARTIFACT_SETTLE_REFETCH_LIMIT) return;
+
+      refreshArtifact();
+
+      const timer = window.setTimeout(() => {
+        setSettleRefetchAttempt((attempt) => attempt + 1);
+      }, ARTIFACT_SETTLE_REFETCH_DELAY_MS);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    if (artifactUnavailable) return;
 
     refreshArtifact();
 
@@ -88,9 +137,11 @@ export function useArtifactJobFlow({
     return () => window.clearTimeout(timer);
   }, [
     artifactUnavailable,
+    artifactVersion,
     isPresent,
     jobSucceeded,
     keyFactory,
+    queuedArtifactVersion,
     refreshArtifact,
     settleRefetchAttempt,
   ]);
@@ -102,6 +153,8 @@ export function useArtifactJobFlow({
     jobLookupFailed,
     jobSucceeded,
     jobActive,
+    jobInFlight,
+    artifactSettling,
     artifactUnavailable,
     refreshArtifact,
     /** À brancher sur le `onSuccess` de la mutation de génération. */

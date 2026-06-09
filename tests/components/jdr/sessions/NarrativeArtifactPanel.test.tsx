@@ -132,23 +132,70 @@ describe("<NarrativeArtifactPanel> (Story 4.4)", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("an existing narrative is displayed and no trigger is shown", async () => {
+  test("an existing narrative is displayed with a regenerate CTA and no first-gen trigger", async () => {
     stub({ narrative: true });
     renderPanel();
     expect(await screen.findByText(TEXT)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Générer le Récit/i }),
+      screen.queryByRole("button", { name: "Générer le Récit" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Régénérer le Récit" }),
+    ).toBeInTheDocument();
   });
 
   test("clicking triggers POST, follows the job, then renders the narrative", async () => {
     stub({ narrative: false, jobStatus: "succeeded" });
     renderPanel();
     const user = userEvent.setup();
-    const button = await screen.findByRole("button", { name: /Générer le Récit/i });
+    const button = await screen.findByRole("button", { name: "Générer le Récit" });
     await user.click(button);
     expect(
       await screen.findByText(TEXT, {}, { timeout: 4000 }),
     ).toBeInTheDocument();
+  });
+
+  // Story 4.5 — regeneration: confirm dialog → second POST → content replaced.
+  test("regenerate → confirm → second POST → new content replaces the old", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes("/artifacts/narrative") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({ id: "job-nar", kind: "narrative", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/narrative")) {
+          const text = postCount > 0 ? "Récit régénéré." : "Récit initial.";
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, text, model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/jobs/job-nar")) {
+          return new Response(
+            JSON.stringify({ id: "job-nar", kind: "narrative", session_id: SESSION_ID, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: null }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    expect(await screen.findByText("Récit initial.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Régénérer le Récit" }));
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+    expect(
+      await screen.findByText("Récit régénéré.", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(postCount).toBe(1);
   });
 });

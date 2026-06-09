@@ -99,26 +99,87 @@ describe("<SummaryArtifactPanel>", () => {
     expect(screen.getByText(/Déclare d'abord les PJs/i)).toBeInTheDocument();
   });
 
-  test("an existing summary is displayed and no trigger is shown", async () => {
+  test("an existing summary is displayed with a regenerate CTA and no first-gen trigger", async () => {
     stub({ declared: ["pj-1"], summary: true });
     renderPanel();
     expect(
       await screen.findByText("Les héros entrent dans la crypte."),
     ).toBeInTheDocument();
+    // First-generation trigger is gone (exact name, so it does not match the
+    // regenerate CTA which contains "générer le Résumé" as a substring).
     expect(
-      screen.queryByRole("button", { name: /Générer le Résumé/i }),
+      screen.queryByRole("button", { name: "Générer le Résumé" }),
     ).not.toBeInTheDocument();
+    // Story 4.5 — regenerate CTA is available on the existing artifact.
+    expect(
+      screen.getByRole("button", { name: "Régénérer le Résumé" }),
+    ).toBeInTheDocument();
   });
 
   test("PJ declared → clicking triggers POST, follows the job, then shows the summary", async () => {
     stub({ declared: ["pj-1"], jobStatus: "succeeded" });
     renderPanel();
     const user = userEvent.setup();
-    const button = await screen.findByRole("button", { name: /Générer le Résumé/i });
+    const button = await screen.findByRole("button", { name: "Générer le Résumé" });
     await waitFor(() => expect(button).toBeEnabled());
     await user.click(button);
     expect(
       await screen.findByText("Les héros entrent dans la crypte.", {}, { timeout: 4000 }),
     ).toBeInTheDocument();
+  });
+
+  // Story 4.5 — regeneration: confirm dialog → second POST → content replaced.
+  test("regenerate → confirm → second POST → new content replaces the old", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({ id: "job-regen", kind: "summary", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/summary")) {
+          const text = postCount > 0 ? "Résumé régénéré." : "Résumé initial.";
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, text, model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/jobs/job-regen")) {
+          return new Response(
+            JSON.stringify({ id: "job-regen", kind: "summary", session_id: SESSION_ID, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: null }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    expect(await screen.findByText("Résumé initial.")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Régénérer le Résumé" }),
+    );
+    // The confirm dialog opens; its confirm button has the exact name "Régénérer".
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+
+    expect(
+      await screen.findByText("Résumé régénéré.", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(postCount).toBe(1);
   });
 });

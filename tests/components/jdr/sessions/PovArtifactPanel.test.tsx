@@ -123,4 +123,108 @@ describe("<PovArtifactPanel> (Story 4.4)", () => {
     });
     expect(posted).toBe(true);
   });
+
+  // Story 4.5 — regenerate from the post-success confirmation → second POST.
+  test("after success, regenerate → confirm → second POST /artifacts/povs", async () => {
+    stub({ declared: ["pj-1"], jobStatus: "succeeded" });
+    renderPanel();
+    const user = userEvent.setup();
+    const button = await screen.findByRole("button", { name: "Générer les POVs" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    expect(
+      await screen.findByText(/POVs générés/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    await waitFor(() => {
+      const postCount = fetchMock.mock.calls.filter((args) => {
+        const request = args[0] as Request;
+        return (
+          request.url.includes("/artifacts/povs") && request.method === "POST"
+        );
+      }).length;
+      expect(postCount).toBe(2);
+    });
+  });
+
+  test("failed regeneration keeps the generated state and retry behind confirm", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
+          return new Response(
+            JSON.stringify({
+              session_id: SESSION_ID,
+              pj_ids: ["pj-1"],
+              updated_at: "2026-06-01T10:00:00Z",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/povs") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({
+              id: `job-pov-${postCount}`,
+              kind: "povs",
+              session_id: SESSION_ID,
+              status: "queued",
+              queued_at: "2026-06-01T10:00:00Z",
+            }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/jobs/job-pov-")) {
+          const failedRegen = url.includes("/jobs/job-pov-2");
+          return new Response(
+            JSON.stringify({
+              id: failedRegen ? "job-pov-2" : "job-pov-1",
+              kind: "povs",
+              session_id: SESSION_ID,
+              status: failedRegen ? "failed" : "succeeded",
+              failure_reason: failedRegen ? "LLM error" : null,
+              queued_at: "2026-06-01T10:00:00Z",
+              started_at: "2026-06-01T10:00:01Z",
+              ended_at: "2026-06-01T10:00:02Z",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Générer les POVs" }),
+    );
+    expect(
+      await screen.findByText(/POVs générés/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+
+    expect(
+      await screen.findByText(/La régénération a échoué/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/POVs générés/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Réessayer" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
+    expect(postCount).toBe(2);
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+    expect(postCount).toBe(3);
+  });
 });
