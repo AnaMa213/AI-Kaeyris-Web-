@@ -394,7 +394,8 @@ export interface paths {
         };
         /** Fetch the diarised transcription of a session. */
         get: operations["get_transcription_services_jdr_sessions__session_id__transcription_get"];
-        put?: never;
+        /** Persist the edited Markdown transcription for a session. */
+        put: operations["put_transcription_edit_services_jdr_sessions__session_id__transcription_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -817,6 +818,29 @@ export interface paths {
          *     which dependency is down without parsing logs.
          */
         get: operations["readyz_readyz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/jobs/{job_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream live status events for a JDR-service async job.
+         * @description Stream the same public job status projection used by GET /jobs/{job_id}.
+         *
+         *     We validate visibility before opening the stream so unknown or foreign jobs
+         *     keep the existing HTTP 404 behavior instead of becoming in-stream failures.
+         */
+        get: operations["get_job_events_services_jdr_jobs__job_id__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1675,6 +1699,37 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * TranscriptionEditIn
+         * @description Payload accepted by ``PUT /services/jdr/sessions/{id}/transcription``.
+         */
+        TranscriptionEditIn: {
+            /** Content Md */
+            content_md: string;
+        };
+        /**
+         * TranscriptionEditOut
+         * @description Projection returned after persisting an edited transcription.
+         */
+        TranscriptionEditOut: {
+            /** Content Md */
+            content_md: string;
+            /**
+             * Is Edited
+             * @default true
+             */
+            is_edited: boolean;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
     };
     responses: never;
@@ -2590,6 +2645,41 @@ export interface operations {
             };
         };
     };
+    put_transcription_edit_services_jdr_sessions__session_id__transcription_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscriptionEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptionEditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_transcription_md_services_jdr_sessions__session_id__transcription_md_get: {
         parameters: {
             query?: never;
@@ -3268,6 +3358,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_job_events_services_jdr_jobs__job_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-Sent Events stream. Each frame uses `event: progress` and a JSON `data` payload with status, phase, progress_percent, and failure_reason when a failure reason is available. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example event: progress
+                     *     data: {"status":"running","phase":null,"progress_percent":null}
+                     */
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
