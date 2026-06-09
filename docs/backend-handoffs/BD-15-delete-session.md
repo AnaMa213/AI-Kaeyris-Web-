@@ -4,7 +4,7 @@
 - **Repo cible** : `AnaMa213/AI-Kaeyris` (backend, FastAPI + SQLAlchemy + RQ + Redis)
 - **Émetteur** : Kenan
 - **Date** : 2026-06-09
-- **Statut** : ready-for-backend
+- **Statut** : ✅ **implémenté & mergé** (`AnaMa213/AI-Kaeyris` PR #15 `codex/015-delete-session`, commit `886e461`, mergé sur `main` le 2026-06-10) — voir §6.
 - **Priorité** : **MOYENNE** — débloque l'item **C4** de l'Epic 4 bis (supprimer une session depuis le bloc « Sessions » de la page campagne). La story 4.8 a livré **C5** seul ; **C4 est reporté** côté frontend tant que cet endpoint n'existe pas (on a refusé un mock destructif trompeur sur un objet lourd).
 - **Migration de données** : **PROBABLE** — voir §2 (cascade : audio stocké, chunks/segments, artefacts, jobs, players/mapping).
 
@@ -60,3 +60,28 @@ Recommandation frontend : **cascade complète** (supprimer session + dépendance
 - **Cœur** : un verbe à ajouter (`DELETE /sessions/{id}`, `204`) + la **cascade** des dépendances (audio, transcription, artefacts, players/mapping, jobs).
 - **Bloquant frontend** : AC-B1 (contrat) pour la story C4 (suppression de session depuis la page campagne). Le frontend a sciemment reporté C4 plutôt que de le mocker.
 - **À trancher backend** : politique sur une session avec job en vol (§2 / AC-B5).
+
+## 6. ✅ Implémentation livrée (backend `AI-Kaeyris`, PR #15, 2026-06-10)
+
+**Endpoint** : `DELETE /services/jdr/sessions/{session_id}` (GM-only, `kaeyris-bearer`).
+
+- `operationId` : `delete_session_services_jdr_sessions__session_id__delete`.
+- **`204 No Content`** — suppression réussie (aligné sur `DELETE /campaigns` / `DELETE /players`).
+- **`404`** — session inexistante ou non visible par le MJ courant (`SessionNotFoundError`).
+- **`409 session-delete-blocked`** (`title: "Session delete blocked"`) — la session a du **travail actif** : voir la décision §2 ci-dessous.
+- **`422`** — `HTTPValidationError` (UUID malformé).
+
+**Décision §2 / AC-B5 tranchée → REFUS `409`, pas d'annulation de job.** `_ensure_session_deletable` bloque la suppression si :
+- `session.state == TRANSCRIBING`, **ou**
+- `session.current_job_id` pointe sur un job RQ en statut actif (`queued` · `deferred` · `scheduled` · `started`).
+
+Sinon (job terminé/inexistant) la suppression procède. Le backend **n'avorte pas** le job en vol — il faut attendre sa fin (ou son échec) puis re-tenter le `DELETE`.
+
+**Cascade (AC-B4)** : `SessionRepository.delete(session)` + `commit` purgent la session et ses dépendances ORM (chunks/segments, artefacts, players/mapping, override `edited_transcript_md`). L'audio est nettoyé hors-DB : `unlink` du blob (`KAEYRIS_DATA_DIR/<audio.path>` si non déjà purgé) + `rmtree` best-effort du dossier de reduce brut (`_raw_audio_reduce_dir`). Les échecs d'unlink sont loggés en `warning`, non bloquants.
+
+**Tests backend** : `tests/services/jdr/test_sessions_delete.py` (684 lignes) couvre 204 + cascade, 404 (autre MJ / inexistante), 409 (transcribing / job actif), purge audio.
+
+### Conséquences frontend
+
+- **C4 débloqué** : l'endpoint réel existe → on peut câbler `useDeleteSession` + le `ConfirmDialog` (Story 4.6) et mapper le `409 session-delete-blocked` sur un message « session en cours de traitement, réessaie après la transcription ».
+- **Contrat à re-synchroniser** : `docs/context/api/openapi.json` (frontend) est encore figé au 2026-06-04 et **n'expose pas** ce `DELETE`. Re-sync depuis le backend (`docs/context/api/openapi.json`, qui inclut désormais BD-12/13/14/15) puis `npm run gen:api` avant d'implémenter C4.
