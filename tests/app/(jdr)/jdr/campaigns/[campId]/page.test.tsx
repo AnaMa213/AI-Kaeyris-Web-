@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -155,7 +155,7 @@ describe("/jdr/campaigns/[campId] page", () => {
     ).toBeInTheDocument();
   });
 
-  test("renders the header with name, description, meta + Modifier + Supprimer + Nouvelle session buttons for GM", async () => {
+  test("renders the header with name, description, meta + Modifier + Supprimer for GM", async () => {
     stubFetch({ sessions: [session1] });
     renderPage();
     expect(
@@ -172,9 +172,25 @@ describe("/jdr/campaigns/[campId] page", () => {
     expect(
       screen.getByRole("button", { name: "Supprimer" }),
     ).not.toBeDisabled();
+  });
+
+  // Story 4.8 (C5): the create-session CTA lives on the Sessions section header,
+  // not the campaign header — one single primary affordance (empty-state aside).
+  test("places the 'Nouvelle session' button within the Sessions section for GM", async () => {
+    stubFetch({ sessions: [session1] });
+    renderPage();
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Les Royaumes Brisés",
+    });
+    const sessionsRegion = screen.getByRole("region", { name: "Sessions" });
     expect(
-      screen.getByRole("button", { name: "Nouvelle session" }),
+      within(sessionsRegion).getByRole("button", { name: "Nouvelle session" }),
     ).toBeInTheDocument();
+    // No duplicate: exactly one create CTA on the page when sessions exist.
+    expect(
+      screen.getAllByRole("button", { name: "Nouvelle session" }),
+    ).toHaveLength(1);
   });
 
   test("hides Modifier and Supprimer buttons for a player campaign role", async () => {
@@ -296,7 +312,7 @@ describe("/jdr/campaigns/[campId] page", () => {
     ).toBeInTheDocument();
   });
 
-  test("header CTA navigates to /jdr/campaigns/[campId]/sessions/new", async () => {
+  test("the Nouvelle session CTA navigates to /jdr/campaigns/[campId]/sessions/new", async () => {
     stubFetch({ sessions: [session1] });
     const user = userEvent.setup();
     renderPage();
