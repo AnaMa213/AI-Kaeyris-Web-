@@ -1,22 +1,26 @@
-# AI-Kaeyris-Web - Claude Instructions
+# Claude Code Instructions
 
-- Répondre en français.
-- Ce repo est le frontend séparé de AI-Kaeyris.
-- Ne jamais modifier le backend depuis ce repo.
-- Le backend est consommé via HTTP/OpenAPI uniquement.
-- Lire `docs/context/api/backend-summary.md` avant toute décision API uniquement.
-- Utiliser `docs/context/api/openapi.json` comme contrat API source.
-- Priorité produit : workflow JDR utilisable de bout en bout.
-- Travailler story par story.
-- Avant une grosse écriture, proposer le plan et les fichiers touchés.
-- Quand la session devient longue, proposer `/compact` avec un résumé des décisions.
-  021
+Apply `AGENTS.md` first. This file only adds Claude Code usage rules.
 
-## Token discipline
+## Claude-specific workflow
 
-- Ne jamais lire tout le repo sans raison.
-- Toujours commencer par identifier les fichiers pertinents.
-- Lire seulement les fichiers nécessaires à la tâche.
-- Ne jamais coller le contenu complet de `openapi.json` dans la réponse.
-- Préférer les références de fichiers aux longs résumés.
-- À la fin d'une tâche, produire un résumé court : décisions, fichiers modifiés, tests, next step.
+- Reply in French unless the user asks otherwise.
+- Keep the active context small; do not preload large docs.
+- Before broad exploration, name the files or folders you want to inspect and why.
+- For long sessions, propose `/compact` with the continuation summary from `AGENTS.md`.
+- Load BMAD skills from `.claude/skills/` only when the user asks for BMAD work or the task clearly needs it.
+- Do not read `.claude/worktrees/` unless the user explicitly targets a worktree.
+
+## Useful entry points
+
+- Start with `project-context.md` for stable project context.
+- Use `CONVENTIONS.md` as the detailed rulebook only when touching boundaries, identity, theming, API, tests, or Git workflow.
+- Use `docs/context/api/backend-summary.md` and `docs/context/api/openapi.json` only for API-facing tasks.
+- Use `_bmad-output/implementation-artifacts/` only when implementing or reviewing a specific story.
+
+## Claude response discipline
+
+- Prefer short plans, compact diffs, and targeted test reports.
+- Do not restate long context from files already referenced.
+- Do not paste full generated files or OpenAPI content.
+- End important tasks with: decisions, files changed, tests, risks, next step.

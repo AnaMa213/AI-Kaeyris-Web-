@@ -1,5 +1,5 @@
 type,name,module,path,hash
-"yaml","manifest","_config","_config/manifest.yaml","840182f44c29142ca6763f24f27cf6f8106211208ca78b56a8cf573ae037f4b6"
+"yaml","manifest","_config","_config/manifest.yaml","b043cb3bb8d5bf55753bb6c1c84ebd9f200d5f1776dd005617ed6d52158a5957"
 "csv","documentation-requirements","bmm","bmm/1-analysis/bmad-document-project/documentation-requirements.csv","d1253b99e88250f2130516b56027ed706e643bfec3d99316727a4c6ec65c6c1d"
 "csv","domain-complexity","bmm","bmm/3-solutioning/bmad-create-architecture/data/domain-complexity.csv","3dc34ed39f1fc79a51f7b8fc92087edb7cd85c4393a891d220f2e8dd5a101c70"
 "csv","module-help","bmm","bmm/module-help.csv","b8c199e3bb160060887211772af2d21b785ce7a3d646699e39520f867af5400f"
