@@ -149,28 +149,36 @@ export default function CampaignDetailPage() {
                 Supprimer
               </Button>
             )}
-            {canCreateSession && (
-              <Button
-                type="button"
-                onClick={() =>
-                  router.push(`/jdr/campaigns/${campId}/sessions/new`)
-                }
-              >
-                Nouvelle session
-              </Button>
-            )}
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
-        <section className={`${SECTION_CARD_CLASSES} lg:col-span-2`}>
-          <h2 className="font-display mb-4 flex items-center justify-between text-xl">
-            <span>Sessions</span>
-            <span className="text-text-chrome-muted text-xs tracking-wide uppercase">
-              {sortedSessions.length} · zone de recherche future
-            </span>
-          </h2>
+        <section
+          aria-label="Sessions"
+          className={`${SECTION_CARD_CLASSES} lg:col-span-2`}
+        >
+          {/* Story 4.8 (C5) : le CTA « Nouvelle session » vit sur la ligne du
+              header « Sessions », à droite (et non plus dans le header campagne). */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl">Sessions</h2>
+            <div className="flex items-center gap-3">
+              <span className="text-text-chrome-muted text-xs tracking-wide uppercase">
+                {sortedSessions.length} · zone de recherche future
+              </span>
+              {canCreateSession && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    router.push(`/jdr/campaigns/${campId}/sessions/new`)
+                  }
+                >
+                  Nouvelle session
+                </Button>
+              )}
+            </div>
+          </div>
           {sessionsQuery.isPending ? (
             <p className="text-text-chrome-muted text-sm">
               Chargement des sessions...
