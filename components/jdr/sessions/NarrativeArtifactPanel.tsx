@@ -14,6 +14,7 @@ import {
   useGenerateNarrative,
   useNarrativeArtifact,
 } from "@/lib/jdr/sessions/artifacts";
+import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
 
 interface NarrativeArtifactPanelProps {
   sessionId: string;
@@ -56,6 +57,7 @@ export function NarrativeArtifactPanel({
     sessionId,
     isPresent: Boolean(narrative?.text),
     keyFactory: narrativeArtifactQueryKey,
+    artifactVersion: narrative?.generated_at,
   });
 
   const handleGenerate = () => {
@@ -97,6 +99,15 @@ export function NarrativeArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {narrative.model_used}
         </p>
+        <ArtifactRegenerateControls
+          artifactLabel="le Récit"
+          jobId={flow.jobId}
+          jobInFlight={flow.jobInFlight}
+          artifactSettling={flow.artifactSettling}
+          jobFailed={flow.jobFailed}
+          pending={generate.isPending}
+          onConfirm={handleGenerate}
+        />
       </section>
     );
   }

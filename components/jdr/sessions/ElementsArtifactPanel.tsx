@@ -15,6 +15,7 @@ import {
   useElementsArtifact,
   useGenerateElements,
 } from "@/lib/jdr/sessions/artifacts";
+import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
 
 type Element = components["schemas"]["Element"];
 
@@ -94,6 +95,7 @@ export function ElementsArtifactPanel({
     sessionId,
     isPresent: Boolean(elements),
     keyFactory: elementsArtifactQueryKey,
+    artifactVersion: elements?.generated_at,
   });
 
   const handleGenerate = () => {
@@ -145,6 +147,15 @@ export function ElementsArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {elements.model_used}
         </p>
+        <ArtifactRegenerateControls
+          artifactLabel="les Éléments"
+          jobId={flow.jobId}
+          jobInFlight={flow.jobInFlight}
+          artifactSettling={flow.artifactSettling}
+          jobFailed={flow.jobFailed}
+          pending={generate.isPending}
+          onConfirm={handleGenerate}
+        />
       </section>
     );
   }

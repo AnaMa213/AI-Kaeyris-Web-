@@ -166,4 +166,83 @@ describe("useArtifactJobFlow (Story 4.4)", () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(result.current.jobActive).toBe(false);
   });
+
+  // Story 4.5 — regeneration: content is already present the whole time.
+  test("regeneration invalidates the artifact key on succeeded even when content is already present", async () => {
+    stubJob("succeeded");
+    const queryClient = makeClient();
+    const spy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: true, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith({ queryKey: keyFactory(SESSION_ID) }),
+    );
+  });
+
+  test("regeneration keeps invalidating until the artifact version changes", async () => {
+    vi.useFakeTimers();
+    stubJob("succeeded");
+    const queryClient = makeClient();
+    const spy = vi.spyOn(queryClient, "invalidateQueries");
+    let artifactVersion = "old-version";
+    const { result, rerender } = renderHook(
+      () =>
+        useArtifactJobFlow({
+          sessionId: SESSION_ID,
+          isPresent: true,
+          keyFactory,
+          artifactVersion,
+        }),
+      { wrapper: wrap(queryClient) },
+    );
+
+    act(() => result.current.onJobQueued("job-x"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result.current.artifactSettling).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    artifactVersion = "new-version";
+    rerender();
+    expect(result.current.artifactSettling).toBe(false);
+    const callsAfterReplacement = spy.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(spy).toHaveBeenCalledTimes(callsAfterReplacement);
+  });
+
+  test("jobInFlight is true while running, false once the job succeeds", async () => {
+    stubJob("running");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: true, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    expect(result.current.jobInFlight).toBe(false);
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobInFlight).toBe(true));
+  });
+
+  test("jobInFlight is false once the job succeeds", async () => {
+    stubJob("succeeded");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: true, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobSucceeded).toBe(true));
+    expect(result.current.jobInFlight).toBe(false);
+  });
 });

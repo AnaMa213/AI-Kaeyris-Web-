@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
@@ -9,6 +10,7 @@ import {
   useArtifactJobFlow,
 } from "@/lib/jdr/sessions/artifactJobFlow";
 import { useGeneratePovs } from "@/lib/jdr/sessions/artifacts";
+import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
 
 interface PovArtifactPanelProps {
   sessionId: string;
@@ -34,26 +36,46 @@ export function PovArtifactPanel({ sessionId }: PovArtifactPanelProps) {
   const generate = useGeneratePovs(sessionId);
   // Pas de GET-liste en 4.4 → `isPresent: false` ; `succeeded` est géré à part.
   const flow = useArtifactJobFlow({ sessionId, isPresent: false });
+  const [regenerationStarted, setRegenerationStarted] = useState(false);
 
   const playersLoading = playersQuery.isPending;
   const playersFailed = playersQuery.isError;
   const hasPjDeclared = (playersQuery.data?.pj_ids.length ?? 0) > 0;
+  const showGeneratedState = flow.jobSucceeded || regenerationStarted;
 
   const handleGenerate = () => {
     if (generate.isPending) return;
+    if (showGeneratedState) {
+      setRegenerationStarted(true);
+    }
     generate.mutate(undefined, {
       onSuccess: (queued) => flow.onJobQueued(queued.id),
       onError: () => toast.error("Impossible de lancer la génération des POVs."),
     });
   };
 
-  if (flow.jobSucceeded) {
+  if (showGeneratedState) {
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="POVs de la séance">
         <h2 className="font-display mb-2 text-xl font-semibold">POVs</h2>
         <p className="text-state-success text-sm">
           POVs générés — la consultation par PJ arrivera prochainement.
         </p>
+        {/*
+          Story 4.5 — régénération des POVs. Comme il n'existe pas de GET-liste
+          (4.4), on ne peut proposer « Régénérer » que dans cet état post-succès
+          (POVs générés dans la session courante). Au rechargement, l'état
+          antérieur est inconnu → le panneau retombe sur le trigger simple, sans
+          confirmation forcée. La consultation par PJ reste la Story 5.7.
+        */}
+        <ArtifactRegenerateControls
+          artifactLabel="les POVs"
+          jobId={flow.jobId}
+          jobInFlight={flow.jobInFlight}
+          jobFailed={flow.jobFailed}
+          pending={generate.isPending}
+          onConfirm={handleGenerate}
+        />
       </section>
     );
   }

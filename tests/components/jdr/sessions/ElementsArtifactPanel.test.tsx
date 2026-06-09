@@ -143,7 +143,7 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("existing elements render the four groups, empty ones as 'Aucun'", async () => {
+  test("existing elements render the four groups, empty ones as 'Aucun', with a regenerate CTA", async () => {
     stub({ elements: true });
     renderPanel();
     expect(await screen.findByText("Grom")).toBeInTheDocument();
@@ -151,8 +151,11 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
     // Objets + Indices are empty → rendered as "Aucun" (two occurrences).
     expect(screen.getAllByText("Aucun")).toHaveLength(2);
     expect(
-      screen.queryByRole("button", { name: /Générer les Éléments/i }),
+      screen.queryByRole("button", { name: "Générer les Éléments" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Régénérer les Éléments" }),
+    ).toBeInTheDocument();
   });
 
   test("clicking triggers POST, follows the job, then renders the groups", async () => {
@@ -160,7 +163,7 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
     renderPanel();
     const user = userEvent.setup();
     await user.click(
-      await screen.findByRole("button", { name: /Générer les Éléments/i }),
+      await screen.findByRole("button", { name: "Générer les Éléments" }),
     );
     const card = await screen.findByLabelText(
       "Éléments de la séance",
@@ -168,5 +171,51 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
       { timeout: 4000 },
     );
     expect(within(card).getByText("Grom")).toBeInTheDocument();
+  });
+
+  // Story 4.5 — regeneration: confirm dialog → second POST → content replaced.
+  test("regenerate → confirm → second POST → new content replaces the old", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes("/artifacts/elements") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({ id: "job-ele", kind: "elements", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/elements")) {
+          const npcName = postCount > 0 ? "Vael" : "Grom";
+          return new Response(
+            JSON.stringify({ ...elementsOut, npcs: [{ name: npcName, description: "PNJ." }] }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/jobs/job-ele")) {
+          return new Response(
+            JSON.stringify({ id: "job-ele", kind: "elements", session_id: SESSION_ID, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: null }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    expect(await screen.findByText("Grom")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Régénérer les Éléments" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+    expect(
+      await screen.findByText("Vael", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(postCount).toBe(1);
   });
 });
