@@ -6,14 +6,13 @@ import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Volume2 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
-import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
+import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
-import { PjPresenceForm } from "@/components/jdr/sessions/PjPresenceForm";
+import { PjPresenceDropdown } from "@/components/jdr/sessions/PjPresenceDropdown";
 import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
 import { NarrativeArtifactPanel } from "@/components/jdr/sessions/NarrativeArtifactPanel";
 import { ElementsArtifactPanel } from "@/components/jdr/sessions/ElementsArtifactPanel";
@@ -45,18 +44,15 @@ import {
 import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
-const STATE_LABEL: Record<SessionOut["state"], string> = {
-  created: "Créée",
-  audio_uploaded: "Audio uploadé",
-  transcribing: "Transcription en cours",
-  transcription_failed: "Échec transcription",
-  transcribed: "Transcrite",
-};
-
 const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
 const ARTIFACT_DISABLED_HINT = "Génère cet artefact d'abord";
 const TRANSCRIPTION_SEEN_STORAGE_PREFIX =
   "kaeyris:jdr:session-transcription-seen:";
+// Story 4.7 (S4) : flag DÉDIÉ pour le toast « terminée », distinct du flag
+// tab-default ci-dessus (qui se pose juste en visitant l'onglet Transcription).
+// Les coupler ferait taire le toast prématurément.
+const TRANSCRIPTION_TOAST_SEEN_STORAGE_PREFIX =
+  "kaeyris:jdr:session-transcription-toast-seen:";
 const TOP_TAB_TRIGGER_CLASS =
   "after:bg-accent-gold data-active:text-accent-gold aria-selected:text-accent-gold";
 
@@ -106,6 +102,22 @@ function hasSeenCompletedTranscription(sessionId: string): boolean {
 function markCompletedTranscriptionSeen(sessionId: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(transcriptionSeenKey(sessionId), "1");
+}
+
+function transcriptionToastSeenKey(sessionId: string): string {
+  return `${TRANSCRIPTION_TOAST_SEEN_STORAGE_PREFIX}${sessionId}`;
+}
+
+function hasNotifiedTranscriptionDone(sessionId: string): boolean {
+  if (typeof window === "undefined") return true;
+  return (
+    window.localStorage.getItem(transcriptionToastSeenKey(sessionId)) === "1"
+  );
+}
+
+function markTranscriptionDoneNotified(sessionId: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(transcriptionToastSeenKey(sessionId), "1");
 }
 
 function buildSessionTabsSearchParams(
@@ -269,17 +281,23 @@ export default function SessionDetailPage() {
     return () => clearInterval(id);
   }, [pipeline.uiState]);
 
-  // Notification de fin, dédupliquée par job.id terminal.
+  // Notification de fin. Dédup en mémoire par job.id (intra-session) + flag
+  // localStorage DÉDIÉ pour le succès (Story 4.7 S4) : le toast « terminée » ne
+  // se déclenche qu'à la transition vers `succeeded`, une seule fois par séance,
+  // jamais re-tiré à chaque rechargement tant que le poll renvoie `succeeded`.
   useEffect(() => {
     if (!job) return;
     if (job.status === "succeeded" && notifiedJobRef.current !== job.id) {
       notifiedJobRef.current = job.id;
-      toast.success("Transcription terminée — ton récit est consigné.");
+      if (!hasNotifiedTranscriptionDone(sid)) {
+        toast.success("Transcription terminée — ton récit est consigné.");
+        markTranscriptionDoneNotified(sid);
+      }
     } else if (job.status === "failed" && notifiedJobRef.current !== job.id) {
       notifiedJobRef.current = job.id;
       toast.error(job.failure_reason ?? "La transcription a échoué.");
     }
-  }, [job]);
+  }, [job, sid]);
 
   useEffect(() => {
     if (!sessionQuery.data || !tabsReady) return;
@@ -420,8 +438,10 @@ export default function SessionDetailPage() {
               <h1 className="font-display text-3xl leading-tight font-semibold">
                 {session.title}
               </h1>
-              <Badge variant="outline">{STATE_LABEL[session.state]}</Badge>
-              {currentJobId && <JobStateBadge jobId={currentJobId} />}
+              <SessionStateChip
+                state={session.state}
+                currentJobId={currentJobId}
+              />
             </div>
             <time
               dateTime={session.recorded_at}
@@ -526,11 +546,14 @@ export default function SessionDetailPage() {
 
         <TabsContent value="artefacts" className="space-y-6">
           <Tabs value={tabState.sub} onValueChange={handleArtifactSubTabChange}>
-            <TabsList
-              variant="line"
-              className="bg-surface-raised border-border-chrome mb-6 flex-wrap rounded-md border px-3"
-            >
-              {ARTIFACT_SUB_TABS.map((artifactTab) => {
+            {/* Story 4.7 (S6) : la déclaration des présents est un dropdown
+                compact sur la même ligne que les sous-onglets, à droite. */}
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              <TabsList
+                variant="line"
+                className="bg-surface-raised border-border-chrome flex-wrap rounded-md border px-3"
+              >
+                {ARTIFACT_SUB_TABS.map((artifactTab) => {
                 // Story 4.3 : Résumé toujours ouvert ; les 3 autres se déverrouillent
                 // une fois le résumé généré (`summaryExists`).
                 const disabled =
@@ -549,16 +572,18 @@ export default function SessionDetailPage() {
                     {artifactTab.label}
                   </TabsTrigger>
                 );
-              })}
-            </TabsList>
+                })}
+              </TabsList>
+
+              {canEdit && session.state === "transcribed" && (
+                <PjPresenceDropdown
+                  sessionId={session.id}
+                  campaignId={campId}
+                />
+              )}
+            </div>
 
             <TabsContent value="summary" className="space-y-6">
-              {/* Story 4.1 : déclaration des PJs présents — GM, une fois la séance
-              transcrite (prérequis aux artefacts / POVs). */}
-              {canEdit && session.state === "transcribed" && (
-                <PjPresenceForm sessionId={session.id} campaignId={campId} />
-              )}
-
               {/* Story 4.3 : génération + affichage du Résumé (GM, séance transcrite). */}
               {canEdit && session.state === "transcribed" && (
                 <SummaryArtifactPanel
