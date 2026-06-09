@@ -27,6 +27,7 @@ const sessionIdFixture = "00000000-0000-0000-0000-000000000abc";
 const campId = "11111111-1111-1111-1111-111111111111";
 const currentPathname = `/jdr/campaigns/${campId}/sessions/${sessionIdFixture}`;
 const seenKey = `kaeyris:jdr:session-transcription-seen:${sessionIdFixture}`;
+const toastSeenKey = `kaeyris:jdr:session-transcription-toast-seen:${sessionIdFixture}`;
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ campId, sid: sessionIdFixture }),
@@ -745,7 +746,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
     }
 
-    test("shows <PjPresenceForm> for a GM on a transcribed session", async () => {
+    test("shows the presence dropdown for a GM on a transcribed session", async () => {
       window.localStorage.setItem(seenKey, "1");
       window.history.replaceState(
         null,
@@ -754,26 +755,27 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
       stubFor({ state: "transcribed", role: "gm" });
       renderPage();
+      // Story 4.7 (S6): the presence card became a compact dropdown trigger.
       expect(
-        await screen.findByRole("heading", { name: "Qui était présent ?" }),
+        await screen.findByRole("button", { name: /Qui était présent/i }),
       ).toBeInTheDocument();
     });
 
-    test("hides the form for a PJ", async () => {
+    test("hides the presence control for a PJ", async () => {
       stubFor({ state: "transcribed", role: "pj" });
       renderPage();
       await screen.findByRole("tab", { name: "Artefacts" });
       expect(
-        screen.queryByRole("heading", { name: "Qui était présent ?" }),
+        screen.queryByRole("button", { name: /Qui était présent/i }),
       ).not.toBeInTheDocument();
     });
 
-    test("hides the form while still transcribing", async () => {
+    test("hides the presence control while still transcribing", async () => {
       stubFor({ state: "transcribing", role: "gm" });
       renderPage();
       await screen.findByText("Les scribes transcrivent");
       expect(
-        screen.queryByRole("heading", { name: "Qui était présent ?" }),
+        screen.queryByRole("button", { name: /Qui était présent/i }),
       ).not.toBeInTheDocument();
     });
   });
@@ -862,7 +864,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         expect(window.location.search).toContain("sub=summary");
       });
       expect(
-        await screen.findByRole("heading", { name: "Qui était présent ?" }),
+        await screen.findByRole("button", { name: /Qui était présent/i }),
       ).toBeInTheDocument();
     });
 
@@ -1114,6 +1116,159 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       expect(
         screen.queryByRole("button", { name: /Générer le Récit/i }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Story 4.7 — One-shot completion toast (S4)", () => {
+    function stubSucceededJob() {
+      const recentUploadedAt = new Date().toISOString();
+      const jobId = "job-4-7-toast";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: "succeeded",
+                failure_reason: null,
+                queued_at: recentUploadedAt,
+                started_at: recentUploadedAt,
+                ended_at: recentUploadedAt,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "transcribing",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("fires the toast once on the transition and persists the seen flag", async () => {
+      stubSucceededJob();
+      renderPage();
+      await waitFor(
+        () =>
+          expect(toastSuccessMock).toHaveBeenCalledWith(
+            "Transcription terminée — ton récit est consigné.",
+          ),
+        { timeout: 4000 },
+      );
+      expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(window.localStorage.getItem(toastSeenKey)).toBe("1"),
+      );
+    });
+
+    test("does NOT re-fire the toast on a later visit (persisted flag set)", async () => {
+      window.localStorage.setItem(toastSeenKey, "1");
+      stubSucceededJob();
+      renderPage();
+      await screen.findByRole("heading", { level: 1 });
+      // Give polling a beat to settle on the succeeded job.
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText("État de la transcription : Transcrite"),
+        ).toBeInTheDocument(),
+      );
+      expect(toastSuccessMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Story 4.7 — Single state chip (S1)", () => {
+    function stubWithJob(opts: {
+      state: string;
+      jobStatus: string;
+      jobId?: string;
+    }) {
+      const jobId = opts.jobId ?? "job-4-7-chip";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: opts.jobStatus,
+                failure_reason: null,
+                queued_at: "2026-05-31T19:00:00+00:00",
+                started_at: "2026-05-31T19:00:05+00:00",
+                ended_at: null,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: opts.state,
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("shows exactly one chip (live job) — no duplicate static state badge", async () => {
+      stubWithJob({ state: "audio_uploaded", jobStatus: "queued" });
+      renderPage();
+      // The live-job chip is present…
+      expect(
+        await screen.findByLabelText("État de la transcription : En file"),
+      ).toBeInTheDocument();
+      // …and the static "Audio uploadé" duplicate is gone (was the S1 bug).
+      expect(screen.queryByText("Audio uploadé")).not.toBeInTheDocument();
+    });
+
+    test("shows a single static chip for 'created' (no active job)", async () => {
+      stubFetch({});
+      renderPage();
+      await screen.findByRole("heading", { level: 1 });
+      expect(
+        screen.getByLabelText("État de la séance : Créée"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Créée")).toBeInTheDocument();
+    });
+
+    test("shows a single colour-coded chip for a 'transcribed' session with no active job", async () => {
+      stubFetch({ session: { ...baseSession, state: "transcribed" } });
+      renderPage();
+      await screen.findByRole("heading", { level: 1 });
+      const chip = await screen.findByLabelText("État de la séance : Transcrite");
+      expect(chip).toBeInTheDocument();
+      expect(chip.className).toContain("text-state-success");
     });
   });
 });

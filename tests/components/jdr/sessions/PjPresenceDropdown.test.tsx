@@ -23,8 +23,8 @@ vi.mock("sonner", () => ({
   },
 }));
 
-const { PjPresenceForm } = await import(
-  "@/components/jdr/sessions/PjPresenceForm"
+const { PjPresenceDropdown } = await import(
+  "@/components/jdr/sessions/PjPresenceDropdown"
 );
 
 const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
@@ -74,13 +74,13 @@ function stub(opts: { roster?: typeof roster; declared?: string[]; postStatus?: 
   return { postBodies };
 }
 
-const renderForm = () => {
+const renderDropdown = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <PjPresenceForm sessionId={SESSION_ID} campaignId={CAMPAIGN_ID} />
+      <PjPresenceDropdown sessionId={SESSION_ID} campaignId={CAMPAIGN_ID} />
     </QueryClientProvider>,
   );
 };
@@ -94,66 +94,82 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("<PjPresenceForm>", () => {
-  test("renders a checkbox per roster PJ, pre-checking the declared ones", async () => {
+describe("<PjPresenceDropdown> (Story 4.7 S6)", () => {
+  test("opens to a checkbox item per roster PJ, pre-checking declared ones", async () => {
     stub({ declared: ["pj-1"] });
-    renderForm();
-    const eldrin = await screen.findByRole("checkbox", { name: "Eldrin" });
-    const galadriel = screen.getByRole("checkbox", { name: "Galadriel" });
-    expect(eldrin).toBeChecked();
-    expect(galadriel).not.toBeChecked();
+    const user = userEvent.setup();
+    renderDropdown();
+    await user.click(
+      await screen.findByRole("button", { name: /Qui était présent/i }),
+    );
+    const eldrin = await screen.findByRole("menuitemcheckbox", {
+      name: "Eldrin",
+    });
+    const galadriel = screen.getByRole("menuitemcheckbox", {
+      name: "Galadriel",
+    });
+    expect(eldrin).toHaveAttribute("aria-checked", "true");
+    expect(galadriel).toHaveAttribute("aria-checked", "false");
   });
 
   test("submits the FULL selected set (replacement, not delta)", async () => {
     const { postBodies } = stub({ declared: ["pj-1"] });
-    renderForm();
     const user = userEvent.setup();
-    await screen.findByRole("checkbox", { name: "Eldrin" });
-    // uncheck Eldrin, check Galadriel → full set must be ["pj-2"]
-    await user.click(screen.getByRole("checkbox", { name: "Eldrin" }));
-    await user.click(screen.getByRole("checkbox", { name: "Galadriel" }));
+    renderDropdown();
+    await user.click(
+      await screen.findByRole("button", { name: /Qui était présent/i }),
+    );
+    await screen.findByRole("menuitemcheckbox", { name: "Eldrin" });
+    // uncheck Eldrin, check Galadriel → full set must be ["pj-2"]; menu stays open
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Eldrin" }));
+    await user.click(
+      screen.getByRole("menuitemcheckbox", { name: "Galadriel" }),
+    );
     await user.click(screen.getByRole("button", { name: /Enregistrer/i }));
     await waitFor(() => expect(postBodies.length).toBe(1));
     expect(postBodies[0]).toEqual({ pj_ids: ["pj-2"] });
     expect(toastSuccessMock).toHaveBeenCalled();
   });
 
-  test("stays editable after a successful submit (submit button re-enabled)", async () => {
-    stub({ declared: [] });
-    renderForm();
-    const user = userEvent.setup();
-    await screen.findByRole("checkbox", { name: "Eldrin" });
-    await user.click(screen.getByRole("checkbox", { name: "Eldrin" }));
-    const submit = screen.getByRole("button", { name: /Enregistrer/i });
-    await user.click(submit);
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: /Enregistrer/i })).toBeEnabled();
-    expect(screen.getByRole("checkbox", { name: "Eldrin" })).toBeChecked();
-  });
-
-  test("empty roster → hint to add PJs, no submit button", async () => {
+  test("empty roster → hint to add PJs, no save button", async () => {
     stub({ roster: [], declared: [] });
-    renderForm();
-    expect(await screen.findByText(/Ajoute d'abord des PJs/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Enregistrer/i })).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    renderDropdown();
+    await user.click(
+      await screen.findByRole("button", { name: /Qui était présent/i }),
+    );
+    expect(
+      await screen.findByText(/Ajoute d'abord des PJs/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Enregistrer/i }),
+    ).not.toBeInTheDocument();
   });
 
-  test("does not submit an empty pj_ids set rejected by the API contract", async () => {
+  test("save is disabled when the selection is empty", async () => {
     const { postBodies } = stub({ declared: ["pj-1"] });
-    renderForm();
     const user = userEvent.setup();
-    const eldrin = await screen.findByRole("checkbox", { name: "Eldrin" });
-    await user.click(eldrin);
-    expect(screen.getByText(/au moins un PJ/i)).toBeInTheDocument();
+    renderDropdown();
+    await user.click(
+      await screen.findByRole("button", { name: /Qui était présent/i }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemcheckbox", { name: "Eldrin" }),
+    );
     expect(screen.getByRole("button", { name: /Enregistrer/i })).toBeDisabled();
     expect(postBodies).toHaveLength(0);
   });
 
   test("surfaces an error toast when the POST fails", async () => {
     stub({ declared: [], postStatus: 500 });
-    renderForm();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("checkbox", { name: "Eldrin" }));
+    renderDropdown();
+    await user.click(
+      await screen.findByRole("button", { name: /Qui était présent/i }),
+    );
+    await user.click(
+      await screen.findByRole("menuitemcheckbox", { name: "Eldrin" }),
+    );
     await user.click(screen.getByRole("button", { name: /Enregistrer/i }));
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
   });
