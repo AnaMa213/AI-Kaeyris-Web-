@@ -11,9 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/** Ghost destructive confirm button styling, shared by all destructive dialogs. */
+/**
+ * Destructive confirm button styling, shared by all destructive dialogs.
+ * Story 4.6 (C3): a bordered red fill (not bare red text) so the action stays
+ * legible on the dark dialog footer surface.
+ */
 export const DESTRUCTIVE_CONFIRM_CLASSES =
-  "text-state-error hover:text-state-error! hover:bg-state-error/10!";
+  "border border-state-error/40 bg-state-error/10 text-state-error hover:bg-state-error/20! hover:text-state-error!";
 
 interface ConfirmDialogProps {
   open: boolean;

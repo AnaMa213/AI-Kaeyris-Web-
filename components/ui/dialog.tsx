@@ -7,8 +7,31 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { XIcon } from "lucide-react";
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+// Story 4.6 — dialogs must only close via the X (close-press) or an explicit
+// cancel button (programmatic onOpenChange). Implicit dismissal (Escape /
+// outside-press / OS close-watcher) is blocked here at the primitive so every
+// consumer inherits the behaviour.
+const NON_DISMISSIBLE_REASONS = new Set([
+  "outside-press",
+  "escape-key",
+  "close-watcher",
+]);
+
+function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      disablePointerDismissal
+      onOpenChange={(open, eventDetails) => {
+        if (!open && NON_DISMISSIBLE_REASONS.has(eventDetails.reason)) {
+          eventDetails.cancel();
+          return;
+        }
+        onOpenChange?.(open, eventDetails);
+      }}
+      {...props}
+    />
+  );
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
