@@ -237,7 +237,10 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
     });
   });
 
-  test("during uploading both Envoyer and Annuler are disabled and the label shows 'Envoi en cours…'", async () => {
+  // Story 4.9 (A1): once the send is committed and in flight, the only control
+  // is the disabled "Envoi en cours…" indicator — no dead "Annuler" beside it
+  // (the in-flight POST has no client-side cancel, so the button was misleading).
+  test("during uploading only 'Envoi en cours…' shows — no dead Annuler button", async () => {
     let resolveResp: ((r: Response) => void) | null = null;
     renderCard({
       fetchImpl: () =>
@@ -260,7 +263,10 @@ describe("<SessionAudioUploadCard> — Story 3.3 upload paths", () => {
         screen.getByRole("button", { name: /Envoi en cours/ }),
       ).toBeDisabled(),
     );
-    expect(screen.getByRole("button", { name: "Annuler" })).toBeDisabled();
+    // The useless cancel button is gone during the in-flight upload.
+    expect(
+      screen.queryByRole("button", { name: "Annuler" }),
+    ).not.toBeInTheDocument();
 
     (resolveResp as ((r: Response) => void) | null)?.(
       new Response(JSON.stringify(audioResponse), {

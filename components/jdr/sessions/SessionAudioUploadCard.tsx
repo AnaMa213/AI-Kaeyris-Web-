@@ -180,18 +180,16 @@ export function SessionAudioUploadCard({
         <RitualProgress uiState="uploading" sessionTitle={session.title} />
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {phase === "reducing" ? (
+            // Le reduce client est réellement annulable (abort du signal).
             <Button type="button" variant="ghost" onClick={handleCancelReducing}>
               Annuler
             </Button>
           ) : (
-            <>
-              <Button type="button" variant="ghost" disabled>
-                Annuler
-              </Button>
-              <Button type="button" disabled className="animate-pulse">
-                Envoi en cours…
-              </Button>
-            </>
+            // Story 4.9 (A1) : l'envoi committé n'a pas d'annulation côté client —
+            // on ne montre plus de bouton « Annuler » mort, seulement l'indicateur.
+            <Button type="button" disabled className="animate-pulse">
+              Envoi en cours…
+            </Button>
           )}
         </div>
       </div>
