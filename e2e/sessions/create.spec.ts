@@ -103,6 +103,12 @@ test("GM creates a session inside a campaign and lands on the new session detail
   await page.getByLabel("Titre").fill("Session 7 — La crypte oubliée");
   // Date input is pre-filled with today; just keep it.
 
+  // Story 4.12: the transcription-mode picker is exposed and defaults to the
+  // "Sans distinction des intervenants" (non_diarised) option.
+  await expect(page.getByLabel("Type de transcription")).toHaveValue(
+    "non_diarised",
+  );
+
   await page.getByRole("button", { name: "Créer la session" }).click();
 
   await expect(page).toHaveURL(

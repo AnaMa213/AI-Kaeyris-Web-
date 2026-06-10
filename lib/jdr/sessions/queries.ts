@@ -58,14 +58,16 @@ export function useCreateSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateSessionInput) => {
-      // V1 lock: transcription_mode is hardcoded "non_diarised" per PRD FR-6.
-      // The UI does not expose it; the user does not choose it.
+      // transcription_mode is GM-chosen at creation (Story 4.12) and immutable
+      // afterwards. It is always sent explicitly — the schema defaults it to
+      // "non_diarised" because the backend default ("diarised") doesn't match
+      // the V1 pipeline.
       const result = await apiClient.POST("/services/jdr/sessions", {
         body: {
           title: input.title,
           campaign_id: input.campaign_id,
           recorded_at: toIsoUtc(input.recorded_at),
-          transcription_mode: "non_diarised",
+          transcription_mode: input.transcription_mode,
         },
       });
       return unwrap<SessionOut>(result);

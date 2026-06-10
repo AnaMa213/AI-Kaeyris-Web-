@@ -13,9 +13,18 @@ export const sessionCreateSchema = z.object({
       (value) => !Number.isNaN(new Date(value).getTime()),
       "Date de la séance invalide.",
     ),
+  // GM-chosen at creation, immutable afterwards. Always sent explicitly on the
+  // wire: the backend default is `diarised`, but the V1 pipeline expects
+  // `non_diarised`, so we default to it here rather than relying on the server.
+  transcription_mode: z
+    .enum(["non_diarised", "diarised"])
+    .default("non_diarised"),
 });
 
+/** Parsed (output) shape — `transcription_mode` is always present. */
 export type SessionCreateInput = z.infer<typeof sessionCreateSchema>;
+/** Raw form (input) shape — `transcription_mode` is optional (schema default). */
+export type SessionCreateFormInput = z.input<typeof sessionCreateSchema>;
 
 export const sessionUpdateSchema = z.object({
   title: z

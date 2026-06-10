@@ -101,13 +101,55 @@ describe("<NewSessionForm>", () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  test("does NOT expose transcription_mode in the rendered form", () => {
+  test("exposes a 'Type de transcription' picker with functional labels, defaulting to non_diarised", () => {
     renderForm();
+    const select = screen.getByLabelText(
+      "Type de transcription",
+    ) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    // Functional French labels, never the raw enum codes.
     expect(
-      screen.queryByLabelText(/transcription/i),
-    ).not.toBeInTheDocument();
+      screen.getByRole("option", {
+        name: "Sans distinction des intervenants",
+      }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByText(/non_diarised/i),
-    ).not.toBeInTheDocument();
+      screen.getByRole("option", {
+        name: "Avec distinction des intervenants",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/non_diarised/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bdiarised\b/i)).not.toBeInTheDocument();
+    // Default pre-selection.
+    expect(select.value).toBe("non_diarised");
+  });
+
+  test("includes the default transcription_mode (non_diarised) in the submit payload", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.click(screen.getByRole("button", { name: "Créer la session" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const [values] = onSubmit.mock.calls[0];
+    expect(values.transcription_mode).toBe("non_diarised");
+  });
+
+  test("submits the chosen transcription_mode when the GM selects diarised", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+    await user.type(screen.getByLabelText("Titre"), "Session 7");
+    await user.selectOptions(
+      screen.getByLabelText("Type de transcription"),
+      "diarised",
+    );
+    await user.click(screen.getByRole("button", { name: "Créer la session" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const [values] = onSubmit.mock.calls[0];
+    expect(values.transcription_mode).toBe("diarised");
+  });
+
+  test("disables the transcription picker while submitting", () => {
+    renderForm({ submitting: true });
+    expect(screen.getByLabelText("Type de transcription")).toBeDisabled();
   });
 });

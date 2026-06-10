@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   sessionCreateSchema,
   type SessionCreateInput,
+  type SessionCreateFormInput,
 } from "@/lib/jdr/schemas/sessions";
 
 interface NewSessionFormProps {
@@ -32,11 +33,14 @@ export function NewSessionForm({
   submitting,
   errorMessage,
 }: NewSessionFormProps) {
-  const form = useForm<SessionCreateInput>({
+  // Three-generic form: the raw input type (transcription_mode optional, schema
+  // default) feeds the resolver; the parsed output type reaches onSubmit.
+  const form = useForm<SessionCreateFormInput, unknown, SessionCreateInput>({
     resolver: zodResolver(sessionCreateSchema),
     defaultValues: {
       title: "",
       recorded_at: todayLocalDatetime(),
+      transcription_mode: "non_diarised",
     },
   });
 
@@ -97,6 +101,27 @@ export function NewSessionForm({
             {recordedAtError}
           </p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="session-transcription-mode">
+          Type de transcription
+        </Label>
+        <select
+          id="session-transcription-mode"
+          disabled={submitting}
+          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 disabled:bg-input/50 dark:bg-input/30 h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+          {...form.register("transcription_mode")}
+        >
+          <option value="non_diarised">
+            Sans distinction des intervenants
+          </option>
+          <option value="diarised">Avec distinction des intervenants</option>
+        </select>
+        <p className="text-text-chrome-muted text-sm">
+          Choisis si la transcription doit distinguer qui parle. Non modifiable
+          après la création.
+        </p>
       </div>
 
       {errorMessage && (
