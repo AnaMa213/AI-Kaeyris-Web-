@@ -53,7 +53,7 @@ export function createSessionState(
 
 /**
  * GET /services/jdr/auth/setup/status replies {required: false}.
- * Required for /login to show the ProfilePicker (not the SetupWizard).
+ * Required for /login to show the credentials form (not the SetupWizard).
  */
 export async function mockSetupStatusNotRequired(page: Page) {
   await page.route(
@@ -250,7 +250,8 @@ export async function installAuthMocks(
 }
 
 /**
- * Drive the ProfilePicker login form. Picks MJ, fills credentials, submits.
+ * Drive the single credentials login form (Story 4.11 — no Profile Picker):
+ * fills credentials and submits.
  */
 export async function loginAsGM(
   page: Page,
@@ -259,7 +260,6 @@ export async function loginAsGM(
     password: "test1234",
   },
 ) {
-  await page.getByText("MJ", { exact: true }).click();
   await page.getByLabel("Nom d'utilisateur").fill(credentials.username);
   await page.getByLabel("Mot de passe").fill(credentials.password);
   await page.getByRole("button", { name: "Se connecter" }).click();
