@@ -13,6 +13,7 @@ import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { PjPresenceDropdown } from "@/components/jdr/sessions/PjPresenceDropdown";
+import { TranscriptionViewer } from "@/components/jdr/sessions/TranscriptionViewer";
 import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
 import { NarrativeArtifactPanel } from "@/components/jdr/sessions/NarrativeArtifactPanel";
 import { ElementsArtifactPanel } from "@/components/jdr/sessions/ElementsArtifactPanel";
@@ -539,6 +540,18 @@ export default function SessionDetailPage() {
                     ? () => setReplacing(true)
                     : undefined
                 }
+              />
+            </div>
+          )}
+
+          {/* Story 4.13 : la transcription terminée est lisible ici. Le viewer
+          branche sur `transcription_mode` (chunks stitchés vs segments diarisés)
+          et n'est monté qu'à l'état `transcribed`. */}
+          {session.state === "transcribed" && (
+            <div className="mb-7">
+              <TranscriptionViewer
+                sessionId={session.id}
+                transcriptionMode={session.transcription_mode}
               />
             </div>
           )}

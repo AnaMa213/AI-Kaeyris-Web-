@@ -76,6 +76,14 @@ function stubFetch(opts: {
   session?: typeof baseSession;
   sessionStatus?: number;
   campaign?: typeof baseCampaign;
+  // Story 4.13 — transcription viewer fixtures (only fetched at `transcribed`).
+  chunks?: Array<{ chunk_id: string; ordre: number; text: string }>;
+  segments?: Array<{
+    speaker_label: string;
+    text: string;
+    start_seconds: number;
+    end_seconds: number;
+  }>;
 }) {
   vi.stubGlobal(
     "fetch",
@@ -86,6 +94,33 @@ function stubFetch(opts: {
           status: 200,
           headers: { "content-type": "application/json" },
         });
+      }
+      // `/chunks` and `/transcription` are sub-paths of the session URL — match
+      // them BEFORE the generic session matcher below, or they'd return a
+      // SessionOut instead of the transcription payload.
+      if (url.includes(`/services/jdr/sessions/${sessionIdFixture}/chunks`)) {
+        return new Response(
+          JSON.stringify({
+            session_id: sessionIdFixture,
+            items: opts.chunks ?? [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (
+        url.includes(`/services/jdr/sessions/${sessionIdFixture}/transcription`)
+      ) {
+        return new Response(
+          JSON.stringify({
+            session_id: sessionIdFixture,
+            language: "fr",
+            model_used: "whisper-x",
+            provider: "mock",
+            completed_at: "2026-06-01T10:00:00Z",
+            segments: opts.segments ?? [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       }
       if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
         if (opts.sessionStatus && opts.sessionStatus >= 400) {
@@ -620,6 +655,46 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       expect(
         screen.queryByText("Les scribes transcrivent"),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Story 4.13 — Transcription viewer", () => {
+    test("renders the stitched chunks for a transcribed non_diarised session", async () => {
+      stubFetch({
+        session: {
+          ...baseSession,
+          state: "transcribed",
+          transcription_mode: "non_diarised",
+        },
+        chunks: [{ chunk_id: "c1", ordre: 1, text: "Le héros entre dans la crypte." }],
+      });
+      renderPage();
+      expect(
+        await screen.findByText("Le héros entre dans la crypte."),
+      ).toBeInTheDocument();
+    });
+
+    test("renders diarised segments with speaker labels for a transcribed diarised session", async () => {
+      stubFetch({
+        session: {
+          ...baseSession,
+          state: "transcribed",
+          transcription_mode: "diarised",
+        },
+        segments: [
+          {
+            speaker_label: "speaker_1",
+            text: "Salutations, aventuriers.",
+            start_seconds: 0,
+            end_seconds: 2,
+          },
+        ],
+      });
+      renderPage();
+      expect(
+        await screen.findByText("Salutations, aventuriers."),
+      ).toBeInTheDocument();
+      expect(screen.getByText("speaker_1")).toBeInTheDocument();
     });
   });
 
