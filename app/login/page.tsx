@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ProfilePicker } from "@/components/jdr/auth/ProfilePicker";
+import { CredentialsLogin } from "@/components/jdr/auth/CredentialsLogin";
 import { SetupWizard } from "@/components/jdr/auth/SetupWizard";
 import { LoginGuard } from "@/components/jdr/auth/LoginGuard";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
@@ -214,7 +214,7 @@ function LoginForm() {
   return (
     <>
       {expiredBanner}
-      <ProfilePicker
+      <CredentialsLogin
         onSubmit={handleLoginSubmit}
         submitting={loginMutation.isPending}
         errorMessage={errorMessage}

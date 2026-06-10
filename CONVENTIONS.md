@@ -50,7 +50,7 @@ Utiliser `campaign_id` (= `campaignId` côté TypeScript). La sémantique JDR es
 **Composants par origine** :
 - `components/ui/` = shadcn primitives, **jamais touchées** (tweaks via wrapping)
 - `components/common/` = génériques cross-service (FantasyLoader, futur ModuleCard…)
-- `components/jdr/` = JDR-flavored (ProfilePicker, SetupWizard, UsersTable, …)
+- `components/jdr/` = JDR-flavored (CredentialsLogin, SetupWizard, UsersTable, …)
 
 ---
 

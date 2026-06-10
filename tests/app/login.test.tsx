@@ -90,8 +90,11 @@ const findLoginCall = (
 };
 
 const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(await screen.findByText("MJ"));
-  await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
+  // Story 4.11 — no Profile Picker: the credentials form is shown directly.
+  await user.type(
+    await screen.findByLabelText("Nom d'utilisateur"),
+    "alice",
+  );
   await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
   await user.click(screen.getByRole("button", { name: "Se connecter" }));
 };
@@ -219,7 +222,7 @@ describe("<LoginPage> setup-status branching", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("renders <ProfilePicker> when setup/status returns required:false", async () => {
+  test("renders the credentials form (no Profile Picker) when setup/status returns required:false", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: Request | string) => {
@@ -239,7 +242,13 @@ describe("<LoginPage> setup-status branching", () => {
       }),
     );
     renderLoginPage();
-    expect(await screen.findByText("Joueur")).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("Nom d'utilisateur"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Mot de passe")).toBeInTheDocument();
+    // Story 4.11 — the MJ/Joueur picker is gone.
+    expect(screen.queryByText("MJ")).not.toBeInTheDocument();
+    expect(screen.queryByText("Joueur")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Créer le premier compte MJ" }),
     ).not.toBeInTheDocument();
@@ -279,8 +288,8 @@ describe("<LoginPage> expired banner", () => {
       makeFetchMock(() => new Response(null, { status: 200 })),
     );
     renderLoginPage();
-    // Wait for the ProfilePicker to render so the loading state passes.
-    await screen.findByText("Joueur");
+    // Wait for the credentials form to render so the loading state passes.
+    await screen.findByLabelText("Nom d'utilisateur");
     expect(
       screen.queryByText("Session expirée, reconnectez-vous."),
     ).not.toBeInTheDocument();

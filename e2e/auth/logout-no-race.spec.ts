@@ -31,5 +31,7 @@ test("logout redirects to /login without flashback to /jdr/campaigns even with a
   await expect(
     page.getByRole("heading", { level: 1, name: "Campagnes" }),
   ).not.toBeVisible();
-  await expect(page.getByText("MJ", { exact: true })).toBeVisible();
+  // Story 4.11 — the credentials form (no Profile Picker) is the proof we
+  // landed back on /login.
+  await expect(page.getByLabel("Nom d'utilisateur")).toBeVisible();
 });

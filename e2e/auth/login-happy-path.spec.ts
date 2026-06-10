@@ -14,7 +14,9 @@ test("GM logs in via /login and lands on /jdr/campaigns with sidebar visible", a
   await mockCampaignsList(page, []);
 
   await page.goto("/login");
-  await expect(page.getByText("MJ", { exact: true })).toBeVisible();
+  // Story 4.11 — the credentials form is shown directly (no MJ/Joueur picker).
+  await expect(page.getByLabel("Nom d'utilisateur")).toBeVisible();
+  await expect(page.getByText("MJ", { exact: true })).toHaveCount(0);
 
   await loginAsGM(page);
 

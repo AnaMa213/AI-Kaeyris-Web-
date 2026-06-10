@@ -18,7 +18,8 @@ test("already-authenticated user visiting /login is redirected to /jdr/campaigns
   await expect(
     page.getByRole("heading", { level: 1, name: "Campagnes" }),
   ).toBeVisible();
-  await expect(page.getByText("MJ", { exact: true })).not.toBeVisible();
+  // Story 4.11 — the login credentials form must not be reachable here either.
+  await expect(page.getByLabel("Nom d'utilisateur")).toHaveCount(0);
 });
 
 test("already-authenticated user visiting /login?from=/jdr/users still lands on /jdr/campaigns (the from is ignored)", async ({

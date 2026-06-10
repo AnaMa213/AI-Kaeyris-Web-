@@ -3,17 +3,17 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ProfilePicker } from "@/components/jdr/auth/ProfilePicker";
+import { CredentialsLogin } from "@/components/jdr/auth/CredentialsLogin";
 
 type RenderOverrides = Omit<
-  Partial<Parameters<typeof ProfilePicker>[0]>,
+  Partial<Parameters<typeof CredentialsLogin>[0]>,
   "onSubmit"
 >;
 
-const renderPicker = (overrides: RenderOverrides = {}) => {
+const renderForm = (overrides: RenderOverrides = {}) => {
   const onSubmit = vi.fn();
   render(
-    <ProfilePicker
+    <CredentialsLogin
       onSubmit={onSubmit}
       submitting={false}
       errorMessage={null}
@@ -24,32 +24,32 @@ const renderPicker = (overrides: RenderOverrides = {}) => {
   return { onSubmit };
 };
 
-describe("<ProfilePicker>", () => {
-  test("renders both cards; Player card is aria-disabled", () => {
-    renderPicker();
-    expect(screen.getByText("MJ")).toBeInTheDocument();
-    expect(screen.getByText("Joueur")).toBeInTheDocument();
-    const playerCard = screen.getByText("Joueur").closest("[aria-disabled]");
-    expect(playerCard).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText(/Bientôt/)).toBeInTheDocument();
-  });
-
-  test("password input is hidden until the GM card is selected", () => {
-    renderPicker();
-    expect(screen.queryByLabelText("Mot de passe")).not.toBeInTheDocument();
-  });
-
-  test("clicking the GM card reveals the password input", async () => {
-    const user = userEvent.setup();
-    renderPicker();
-    await user.click(screen.getByText("MJ"));
+describe("<CredentialsLogin>", () => {
+  test("renders the credentials form directly — no MJ/Joueur profile picker", () => {
+    renderForm();
+    // The fields are visible immediately — no card-selection step.
+    expect(screen.getByLabelText("Nom d'utilisateur")).toBeInTheDocument();
     expect(screen.getByLabelText("Mot de passe")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Se connecter" }),
+    ).toBeInTheDocument();
+    // The removed Profile Picker: no MJ/Joueur cards, no "Choisir un profil".
+    expect(screen.queryByText("MJ")).not.toBeInTheDocument();
+    expect(screen.queryByText("Joueur")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Bientôt/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Choisir un profil" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("autofocuses the username field", () => {
+    renderForm();
+    expect(screen.getByLabelText("Nom d'utilisateur")).toHaveFocus();
   });
 
   test("submitting an empty password (with username) surfaces the zod validation error", async () => {
     const user = userEvent.setup();
-    const { onSubmit } = renderPicker();
-    await user.click(screen.getByText("MJ"));
+    const { onSubmit } = renderForm();
     await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(await screen.findByText("Mot de passe requis.")).toBeInTheDocument();
@@ -61,8 +61,7 @@ describe("<ProfilePicker>", () => {
 
   test("submitting an empty username (with password) surfaces the zod validation error", async () => {
     const user = userEvent.setup();
-    const { onSubmit } = renderPicker();
-    await user.click(screen.getByText("MJ"));
+    const { onSubmit } = renderForm();
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(
@@ -74,8 +73,7 @@ describe("<ProfilePicker>", () => {
 
   test("submitting a valid username + password calls onSubmit with { username, password } (no profile field — BD-7)", async () => {
     const user = userEvent.setup();
-    const { onSubmit } = renderPicker();
-    await user.click(screen.getByText("MJ"));
+    const { onSubmit } = renderForm();
     await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
     await user.click(screen.getByRole("button", { name: "Se connecter" }));
@@ -89,14 +87,13 @@ describe("<ProfilePicker>", () => {
   test("clearPasswordTrigger resets the password field but preserves username", async () => {
     const user = userEvent.setup();
     const { rerender } = render(
-      <ProfilePicker
+      <CredentialsLogin
         onSubmit={vi.fn()}
         submitting={false}
         errorMessage={null}
         clearPasswordTrigger={0}
       />,
     );
-    await user.click(screen.getByText("MJ"));
     await user.type(screen.getByLabelText("Nom d'utilisateur"), "alice");
     await user.type(screen.getByLabelText("Mot de passe"), "hunter2");
     expect(
@@ -107,7 +104,7 @@ describe("<ProfilePicker>", () => {
     ).toBe("hunter2");
 
     rerender(
-      <ProfilePicker
+      <CredentialsLogin
         onSubmit={vi.fn()}
         submitting={false}
         errorMessage="Identifiants invalides."
@@ -124,12 +121,20 @@ describe("<ProfilePicker>", () => {
     ).toBe("alice");
   });
 
-  test("inline error message renders with role=alert after GM selection", async () => {
-    const user = userEvent.setup();
-    renderPicker({ errorMessage: "Identifiants invalides." });
-    await user.click(screen.getByText("MJ"));
+  test("inline error message renders with role=alert", () => {
+    renderForm({ errorMessage: "Identifiants invalides." });
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Identifiants invalides.",
     );
+  });
+
+  test("inline error shows an optional detail in a <details> disclosure", () => {
+    renderForm({
+      errorMessage: "Connexion impossible. Réessaie dans quelques instants.",
+      errorDetail: "Erreur réseau. Vérifie ta connexion ou la base URL.",
+    });
+    expect(
+      screen.getByText("Erreur réseau. Vérifie ta connexion ou la base URL."),
+    ).toBeInTheDocument();
   });
 });
