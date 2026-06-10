@@ -13,6 +13,11 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+const toastErrorMock = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: (...a: unknown[]) => toastErrorMock(...a) },
+}));
+
 const { useArtifactJobFlow, ARTIFACT_JOB_LABELS } = await import(
   "@/lib/jdr/sessions/artifactJobFlow"
 );
@@ -21,7 +26,7 @@ const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
 const keyFactory = (sessionId: string) =>
   ["jdr", "artifact", "narrative", sessionId] as const;
 
-function stubJob(status: string) {
+function stubJob(status: string, failureReason: string | null = null) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string) => {
@@ -33,7 +38,7 @@ function stubJob(status: string) {
             kind: "narrative",
             session_id: SESSION_ID,
             status,
-            failure_reason: null,
+            failure_reason: failureReason,
             queued_at: "2026-06-01T10:00:00Z",
             started_at: "2026-06-01T10:00:01Z",
             ended_at: null,
@@ -78,7 +83,10 @@ const makeClient = () =>
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
-beforeEach(() => stubJob("running"));
+beforeEach(() => {
+  toastErrorMock.mockClear();
+  stubJob("running");
+});
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -244,5 +252,101 @@ describe("useArtifactJobFlow (Story 4.4)", () => {
     act(() => result.current.onJobQueued("job-x"));
     await waitFor(() => expect(result.current.jobSucceeded).toBe(true));
     expect(result.current.jobInFlight).toBe(false);
+  });
+});
+
+// Story 4.10 — surface artifact-generation failures (A5).
+describe("useArtifactJobFlow — failure surfacing (Story 4.10)", () => {
+  test("exposes the backend failure_reason on a failed job", async () => {
+    stubJob("failed", "LLM provider unreachable");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: false, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobFailed).toBe(true));
+    expect(result.current.failureReason).toBe("LLM provider unreachable");
+  });
+
+  test("treats a whitespace-only failure_reason as no reason (null + generic toast)", async () => {
+    stubJob("failed", "   ");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: false, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobFailed).toBe(true));
+    // Normalised to null → inline panels won't render a dangling "... : ".
+    expect(result.current.failureReason).toBeNull();
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+    // Generic toast, no orphan colon.
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.not.stringContaining(":"),
+    );
+  });
+
+  test("fires a single error toast with the failure_reason when the job fails", async () => {
+    stubJob("failed", "LLM provider unreachable");
+    const queryClient = makeClient();
+    const { result, rerender } = renderHook(
+      () =>
+        useArtifactJobFlow({
+          sessionId: SESSION_ID,
+          isPresent: false,
+          keyFactory,
+          artifactNoun: "du récit",
+        }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("LLM provider unreachable"),
+    );
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("du récit"),
+    );
+    // Re-render must not re-fire the toast (deduped per jobId).
+    rerender();
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("fires a generic error toast (no reason) when the job lookup itself fails", async () => {
+    stubJobNotFound();
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: false, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-missing"));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+    expect(result.current.failureReason).toBeNull();
+  });
+
+  test("does NOT toast for a running job", async () => {
+    stubJob("running");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: false, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobId).toBe("job-x"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("does NOT toast for a succeeded job", async () => {
+    stubJob("succeeded");
+    const queryClient = makeClient();
+    const { result } = renderHook(
+      () => useArtifactJobFlow({ sessionId: SESSION_ID, isPresent: true, keyFactory }),
+      { wrapper: wrap(queryClient) },
+    );
+    act(() => result.current.onJobQueued("job-x"));
+    await waitFor(() => expect(result.current.jobSucceeded).toBe(true));
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 });

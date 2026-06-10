@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useJob, type JobOut } from "@/lib/jdr/jobs/queries";
 
 /**
@@ -38,6 +39,12 @@ interface UseArtifactJobFlowOptions {
    * artefact, puis de s'arrêter dès que le remplacement est visible.
    */
   artifactVersion?: unknown;
+  /**
+   * Story 4.10 — complément accordé de l'artefact (« du résumé », « du récit »,
+   * « des éléments », « des POVs ») injecté dans le toast d'échec. Optionnel :
+   * un libellé neutre (« La génération a échoué ») sert de repli.
+   */
+  artifactNoun?: string;
 }
 
 /**
@@ -51,9 +58,11 @@ export function useArtifactJobFlow({
   isPresent,
   keyFactory,
   artifactVersion,
+  artifactNoun,
 }: UseArtifactJobFlowOptions) {
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
+  const toastedJobIdRef = useRef<string | null>(null);
   const [settleRefetchAttempt, setSettleRefetchAttempt] = useState(0);
   const [artifactUnavailable, setArtifactUnavailable] = useState(false);
   const [queuedArtifactVersion, setQueuedArtifactVersion] =
@@ -63,6 +72,13 @@ export function useArtifactJobFlow({
   const jobLookupFailed = jobQuery.isError;
   const jobFailed = job?.status === "failed" || jobLookupFailed;
   const jobSucceeded = job?.status === "succeeded";
+  // Story 4.10 — raison d'échec backend, seulement pertinente sur un job `failed`
+  // (un `jobLookupFailed` n'a pas de JobOut → null, repli message générique).
+  // Normalisée ici une seule fois (trim → null si vide/blanche) pour que le toast
+  // ET l'affichage inline des panneaux partagent la même valeur — évite un « : »
+  // orphelin si le backend renvoie une raison vide ou faite d'espaces.
+  const failureReason =
+    job?.status === "failed" ? (job.failure_reason?.trim() || null) : null;
   // Actif = job en vol OU terminé OK mais le contenu n'est pas encore relu.
   // (Premier rendu uniquement : se replie sur `isPresent` pour éviter le flash
   // du bouton entre `succeeded` et l'arrivée du GET.)
@@ -90,9 +106,27 @@ export function useArtifactJobFlow({
       setSettleRefetchAttempt(0);
       setArtifactUnavailable(false);
       setQueuedArtifactVersion(isPresent ? (artifactVersion ?? null) : null);
+      // Story 4.10 — nouvelle tentative : ré-arme le toast d'échec.
+      toastedJobIdRef.current = null;
     },
     [artifactVersion, isPresent],
   );
+
+  // Story 4.10 — notifie l'échec d'un job d'artefact UNE fois (toast), dédupliqué
+  // par `jobId` car le cache conserve le job `failed` et l'effet pourrait sinon
+  // re-tirer à chaque rendu. Couvre aussi `jobLookupFailed` (404/réseau), où
+  // aucune `failure_reason` n'est disponible → message générique.
+  useEffect(() => {
+    if (!jobFailed || jobId === null) return;
+    if (toastedJobIdRef.current === jobId) return;
+    toastedJobIdRef.current = jobId;
+    const noun = artifactNoun ? ` ${artifactNoun}` : "";
+    toast.error(
+      failureReason
+        ? `La génération${noun} a échoué : ${failureReason}`
+        : `La génération${noun} a échoué.`,
+    );
+  }, [jobFailed, jobId, failureReason, artifactNoun]);
 
   // À la complétion, le contenu peut arriver avec une petite latence backend.
   // On retente quelques invalidations avant de rendre un état non bloquant.
@@ -151,6 +185,7 @@ export function useArtifactJobFlow({
     job,
     jobFailed,
     jobLookupFailed,
+    failureReason,
     jobSucceeded,
     jobActive,
     jobInFlight,

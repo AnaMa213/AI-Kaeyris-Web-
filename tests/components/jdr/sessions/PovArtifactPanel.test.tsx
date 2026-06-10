@@ -214,8 +214,14 @@ describe("<PovArtifactPanel> (Story 4.4)", () => {
     await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
     await user.click(screen.getByRole("button", { name: "Régénérer" }));
 
+    // Story 4.10 — ArtifactRegenerateControls must surface the backend reason inline,
+    // not just the generic "La régénération a échoué.".
     expect(
-      await screen.findByText(/La régénération a échoué/i, {}, { timeout: 4000 }),
+      await screen.findByText(
+        /La régénération a échoué : LLM error/i,
+        {},
+        { timeout: 4000 },
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText(/POVs générés/i)).toBeInTheDocument();
     expect(
@@ -226,5 +232,54 @@ describe("<PovArtifactPanel> (Story 4.4)", () => {
     expect(postCount).toBe(2);
     await user.click(screen.getByRole("button", { name: "Régénérer" }));
     expect(postCount).toBe(3);
+  });
+
+  // Story 4.10 — a failed first generation must not be silent: inline reason + toast + retry.
+  test("a failed generation surfaces the failure_reason inline + toast, with a Réessayer retry", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/povs") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({ id: `job-fail-${postCount}`, kind: "povs", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/jobs/job-fail-")) {
+          return new Response(
+            JSON.stringify({ id: "job-fail", kind: "povs", session_id: SESSION_ID, status: "failed", failure_reason: "LLM provider unreachable", queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:02Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Générer les POVs" }),
+    );
+
+    expect(
+      await screen.findByText(/LLM provider unreachable/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("LLM provider unreachable"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => expect(postCount).toBe(2));
   });
 });

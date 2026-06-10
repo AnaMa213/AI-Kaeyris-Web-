@@ -35,7 +35,11 @@ export function PovArtifactPanel({ sessionId }: PovArtifactPanelProps) {
   const playersQuery = useSessionPlayers(sessionId);
   const generate = useGeneratePovs(sessionId);
   // Pas de GET-liste en 4.4 → `isPresent: false` ; `succeeded` est géré à part.
-  const flow = useArtifactJobFlow({ sessionId, isPresent: false });
+  const flow = useArtifactJobFlow({
+    sessionId,
+    isPresent: false,
+    artifactNoun: "des POVs",
+  });
   const [regenerationStarted, setRegenerationStarted] = useState(false);
 
   const playersLoading = playersQuery.isPending;
@@ -73,6 +77,7 @@ export function PovArtifactPanel({ sessionId }: PovArtifactPanelProps) {
           jobId={flow.jobId}
           jobInFlight={flow.jobInFlight}
           jobFailed={flow.jobFailed}
+          failureReason={flow.failureReason}
           pending={generate.isPending}
           onConfirm={handleGenerate}
         />
@@ -124,7 +129,9 @@ export function PovArtifactPanel({ sessionId }: PovArtifactPanelProps) {
           )}
           {flow.jobFailed && (
             <p className="text-state-error text-sm">
-              La génération a échoué. Réessaie.
+              {flow.failureReason
+                ? `La génération a échoué : ${flow.failureReason}`
+                : "La génération a échoué. Réessaie."}
             </p>
           )}
           <div>

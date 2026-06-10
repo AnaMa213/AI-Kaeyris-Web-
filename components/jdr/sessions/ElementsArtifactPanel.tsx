@@ -96,6 +96,7 @@ export function ElementsArtifactPanel({
     isPresent: Boolean(elements),
     keyFactory: elementsArtifactQueryKey,
     artifactVersion: elements?.generated_at,
+    artifactNoun: "des éléments",
   });
 
   const handleGenerate = () => {
@@ -153,6 +154,7 @@ export function ElementsArtifactPanel({
           jobInFlight={flow.jobInFlight}
           artifactSettling={flow.artifactSettling}
           jobFailed={flow.jobFailed}
+          failureReason={flow.failureReason}
           pending={generate.isPending}
           onConfirm={handleGenerate}
         />
@@ -203,7 +205,9 @@ export function ElementsArtifactPanel({
         <div className="flex flex-col gap-2">
           {flow.jobFailed && (
             <p className="text-state-error text-sm">
-              La génération a échoué. Réessaie.
+              {flow.failureReason
+                ? `La génération a échoué : ${flow.failureReason}`
+                : "La génération a échoué. Réessaie."}
             </p>
           )}
           <div>
