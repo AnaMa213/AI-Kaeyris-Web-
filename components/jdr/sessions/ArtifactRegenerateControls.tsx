@@ -17,6 +17,8 @@ interface ArtifactRegenerateControlsProps {
   artifactSettling?: boolean;
   /** Vrai si la dernière régénération a échoué. */
   jobFailed: boolean;
+  /** Story 4.10 — raison d'échec backend (`JobOut.failure_reason`), si dispo. */
+  failureReason?: string | null;
   /** Vrai pendant l'envoi du POST de régénération. */
   pending: boolean;
   /** Déclenché à la confirmation de l'utilisateur. */
@@ -36,6 +38,7 @@ export function ArtifactRegenerateControls({
   jobInFlight,
   artifactSettling = false,
   jobFailed,
+  failureReason,
   pending,
   onConfirm,
 }: ArtifactRegenerateControlsProps) {
@@ -66,7 +69,9 @@ export function ArtifactRegenerateControls({
 
       {jobFailed && (
         <p className="text-state-error text-sm">
-          La régénération a échoué. Réessaie.
+          {failureReason
+            ? `La régénération a échoué : ${failureReason}`
+            : "La régénération a échoué. Réessaie."}
         </p>
       )}
 

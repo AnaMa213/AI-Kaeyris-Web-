@@ -39,6 +39,7 @@ export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
     isPresent: Boolean(summary),
     keyFactory: summaryArtifactQueryKey,
     artifactVersion: summary?.generated_at,
+    artifactNoun: "du résumé",
   });
 
   const hasPjDeclared = (playersQuery.data?.pj_ids.length ?? 0) > 0;
@@ -69,6 +70,7 @@ export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
           jobInFlight={flow.jobInFlight}
           artifactSettling={flow.artifactSettling}
           jobFailed={flow.jobFailed}
+          failureReason={flow.failureReason}
           pending={generate.isPending}
           onConfirm={handleGenerate}
         />
@@ -108,7 +110,9 @@ export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
           )}
           {flow.jobFailed && (
             <p className="text-state-error text-sm">
-              La génération a échoué. Réessaie.
+              {flow.failureReason
+                ? `La génération a échoué : ${flow.failureReason}`
+                : "La génération a échoué. Réessaie."}
             </p>
           )}
           <div>

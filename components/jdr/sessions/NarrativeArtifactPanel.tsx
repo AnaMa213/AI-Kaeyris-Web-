@@ -58,6 +58,7 @@ export function NarrativeArtifactPanel({
     isPresent: Boolean(narrative?.text),
     keyFactory: narrativeArtifactQueryKey,
     artifactVersion: narrative?.generated_at,
+    artifactNoun: "du récit",
   });
 
   const handleGenerate = () => {
@@ -105,6 +106,7 @@ export function NarrativeArtifactPanel({
           jobInFlight={flow.jobInFlight}
           artifactSettling={flow.artifactSettling}
           jobFailed={flow.jobFailed}
+          failureReason={flow.failureReason}
           pending={generate.isPending}
           onConfirm={handleGenerate}
         />
@@ -154,7 +156,9 @@ export function NarrativeArtifactPanel({
         <div className="flex flex-col gap-2">
           {flow.jobFailed && (
             <p className="text-state-error text-sm">
-              La génération a échoué. Réessaie.
+              {flow.failureReason
+                ? `La génération a échoué : ${flow.failureReason}`
+                : "La génération a échoué. Réessaie."}
             </p>
           )}
           <div>

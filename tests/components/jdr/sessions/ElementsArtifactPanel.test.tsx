@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -217,5 +217,55 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
       await screen.findByText("Vael", {}, { timeout: 4000 }),
     ).toBeInTheDocument();
     expect(postCount).toBe(1);
+  });
+
+  // Story 4.10 — a failed generation must not be silent: inline reason + toast + retry.
+  test("a failed generation surfaces the failure_reason inline + toast, with a Réessayer retry", async () => {
+    let postCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes("/artifacts/elements") && method.toUpperCase() === "POST") {
+          postCount += 1;
+          return new Response(
+            JSON.stringify({ id: `job-fail-${postCount}`, kind: "elements", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/elements")) {
+          // Generation failed → the artifact never materialises.
+          return new Response(JSON.stringify({ type: "about:blank", title: "absent", status: 404 }), {
+            status: 404,
+            headers: { "content-type": "application/problem+json" },
+          });
+        }
+        if (url.includes("/jobs/job-fail-")) {
+          return new Response(
+            JSON.stringify({ id: "job-fail", kind: "elements", session_id: SESSION_ID, status: "failed", failure_reason: "LLM provider unreachable", queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:02Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Générer les Éléments" }),
+    );
+
+    expect(
+      await screen.findByText(/LLM provider unreachable/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("LLM provider unreachable"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => expect(postCount).toBe(2));
   });
 });
