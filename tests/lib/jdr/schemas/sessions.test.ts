@@ -60,6 +60,38 @@ describe("sessionCreateSchema", () => {
       expect(messages).toMatch(/invalide/i);
     }
   });
+
+  test("defaults transcription_mode to non_diarised when omitted", () => {
+    const result = sessionCreateSchema.safeParse({
+      title: "Session 7",
+      recorded_at: "2026-05-31T20:00",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.transcription_mode).toBe("non_diarised");
+    }
+  });
+
+  test("accepts an explicit diarised transcription_mode", () => {
+    const result = sessionCreateSchema.safeParse({
+      title: "Session 7",
+      recorded_at: "2026-05-31T20:00",
+      transcription_mode: "diarised",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.transcription_mode).toBe("diarised");
+    }
+  });
+
+  test("rejects an unknown transcription_mode", () => {
+    const result = sessionCreateSchema.safeParse({
+      title: "Session 7",
+      recorded_at: "2026-05-31T20:00",
+      transcription_mode: "speaker_split",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("sessionUpdateSchema", () => {

@@ -87,7 +87,7 @@ afterEach(() => {
 });
 
 describe("useCreateSession", () => {
-  test("POSTs to /services/jdr/sessions with transcription_mode hardcoded to 'non_diarised'", async () => {
+  test("POSTs to /services/jdr/sessions with the chosen transcription_mode (default non_diarised)", async () => {
     const queryClient = makeClient();
     const { result } = renderHook(() => useCreateSession(), {
       wrapper: wrapper(queryClient),
@@ -96,6 +96,7 @@ describe("useCreateSession", () => {
       title: "Session 7",
       recorded_at: "2026-05-31T20:00",
       campaign_id: "11111111-1111-1111-1111-111111111111",
+      transcription_mode: "non_diarised",
     });
     expect(data).toEqual(sampleSession);
 
@@ -119,6 +120,31 @@ describe("useCreateSession", () => {
     expect(body.recorded_at).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/,
     );
+  });
+
+  test("forwards an explicit diarised transcription_mode on the wire", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useCreateSession(), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({
+      title: "Session 8",
+      recorded_at: "2026-05-31T20:00",
+      campaign_id: "11111111-1111-1111-1111-111111111111",
+      transcription_mode: "diarised",
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith("/services/jdr/sessions") &&
+        request.method === "POST"
+      );
+    });
+    if (!call) throw new Error("No POST /sessions call found");
+    const body = await (call[0] as Request).clone().json();
+    expect(body.transcription_mode).toBe("diarised");
   });
 });
 
