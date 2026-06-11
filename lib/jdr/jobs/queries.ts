@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError } from "@/lib/core/api/errors";
+import { useJobEventStream } from "@/lib/jdr/jobs/jobEvents";
 import type { components } from "@/types/api";
 
 type JobOut = components["schemas"]["JobOut"];
@@ -60,6 +61,13 @@ interface UseJobOptions {
  */
 export function useJob(jobId: string | null, { live = false }: UseJobOptions = {}) {
   const apiClient = useMemo(() => createApiClient(), []);
+  // Story 4.19 — quand on suit le job en live, on consomme d'abord le flux SSE
+  // (BD-14) : il pousse le statut dans CE même cache (`jobQueryKey`). Tant qu'il
+  // est connecté, on suspend le polling ci-dessous ; s'il est indisponible ou
+  // tombe, `connected` reste/redevient `false` et le polling reprend la main.
+  const { connected: sseConnected } = useJobEventStream(jobId, {
+    enabled: live,
+  });
   return useQuery({
     queryKey: jobQueryKey(jobId ?? ""),
     queryFn: async () => {
@@ -77,6 +85,8 @@ export function useJob(jobId: string | null, { live = false }: UseJobOptions = {
     refetchInterval: live
       ? (query) => {
           if (isJobNotFound(query.state.error)) return false;
+          // SSE actif → le statut est poussé en temps réel ; pas de poll redondant.
+          if (sseConnected) return false;
           return jobRefetchInterval(query.state.data as JobOut | undefined);
         }
       : false,

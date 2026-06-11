@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/lib/core/env", () => ({
@@ -147,5 +147,108 @@ describe("isJobNotFound — garde anti-boucle 404", () => {
     expect(isJobNotFound(new Error("network"))).toBe(false);
     expect(isJobNotFound(undefined)).toBe(false);
     expect(isJobNotFound(null)).toBe(false);
+  });
+});
+
+// Story 4.19 — useJob consumes the BD-14 SSE stream (when EventSource exists)
+// and falls back to polling otherwise. jsdom has no EventSource, so the rest of
+// this suite already exercises the polling path; here we install a mock.
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+  static reset() {
+    MockEventSource.instances = [];
+  }
+  withCredentials: boolean;
+  onopen: ((e: Event) => void) | null = null;
+  onerror: ((e: Event) => void) | null = null;
+  closed = false;
+  private listeners: Record<string, Array<(e: MessageEvent) => void>> = {};
+  constructor(_url: string, init?: { withCredentials?: boolean }) {
+    this.withCredentials = init?.withCredentials ?? false;
+    MockEventSource.instances.push(this);
+  }
+  addEventListener(type: string, cb: (e: MessageEvent) => void) {
+    (this.listeners[type] ??= []).push(cb);
+  }
+  removeEventListener(type: string, cb: (e: MessageEvent) => void) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== cb);
+  }
+  close() {
+    this.closed = true;
+  }
+  open() {
+    this.onopen?.(new Event("open"));
+  }
+  emitProgress(data: unknown) {
+    const evt = { data: JSON.stringify(data) } as MessageEvent;
+    (this.listeners["progress"] ?? []).forEach((cb) => cb(evt));
+  }
+}
+
+const runningJob = {
+  ...sampleJob,
+  status: "running" as const,
+  queued_at: new Date().toISOString(),
+  started_at: new Date().toISOString(),
+};
+
+const jsonResponse = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+describe("useJob — SSE consumption + polling fallback (Story 4.19)", () => {
+  afterEach(() => {
+    MockEventSource.reset();
+    vi.unstubAllGlobals();
+  });
+
+  test("a terminal SSE event drives useJob to the terminal status (shared cache)", async () => {
+    vi.stubGlobal("EventSource", MockEventSource);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(runningJob)),
+    );
+    const client = makeClient();
+    const { result } = renderHook(() => useJob("job-sse", { live: true }), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data?.status).toBe("running"));
+
+    act(() => {
+      MockEventSource.instances[0].open();
+      MockEventSource.instances[0].emitProgress({ status: "succeeded" });
+    });
+    await waitFor(() => expect(result.current.data?.status).toBe("succeeded"));
+  });
+
+  test("while SSE is connected, polling is suspended (no extra GET)", async () => {
+    vi.stubGlobal("EventSource", MockEventSource);
+    const fetchMock = vi.fn(async () => jsonResponse(runningJob));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = makeClient();
+    const { result } = renderHook(() => useJob("job-sse", { live: true }), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data?.status).toBe("running"));
+
+    act(() => MockEventSource.instances[0].open());
+    const callsAfterConnect = fetchMock.mock.calls.length;
+    // Well past the 1s back-off: a live poll would have fired ≥1 more GET.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(fetchMock.mock.calls.length).toBe(callsAfterConnect);
+  });
+
+  test("with EventSource unavailable, a live job still polls (fallback GET fires)", async () => {
+    vi.stubGlobal("EventSource", undefined);
+    const fetchMock = vi.fn(async () => jsonResponse(runningJob));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = makeClient();
+    renderHook(() => useJob("job-poll", { live: true }), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(MockEventSource.instances).toHaveLength(0);
   });
 });
