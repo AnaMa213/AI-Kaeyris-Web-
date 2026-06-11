@@ -16,7 +16,10 @@ vi.mock("@/lib/core/env", () => ({
 const {
   useSessionChunks,
   useSessionTranscription,
+  useSessionTranscriptionMarkdown,
   useDownloadTranscriptionMarkdown,
+  useUpdateTranscriptionMarkdown,
+  transcriptionMarkdownQueryKey,
 } = await import("@/lib/jdr/sessions/transcription");
 const { isArtifactAbsentError } = await import("@/lib/jdr/sessions/artifacts");
 const { ApiError } = await import("@/lib/core/api/errors");
@@ -174,5 +177,93 @@ describe("useDownloadTranscriptionMarkdown", () => {
       { wrapper: wrapper(makeClient()) },
     );
     await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("useSessionTranscriptionMarkdown", () => {
+  function markdown(body: string, status = 200) {
+    return new Response(body, {
+      status,
+      headers: { "content-type": "text/markdown" },
+    });
+  }
+
+  test("hits /transcription.md with parseAs:text and returns the raw markdown", async () => {
+    const fetchMock = stubFetch(async () => markdown("# Seance\n\nBonjour."));
+    const { result } = renderHook(
+      () => useSessionTranscriptionMarkdown(SESSION_ID, { enabled: true }),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe("# Seance\n\nBonjour.");
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/transcription.md")).toBe(true);
+  });
+
+  test("enabled:false issues no request", () => {
+    const fetchMock = stubFetch(async () => markdown("# Seance"));
+    const { result } = renderHook(
+      () => useSessionTranscriptionMarkdown(SESSION_ID, { enabled: false }),
+      { wrapper: wrapper(makeClient()) },
+    );
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useUpdateTranscriptionMarkdown", () => {
+  test("PUTs content_md and seeds the markdown query on success", async () => {
+    const queryClient = makeClient();
+    const fetchMock = stubFetch(async (input) => {
+      const request = input as Request;
+      expect(request.method).toBe("PUT");
+      expect(request.url.endsWith("/transcription")).toBe(true);
+      expect(await request.clone().json()).toEqual({
+        content_md: "# Corrige\n\nTexte",
+      });
+      return json({
+        session_id: SESSION_ID,
+        content_md: "# Corrige\n\nTexte",
+        is_edited: true,
+        updated_at: "2026-06-11T08:00:00Z",
+      });
+    });
+    const { result } = renderHook(
+      () => useUpdateTranscriptionMarkdown(SESSION_ID),
+      { wrapper: wrapper(queryClient) },
+    );
+    await expect(
+      result.current.mutateAsync({ content_md: "# Corrige\n\nTexte" }),
+    ).resolves.toMatchObject({
+      content_md: "# Corrige\n\nTexte",
+      is_edited: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      queryClient.getQueryData(transcriptionMarkdownQueryKey(SESSION_ID)),
+    ).toBe("# Corrige\n\nTexte");
+  });
+
+  test("surfaces ApiError on a 409 session-not-transcribed response", async () => {
+    stubFetch(async () =>
+      json(
+        {
+          type: "about:blank",
+          title: "session-not-transcribed",
+          status: 409,
+        },
+        409,
+      ),
+    );
+    const { result } = renderHook(
+      () => useUpdateTranscriptionMarkdown(SESSION_ID),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(
+      result.current.mutateAsync({ content_md: "# Trop tot" }),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 });
