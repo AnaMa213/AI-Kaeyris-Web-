@@ -392,6 +392,13 @@ export default function SessionDetailPage() {
   const transcriptionActive =
     ritualState === "transcribing" && Boolean(currentJobId);
   const replaceBlocked = replaceEligible && transcriptionActive;
+  // Story 4.17 (R3/T-d): an edited Markdown transcription must not be saved
+  // while a transcription job is still active. Block pessimistically while the
+  // job status is loading; release only on terminal statuses.
+  const transcriptionEditBlocked =
+    Boolean(currentJobId) &&
+    job?.status !== "succeeded" &&
+    job?.status !== "failed";
   const ritualProgress = estimateJobProgress({
     job,
     durationSeconds,
@@ -570,6 +577,8 @@ export default function SessionDetailPage() {
                 sessionId={session.id}
                 transcriptionMode={session.transcription_mode}
                 sessionTitle={session.title}
+                canEdit={canEdit}
+                editingBlocked={transcriptionEditBlocked}
               />
             </div>
           )}
