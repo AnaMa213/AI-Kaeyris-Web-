@@ -30,6 +30,7 @@ export function CredentialsLogin({
   clearPasswordTrigger,
 }: CredentialsLoginProps) {
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const isFirstRender = useRef(true);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -37,6 +38,10 @@ export function CredentialsLogin({
   });
 
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     if (clearPasswordTrigger === undefined) return;
     form.resetField("password");
     passwordInputRef.current?.focus();
