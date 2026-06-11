@@ -169,6 +169,28 @@ describe("<PjForm> edit mode", () => {
     });
   });
 
+  test("preserves an unresolved current user link on rename-only submit", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm({ mode: "edit", pj: eldrin, users: [] });
+    const picker = screen.getByLabelText("Joueur lié") as HTMLSelectElement;
+    expect(picker.value).toBe(alice.id);
+    expect(
+      screen.getByRole("option", { name: "Joueur lié (non résolu)" }),
+    ).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText("Nom du PJ");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Eldrin relu");
+    await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith({
+      mode: "edit",
+      id: eldrin.id,
+      values: { name: "Eldrin relu", user_id: alice.id },
+    });
+  });
+
   test("defaults the picker to 'Aucun' when the PJ has no linked user", () => {
     renderForm({ mode: "edit", pj: { ...eldrin, user_id: null }, users: [alice] });
     const picker = screen.getByLabelText("Joueur lié") as HTMLSelectElement;

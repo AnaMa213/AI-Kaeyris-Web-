@@ -183,6 +183,9 @@ class MockEventSource {
     const evt = { data: JSON.stringify(data) } as MessageEvent;
     (this.listeners["progress"] ?? []).forEach((cb) => cb(evt));
   }
+  emitError() {
+    this.onerror?.(new Event("error"));
+  }
 }
 
 const runningJob = {
@@ -238,6 +241,29 @@ describe("useJob — SSE consumption + polling fallback (Story 4.19)", () => {
     // Well past the 1s back-off: a live poll would have fired ≥1 more GET.
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(fetchMock.mock.calls.length).toBe(callsAfterConnect);
+  });
+
+  test("after an SSE error, live polling resumes", async () => {
+    vi.stubGlobal("EventSource", MockEventSource);
+    const fetchMock = vi.fn(async () => jsonResponse(runningJob));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = makeClient();
+    const { result } = renderHook(() => useJob("job-sse", { live: true }), {
+      wrapper: wrapper(client),
+    });
+    await waitFor(() => expect(result.current.data?.status).toBe("running"));
+
+    act(() => MockEventSource.instances[0].open());
+    const callsAfterConnect = fetchMock.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(fetchMock.mock.calls.length).toBe(callsAfterConnect);
+
+    act(() => MockEventSource.instances[0].emitError());
+
+    await waitFor(
+      () => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterConnect),
+      { timeout: 3000 },
+    );
   });
 
   test("with EventSource unavailable, a live job still polls (fallback GET fires)", async () => {

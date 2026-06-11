@@ -15,6 +15,12 @@ export function jobEventsPath(jobId: string): string {
 }
 
 const TERMINAL_STATUSES: JobOut["status"][] = ["succeeded", "failed"];
+const JOB_STATUSES: JobOut["status"][] = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+];
 
 /**
  * Payload d'une frame `event: progress` (BD-14) = projection publique de
@@ -22,6 +28,17 @@ const TERMINAL_STATUSES: JobOut["status"][] = ["succeeded", "failed"];
  * `queued_at`…). On la fusionne sur le job déjà en cache, jamais on ne remplace.
  */
 type JobEventPayload = Partial<JobOut> & Pick<JobOut, "status">;
+
+function isJobEventPayload(value: unknown): value is JobEventPayload {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const status = (value as { status?: unknown }).status;
+  return (
+    typeof status === "string" &&
+    JOB_STATUSES.includes(status as JobOut["status"])
+  );
+}
 
 interface UseJobEventStreamOptions {
   /** Active le flux SSE (par défaut inerte). Aligné sur `useJob({ live })`. */
@@ -71,12 +88,20 @@ export function useJobEventStream(
     const source = new EventSource(url, { withCredentials: true });
 
     const handleProgress = (event: MessageEvent) => {
-      let payload: JobEventPayload;
+      let parsed: unknown;
       try {
-        payload = JSON.parse(event.data) as JobEventPayload;
+        parsed = JSON.parse(event.data);
       } catch {
+        source.close();
+        setConnected(false);
         return;
       }
+      if (!isJobEventPayload(parsed)) {
+        source.close();
+        setConnected(false);
+        return;
+      }
+      const payload = parsed;
       // Fusion (jamais remplacement) : la projection omet id/kind/queued_at,
       // fournis par le GET initial de `useJob`.
       queryClient.setQueryData<JobOut>(

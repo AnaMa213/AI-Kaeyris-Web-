@@ -75,7 +75,11 @@ function DownloadTranscriptionButton({
     if (download.isPending) return;
     download.mutate(undefined, {
       onSuccess: (markdown) => {
-        downloadTextFile(transcriptionFileName(sessionTitle), markdown);
+        try {
+          downloadTextFile(transcriptionFileName(sessionTitle), markdown);
+        } catch {
+          toast.error("Impossible de télécharger la transcription.");
+        }
       },
       onError: () => {
         toast.error("Impossible de télécharger la transcription.");
@@ -167,9 +171,28 @@ export function TranscriptionViewer({
     );
   }
 
-  if (renderedMarkdown.trim() === "") {
+  if (!isEditing && renderedMarkdown.trim() === "") {
     return (
       <ViewerShell ariaLabel="Transcription de la séance">
+        {canEdit && (
+          <div className="mb-3 flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={startEditing}
+              disabled={editingBlocked}
+              title={
+                editingBlocked
+                  ? "Transcription en cours — modification bloquée."
+                  : undefined
+              }
+            >
+              <Pencil />
+              Modifier
+            </Button>
+          </div>
+        )}
         <p className="text-text-chrome-muted text-sm">Transcription vide.</p>
       </ViewerShell>
     );
@@ -216,7 +239,7 @@ export function TranscriptionViewer({
 
   const action = (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      {canEdit && (
+      {canEdit && !isEditing && (
         <Button
           type="button"
           variant="ghost"
@@ -233,10 +256,12 @@ export function TranscriptionViewer({
           Modifier
         </Button>
       )}
-      <DownloadTranscriptionButton
-        sessionId={sessionId}
-        sessionTitle={sessionTitle}
-      />
+      {renderedMarkdown.trim() !== "" && (
+        <DownloadTranscriptionButton
+          sessionId={sessionId}
+          sessionTitle={sessionTitle}
+        />
+      )}
     </div>
   );
 

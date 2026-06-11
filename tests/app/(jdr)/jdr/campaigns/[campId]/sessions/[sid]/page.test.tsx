@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -737,6 +737,60 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         screen.queryByRole("button", { name: /Glisse ton M4A/ }),
       ).not.toBeInTheDocument();
     });
+
+    test("re-enables replace when the cached current_job_id is not found", async () => {
+      const jobId = "job-stale-replace";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                type: "https://kaeyris.local/errors/job-not-found",
+                title: "Job not found",
+                status: 404,
+              }),
+              {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "audio_uploaded",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText("Les scribes transcrivent");
+      const replace = screen.getByRole("button", {
+        name: "Remplacer l'enregistrement",
+      });
+      await waitFor(() => expect(replace).toBeEnabled());
+
+      await user.click(replace);
+
+      expect(
+        await screen.findByRole("button", { name: /Glisse ton M4A/ }),
+      ).toBeInTheDocument();
+    });
+
   });
 
   describe("Story 4.13 — Transcription viewer", () => {
@@ -1409,6 +1463,71 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         "Transcription en cours — modification bloquée.",
       );
     });
+
+    test("allows inline editing when current_job_id is stale and the job is not found", async () => {
+      const jobId = "job-4-17-stale";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                type: "https://kaeyris.local/errors/job-not-found",
+                title: "Job not found",
+                status: 404,
+              }),
+              {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              },
+            );
+          }
+          if (url.endsWith("/transcription.md")) {
+            return new Response("# Transcription\n\nTexte corrigeable", {
+              status: 200,
+              headers: { "content-type": "text/markdown" },
+            });
+          }
+          if (url.includes("/artifacts/summary")) {
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              { status: 404, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "transcribed",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+      const user = userEvent.setup();
+      renderPage();
+      const viewer = await screen.findByLabelText("Transcription de la séance");
+      const editButton = within(viewer).getByRole("button", {
+        name: "Modifier",
+      });
+      await waitFor(() => expect(editButton).toBeEnabled());
+
+      await user.click(editButton);
+
+      expect(
+        within(viewer).getByRole("textbox", { name: "Transcription Markdown" }),
+      ).toHaveValue("# Transcription\n\nTexte corrigeable");
+    });
   });
 
   describe("Story 4.7 — Single state chip (S1)", () => {
@@ -1506,11 +1625,11 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
     }
 
-    // AC2 — the summary GET starts 404 (absent) and flips to 200 once the GM has
-    // POSTed the generation; the polled job reaches `succeeded`. Mirrors the 4.3
-    // stub shape but drives the dynamic absent→present transition.
+    // AC2 — the summary GET starts 404 (absent) and flips to 200 only after the
+    // polled job reaches `succeeded`. Mirrors the 4.3 stub shape but drives the
+    // dynamic absent→present transition.
     function stubLiveSummaryGeneration() {
-      let summaryGenerated = false;
+      let summaryJobSucceeded = false;
       const derivedPosts: string[] = [];
       const jobId = "job-summary-418";
       vi.stubGlobal(
@@ -1551,14 +1670,13 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
             );
           }
           if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
-            summaryGenerated = true;
             return new Response(
               JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
               { status: 202, headers: { "content-type": "application/json" } },
             );
           }
           if (url.includes("/artifacts/summary")) {
-            if (!summaryGenerated) {
+            if (!summaryJobSucceeded) {
               return new Response(
                 JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
                 { status: 404, headers: { "content-type": "application/problem+json" } },
@@ -1570,6 +1688,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
             );
           }
           if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            summaryJobSucceeded = true;
             return new Response(
               JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:05Z" }),
               { status: 200, headers: { "content-type": "application/json" } },
@@ -1625,6 +1744,8 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     test("AC3 — regenerate replaces the summary in place end-to-end; sub-tabs stay enabled, no cascade", async () => {
       gotoSummaryTab();
       let summaryPostCount = 0;
+      let regenJobPollCount = 0;
+      let regenJobSucceeded = false;
       const derivedPosts: string[] = [];
       const jobId = "job-summary-regen-418";
       vi.stubGlobal(
@@ -1668,8 +1789,9 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
             );
           }
           if (url.includes("/artifacts/summary")) {
-            // New version after the regen POST so artifactVersion (generated_at) changes.
-            const regenerated = summaryPostCount > 0;
+            // New version only after the regen job succeeds so artifactVersion
+            // (generated_at) changes at the same boundary as production.
+            const regenerated = regenJobSucceeded;
             return new Response(
               JSON.stringify({
                 session_id: sessionIdFixture,
@@ -1681,8 +1803,21 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
             );
           }
           if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            regenJobPollCount += 1;
+            const status = regenJobPollCount > 1 ? "succeeded" : "running";
+            regenJobSucceeded = status === "succeeded";
+            const now = new Date().toISOString();
             return new Response(
-              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T11:00:00Z", started_at: "2026-06-01T11:00:01Z", ended_at: "2026-06-01T11:00:05Z" }),
+              JSON.stringify({
+                id: jobId,
+                kind: "summary",
+                session_id: sessionIdFixture,
+                status,
+                failure_reason: null,
+                queued_at: now,
+                started_at: now,
+                ended_at: status === "succeeded" ? now : null,
+              }),
               { status: 200, headers: { "content-type": "application/json" } },
             );
           }
@@ -1709,6 +1844,10 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       await user.click(screen.getByRole("button", { name: "Régénérer le Résumé" }));
       await user.click(screen.getByRole("button", { name: "Régénérer" }));
 
+      expect(screen.getByText("Récit initial de la séance.")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Récit régénéré : la crypte révèle un autre secret."),
+      ).not.toBeInTheDocument();
       expect(
         await screen.findByText("Récit régénéré : la crypte révèle un autre secret.", {}, { timeout: 4000 }),
       ).toBeInTheDocument();
