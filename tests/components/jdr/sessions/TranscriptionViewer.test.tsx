@@ -322,6 +322,23 @@ describe("TranscriptionViewer — download (.md)", () => {
     );
     expect(downloadTextFile).not.toHaveBeenCalled();
   });
+
+  test("a local browser save failure raises the same download toast", async () => {
+    vi.mocked(downloadTextFile).mockImplementationOnce(() => {
+      throw new Error("createObjectURL unavailable");
+    });
+    stubFetch({ markdown: "# Ma Séance\n\nTexte" });
+    renderViewer("non_diarised", "Ma Séance");
+    const button = await screen.findByRole("button", { name: /Télécharger/ });
+
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Impossible de télécharger la transcription.",
+      ),
+    );
+  });
 });
 
 describe("TranscriptionViewer — inline edit", () => {
@@ -342,6 +359,48 @@ describe("TranscriptionViewer — inline edit", () => {
     expect(
       screen.getByRole("textbox", { name: "Transcription Markdown" }),
     ).toHaveValue("# Transcription\n\nTexte");
+  });
+
+  test("hides the edit action while editing so the draft cannot be reset", async () => {
+    stubFetch({ markdown: "# Original\n\nTexte" });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Texte/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "# Brouillon" } },
+    );
+
+    expect(screen.queryByRole("button", { name: "Modifier" })).toBeNull();
+    expect(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+    ).toHaveValue("# Brouillon");
+  });
+
+  test("allows a GM to open the editor from an empty transcription", async () => {
+    const fetchMock = stubFetch({
+      markdown: "   ",
+      updatedMarkdown: "# Corrigée\n\nTexte ajouté",
+    });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText("Transcription vide.");
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    expect(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+    ).toHaveValue("   ");
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "# Corrigée\n\nTexte ajouté" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await screen.findByText(/Texte ajouté/);
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const input = call[0] as Request | string;
+        return typeof input !== "string" && input.method === "PUT";
+      }),
+    ).toBe(true);
   });
 
   test("cancel discards local edits without sending PUT", async () => {

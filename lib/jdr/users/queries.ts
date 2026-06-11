@@ -26,7 +26,11 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
   return result.data as T;
 }
 
-export function useUsers() {
+interface UseUsersOptions {
+  enabled?: boolean;
+}
+
+export function useUsers({ enabled = true }: UseUsersOptions = {}) {
   const apiClient = useMemo(() => createApiClient(), []);
   return useQuery({
     queryKey: ["users"],
@@ -34,6 +38,7 @@ export function useUsers() {
       const result = await apiClient.GET("/services/jdr/users");
       return unwrap(result);
     },
+    enabled,
   });
 }
 

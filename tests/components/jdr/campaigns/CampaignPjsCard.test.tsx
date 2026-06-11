@@ -207,6 +207,14 @@ describe("<CampaignPjsCard>", () => {
     expect(
       screen.queryByRole("button", { name: "Ajouter un PJ" }),
     ).not.toBeInTheDocument();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(
+      fetchMock.mock.calls.some((args) => {
+        const input = args[0] as Request | string;
+        const url = typeof input === "string" ? input : input.url;
+        return url.includes("/services/jdr/users");
+      }),
+    ).toBe(false);
   });
 
   test("clicking the header Ajouter button opens the PjForm dialog", async () => {

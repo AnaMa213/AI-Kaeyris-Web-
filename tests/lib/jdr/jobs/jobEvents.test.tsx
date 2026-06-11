@@ -59,6 +59,10 @@ class MockEventSource {
     const evt = { data: JSON.stringify(data) } as MessageEvent;
     (this.listeners["progress"] ?? []).forEach((cb) => cb(evt));
   }
+  emitRawProgress(data: string) {
+    const evt = { data } as MessageEvent;
+    (this.listeners["progress"] ?? []).forEach((cb) => cb(evt));
+  }
   emitError() {
     this.onerror?.(new Event("error"));
   }
@@ -124,6 +128,30 @@ describe("useJobEventStream", () => {
     );
   });
 
+  test("an invalid progress frame closes the stream and reports not-connected", async () => {
+    const { result } = setup("job-1");
+    const es = MockEventSource.instances[0];
+    act(() => es.open());
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => es.emitRawProgress("{invalid-json"));
+
+    await waitFor(() => expect(result.current.connected).toBe(false));
+    expect(es.closed).toBe(true);
+  });
+
+  test("a progress frame without a valid status closes the stream", async () => {
+    const { result } = setup("job-1");
+    const es = MockEventSource.instances[0];
+    act(() => es.open());
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    act(() => es.emitProgress({ phase: "loading" }));
+
+    await waitFor(() => expect(result.current.connected).toBe(false));
+    expect(es.closed).toBe(true);
+  });
+
   test("a terminal progress event closes the stream (no auto-reconnect)", () => {
     setup("job-1");
     const es = MockEventSource.instances[0];
@@ -156,6 +184,44 @@ describe("useJobEventStream", () => {
     const es = MockEventSource.instances[0];
     unmount();
     expect(es.closed).toBe(true);
+  });
+
+  test("changing jobId closes the old stream and tracks the new one", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(jobQueryKey("job-1"), sampleJob);
+    client.setQueryData(jobQueryKey("job-2"), { ...sampleJob, id: "job-2" });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const initialProps: { jobId: string | null } = { jobId: "job-1" };
+    const { rerender, result } = renderHook(
+      ({ jobId }: { jobId: string | null }) =>
+        useJobEventStream(jobId, { enabled: true }),
+      {
+        initialProps,
+        wrapper,
+      },
+    );
+    const first = MockEventSource.instances[0];
+    act(() => first.open());
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    rerender({ jobId: "job-2" });
+
+    await waitFor(() => expect(first.closed).toBe(true));
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(2));
+    expect(result.current.connected).toBe(false);
+
+    const second = MockEventSource.instances[1];
+    act(() => second.open());
+    await waitFor(() => expect(result.current.connected).toBe(true));
+
+    rerender({ jobId: null });
+
+    await waitFor(() => expect(second.closed).toBe(true));
+    await waitFor(() => expect(result.current.connected).toBe(false));
   });
 
   test("disabled or null jobId opens no stream", () => {

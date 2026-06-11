@@ -24,7 +24,7 @@ import { ApiError } from "@/lib/core/api/errors";
 import { env } from "@/lib/core/env";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { useGetCampaign } from "@/lib/jdr/campaigns/queries";
-import { useJob } from "@/lib/jdr/jobs/queries";
+import { isJobNotFound, useJob } from "@/lib/jdr/jobs/queries";
 import {
   estimateJobProgress,
   resolveDisplayProgress,
@@ -389,16 +389,23 @@ export default function SessionDetailPage() {
   const replaceEligible =
     canReplace &&
     (ritualState === "failed" || ritualState === "transcribing");
+  const jobNotFound = isJobNotFound(jobQuery.error);
+  const jobLookupErrored = jobQuery.isError && !jobNotFound;
+  const jobNonTerminal =
+    job?.status === "queued" || job?.status === "running";
   const transcriptionActive =
-    ritualState === "transcribing" && Boolean(currentJobId);
+    ritualState === "transcribing" &&
+    Boolean(currentJobId) &&
+    (jobQuery.isPending || jobNonTerminal || jobLookupErrored) &&
+    !jobNotFound;
   const replaceBlocked = replaceEligible && transcriptionActive;
   // Story 4.17 (R3/T-d): an edited Markdown transcription must not be saved
   // while a transcription job is still active. Block pessimistically while the
   // job status is loading; release only on terminal statuses.
   const transcriptionEditBlocked =
     Boolean(currentJobId) &&
-    job?.status !== "succeeded" &&
-    job?.status !== "failed";
+    (jobQuery.isPending || jobNonTerminal || jobLookupErrored) &&
+    !jobNotFound;
   const ritualProgress = estimateJobProgress({
     job,
     durationSeconds,

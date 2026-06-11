@@ -85,8 +85,9 @@ function linkLabel(pj: PjOut, users: UserOut[]): string {
 }
 
 export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
+  const canManage = canManageCampaignPjs(campaign);
   const pjsQuery = useListCampaignPjs(campaign.id);
-  const usersQuery = useUsers();
+  const usersQuery = useUsers({ enabled: canManage });
   const createMutation = useCreateCampaignPj(campaign.id);
   const updateMutation = useUpdateCampaignPj(campaign.id);
   const deleteMutation = useDeleteCampaignPj(campaign.id);
@@ -95,7 +96,6 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
   const [editingPj, setEditingPj] = useState<PjOut | null>(null);
   const [deletingPj, setDeletingPj] = useState<PjOut | null>(null);
 
-  const canManage = canManageCampaignPjs(campaign);
   const createErrorMessage = formatCreateError(createMutation.error);
   const updateErrorMessage = formatUpdateError(updateMutation.error);
   const deleteErrorMessage = formatDeleteError(deleteMutation.error);

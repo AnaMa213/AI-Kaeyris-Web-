@@ -50,6 +50,11 @@ const defaultForEdit = (pj: PjOut): FormShape => ({
   userId: pj.user_id ?? "",
 });
 
+function unresolvedLinkedUser(pj: PjOut | null | undefined, users: UserOut[]) {
+  if (!pj?.user_id) return null;
+  return users.some((user) => user.id === pj.user_id) ? null : pj.user_id;
+}
+
 export function PjForm({
   open,
   onOpenChange,
@@ -73,6 +78,7 @@ export function PjForm({
   }, [open, isEdit, pj, form]);
 
   const nameError = form.formState.errors.name?.message;
+  const unresolvedUserId = isEdit ? unresolvedLinkedUser(pj, users) : null;
 
   const handleSubmit = (values: FormShape) => {
     if (mode === "edit" && pj) {
@@ -137,6 +143,11 @@ export function PjForm({
                 {...form.register("userId")}
               >
                 <option value="">Aucun (non lié)</option>
+                {unresolvedUserId && (
+                  <option value={unresolvedUserId}>
+                    Joueur lié (non résolu)
+                  </option>
+                )}
                 {users.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.username}
