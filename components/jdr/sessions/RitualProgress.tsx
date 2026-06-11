@@ -26,6 +26,13 @@ interface RitualProgressProps {
   onRetry?: () => void;
   /** Remplacer l'enregistrement (Story 3.6). Bouton inerte si absent. */
   onReplace?: () => void;
+  /**
+   * Story 4.15 (T2) : un job de transcription actif verrouille le remplacement.
+   * Quand cet indice est fourni, le bouton « Remplacer » est rendu DÉSACTIVÉ
+   * avec ce `title` (prioritaire sur `onReplace`) — empêche le MJ de lancer une
+   * seconde transcription concurrente. Absent → comportement legacy (`onReplace`).
+   */
+  replaceDisabledHint?: string;
 }
 
 const SECTION_CARD_CLASSES =
@@ -74,6 +81,7 @@ export function RitualProgress({
   onOpenStory,
   onRetry,
   onReplace,
+  replaceDisabledHint,
 }: RitualProgressProps) {
   // Sous-acte de `transcribing` raffiné par la phase backend (Story 3.6).
   const transcribingVariant = phaseToTranscribingAct(phase);
@@ -109,13 +117,46 @@ export function RitualProgress({
           subtext={rotatingSubtext}
           progress={progress}
           onReplace={onReplace}
+          replaceDisabledHint={replaceDisabledHint}
         />
       )}
       {uiState === "transcribed" && <TranscribedAct onOpenStory={onOpenStory} />}
       {uiState === "failed" && (
-        <FailedAct onRetry={onRetry} onReplace={onReplace} />
+        <FailedAct
+          onRetry={onRetry}
+          onReplace={onReplace}
+          replaceDisabledHint={replaceDisabledHint}
+        />
       )}
     </section>
+  );
+}
+
+/**
+ * Bouton « Remplacer l'enregistrement » partagé par les actes `transcribing` et
+ * `failed`. Story 4.15 : si `disabledHint` est fourni, le bouton est rendu
+ * DÉSACTIVÉ avec ce `title` (prioritaire sur `onReplace`) — verrou anti-double
+ * transcription. Sinon comportement legacy : actif si `onReplace`, absent sinon.
+ */
+function ReplaceAudioButton({
+  onReplace,
+  disabledHint,
+}: {
+  onReplace?: () => void;
+  disabledHint?: string;
+}) {
+  if (!disabledHint && !onReplace) return null;
+  const disabled = Boolean(disabledHint);
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={onReplace}
+      disabled={disabled}
+      title={disabledHint}
+    >
+      Remplacer l&apos;enregistrement
+    </Button>
   );
 }
 
@@ -268,11 +309,13 @@ function TranscribingAct({
   subtext,
   progress,
   onReplace,
+  replaceDisabledHint,
 }: {
   variant: TranscribingActVariant;
   subtext: string;
   progress?: number | null;
   onReplace?: () => void;
+  replaceDisabledHint?: string;
 }) {
   // Phase `reducing` (BD-10) : préparation du grimoire (réutilise le parchemin).
   // Sinon : les scribes écrivent (plume). La barre/% et le bouton remplacer
@@ -289,11 +332,10 @@ function TranscribingAct({
       ) : (
         <CredibleBar />
       )}
-      {onReplace && (
-        <Button type="button" variant="ghost" onClick={onReplace}>
-          Remplacer l&apos;enregistrement
-        </Button>
-      )}
+      <ReplaceAudioButton
+        onReplace={onReplace}
+        disabledHint={replaceDisabledHint}
+      />
     </ActShell>
   );
 }
@@ -353,9 +395,11 @@ function TranscribedAct({ onOpenStory }: { onOpenStory?: () => void }) {
 function FailedAct({
   onRetry,
   onReplace,
+  replaceDisabledHint,
 }: {
   onRetry?: () => void;
   onReplace?: () => void;
+  replaceDisabledHint?: string;
 }) {
   return (
     <ActShell
@@ -391,13 +435,13 @@ function FailedAct({
         >
           Relancer la transcription
         </Button>
-        {/* Replace ships in Story 3.5 and is gm-gated: hide it entirely when the
-            caller can't replace, rather than advertising a disabled control. */}
-        {onReplace && (
-          <Button type="button" variant="ghost" onClick={onReplace}>
-            Remplacer l&apos;enregistrement
-          </Button>
-        )}
+        {/* Replace ships in Story 3.5 and is gm-gated: hidden entirely when the
+            caller can't replace. Story 4.15: an active job passes a disabled
+            hint instead, locking the control rather than advertising it. */}
+        <ReplaceAudioButton
+          onReplace={onReplace}
+          disabledHint={replaceDisabledHint}
+        />
       </div>
     </ActShell>
   );
