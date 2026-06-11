@@ -76,6 +76,7 @@ function stubFetch(opts: {
   session?: typeof baseSession;
   sessionStatus?: number;
   campaign?: typeof baseCampaign;
+  markdown?: string;
   // Story 4.13 — transcription viewer fixtures (only fetched at `transcribed`).
   chunks?: Array<{ chunk_id: string; ordre: number; text: string }>;
   segments?: Array<{
@@ -98,6 +99,12 @@ function stubFetch(opts: {
       // `/chunks` and `/transcription` are sub-paths of the session URL — match
       // them BEFORE the generic session matcher below, or they'd return a
       // SessionOut instead of the transcription payload.
+      if (url.endsWith(`/services/jdr/sessions/${sessionIdFixture}/transcription.md`)) {
+        return new Response(opts.markdown ?? "# Transcription\n\nContenu.", {
+          status: 200,
+          headers: { "content-type": "text/markdown" },
+        });
+      }
       if (url.includes(`/services/jdr/sessions/${sessionIdFixture}/chunks`)) {
         return new Response(
           JSON.stringify({
@@ -733,42 +740,35 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
   });
 
   describe("Story 4.13 — Transcription viewer", () => {
-    test("renders the stitched chunks for a transcribed non_diarised session", async () => {
+    test("renders canonical Markdown for a transcribed non_diarised session", async () => {
       stubFetch({
         session: {
           ...baseSession,
           state: "transcribed",
           transcription_mode: "non_diarised",
         },
-        chunks: [{ chunk_id: "c1", ordre: 1, text: "Le héros entre dans la crypte." }],
+        markdown: "# Transcription\n\nLe héros entre dans la crypte.",
       });
       renderPage();
       expect(
-        await screen.findByText("Le héros entre dans la crypte."),
+        await screen.findByText(/Le héros entre dans la crypte/),
       ).toBeInTheDocument();
     });
 
-    test("renders diarised segments with speaker labels for a transcribed diarised session", async () => {
+    test("renders canonical Markdown for a transcribed diarised session", async () => {
       stubFetch({
         session: {
           ...baseSession,
           state: "transcribed",
           transcription_mode: "diarised",
         },
-        segments: [
-          {
-            speaker_label: "speaker_1",
-            text: "Salutations, aventuriers.",
-            start_seconds: 0,
-            end_seconds: 2,
-          },
-        ],
+        markdown: "**speaker_1** : Salutations, aventuriers.",
       });
       renderPage();
       expect(
-        await screen.findByText("Salutations, aventuriers."),
+        await screen.findByText(/Salutations, aventuriers/),
       ).toBeInTheDocument();
-      expect(screen.getByText("speaker_1")).toBeInTheDocument();
+      expect(screen.getByText(/speaker_1/)).toBeInTheDocument();
     });
   });
 
@@ -1340,6 +1340,74 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         ).toBeInTheDocument(),
       );
       expect(toastSuccessMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Story 4.17 - Inline transcription editing", () => {
+    test("disables the inline edit action while a transcription job is active", async () => {
+      const jobId = "job-4-17-active";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: "running",
+                failure_reason: null,
+                queued_at: "2026-05-31T19:00:00+00:00",
+                started_at: "2026-05-31T19:00:05+00:00",
+                ended_at: null,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.endsWith("/transcription.md")) {
+            return new Response("# Transcription\n\nTexte corrigeable", {
+              status: 200,
+              headers: { "content-type": "text/markdown" },
+            });
+          }
+          if (url.includes("/artifacts/summary")) {
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              { status: 404, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "transcribed",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+
+      renderPage();
+      await screen.findByText(/Texte corrigeable/);
+      const editButton = (await screen.findAllByRole("button", {
+        name: "Modifier",
+      })).find((button) => button.hasAttribute("disabled"));
+      expect(editButton).toBeDefined();
+      expect(editButton).toBeDisabled();
+      expect(editButton).toHaveAttribute(
+        "title",
+        "Transcription en cours — modification bloquée.",
+      );
     });
   });
 

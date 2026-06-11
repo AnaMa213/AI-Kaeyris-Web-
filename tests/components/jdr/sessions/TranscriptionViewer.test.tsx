@@ -53,11 +53,14 @@ function stubFetch(opts: {
   transcriptionStatus?: number;
   markdown?: string;
   markdownStatus?: number;
+  updatedMarkdown?: string;
+  editStatus?: number;
 }) {
   const fetchMock = vi.fn(async (input: Request | string) => {
     const url = typeof input === "string" ? input : input.url;
+    const method = typeof input === "string" ? "GET" : (input.method ?? "GET");
     // `.md` must be matched before `/transcription` (it is a sub-path of it).
-    if (url.endsWith("/transcription.md")) {
+    if (url.endsWith("/transcription.md") && method.toUpperCase() === "GET") {
       if (opts.markdownStatus && opts.markdownStatus >= 400) {
         return json(
           { type: "about:blank", title: "boom", status: opts.markdownStatus },
@@ -67,6 +70,27 @@ function stubFetch(opts: {
       return new Response(opts.markdown ?? "# Transcription\n\nContenu.", {
         status: 200,
         headers: { "content-type": "text/markdown" },
+      });
+    }
+    if (url.includes("/transcription") && method.toUpperCase() === "PUT") {
+      if (opts.editStatus && opts.editStatus >= 400) {
+        return json(
+          {
+            type: "about:blank",
+            title:
+              opts.editStatus === 409
+                ? "session-not-transcribed"
+                : "session-not-found",
+            status: opts.editStatus,
+          },
+          opts.editStatus,
+        );
+      }
+      return json({
+        session_id: SESSION_ID,
+        content_md: opts.updatedMarkdown ?? "# Transcription corrigee",
+        is_edited: true,
+        updated_at: "2026-06-11T08:00:00Z",
       });
     }
     if (url.includes("/chunks")) {
@@ -107,6 +131,7 @@ function stubFetch(opts: {
 function renderViewer(
   mode: "non_diarised" | "diarised",
   sessionTitle = "Ma Séance",
+  props: { canEdit?: boolean; editingBlocked?: boolean } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -120,6 +145,8 @@ function renderViewer(
         sessionId={SESSION_ID}
         transcriptionMode={mode}
         sessionTitle={sessionTitle}
+        canEdit={props.canEdit}
+        editingBlocked={props.editingBlocked}
       />
     </QueryClientProvider>,
   );
@@ -138,101 +165,63 @@ afterEach(() => {
 });
 
 describe("TranscriptionViewer — non_diarised", () => {
-  test("stitches chunks in `ordre` order", async () => {
+  test("renders the canonical Markdown transcription", async () => {
     stubFetch({
-      chunks: [
-        { chunk_id: "c2", ordre: 2, text: "DEUXIEME" },
-        { chunk_id: "c1", ordre: 1, text: "PREMIER" },
-      ],
+      markdown: "# Transcription\n\nPREMIER\n\nDEUXIEME",
     });
     const { container } = renderViewer("non_diarised");
-    await screen.findByText("PREMIER");
+    await screen.findByText(/PREMIER/);
     const text = container.textContent ?? "";
     expect(text.indexOf("PREMIER")).toBeLessThan(text.indexOf("DEUXIEME"));
   });
 
   test("404 not-ready shows a calm message, not an error", async () => {
-    stubFetch({ chunksStatus: 404 });
+    stubFetch({ markdownStatus: 404 });
     renderViewer("non_diarised");
     expect(
       await screen.findByText("La transcription n'est pas encore disponible."),
     ).toBeTruthy();
   });
 
-  test("empty chunk list shows an empty state", async () => {
-    stubFetch({ chunks: [] });
+  test("empty markdown shows an empty state", async () => {
+    stubFetch({ markdown: "   " });
     renderViewer("non_diarised");
     expect(await screen.findByText("Transcription vide.")).toBeTruthy();
   });
 
-  test("never calls the diarised endpoint (no wrong-mode)", async () => {
+  test("uses only the mode-agnostic Markdown endpoint", async () => {
     const fetchMock = stubFetch({
-      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
+      markdown: "Texte",
     });
     renderViewer("non_diarised");
     await screen.findByText("Texte");
     const urls = calledUrls(fetchMock);
-    expect(urls.some((u) => u.includes("/chunks"))).toBe(true);
-    expect(urls.some((u) => u.includes("/transcription"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("/transcription.md"))).toBe(true);
+    expect(urls.some((u) => u.endsWith("/chunks"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("/transcription"))).toBe(false);
   });
 });
 
 describe("TranscriptionViewer — diarised", () => {
-  test("renders segments with speaker labels", async () => {
+  test("renders canonical Markdown for diarised sessions too", async () => {
     stubFetch({
-      segments: [
-        {
-          speaker_label: "speaker_1",
-          text: "Bonjour à tous.",
-          start_seconds: 0,
-          end_seconds: 1,
-        },
-        {
-          speaker_label: "speaker_2",
-          text: "Salut.",
-          start_seconds: 1,
-          end_seconds: 2,
-        },
-      ],
+      markdown: "**speaker_1** : Bonjour a tous.\n\n**speaker_2** : Salut.",
     });
     renderViewer("diarised");
-    expect(await screen.findByText("Bonjour à tous.")).toBeTruthy();
-    expect(screen.getByText("speaker_1")).toBeTruthy();
-    expect(screen.getByText("speaker_2")).toBeTruthy();
-    expect(screen.getByText("Salut.")).toBeTruthy();
+    expect(await screen.findByText(/Bonjour a tous/)).toBeTruthy();
+    expect(screen.getByText(/Salut/)).toBeTruthy();
   });
 
-  test("groups consecutive segments from the same speaker", async () => {
-    stubFetch({
-      segments: [
-        { speaker_label: "speaker_1", text: "A", start_seconds: 0, end_seconds: 1 },
-        { speaker_label: "speaker_1", text: "B", start_seconds: 1, end_seconds: 2 },
-        { speaker_label: "speaker_2", text: "C", start_seconds: 2, end_seconds: 3 },
-      ],
-    });
-    renderViewer("diarised");
-    expect(await screen.findByText("A B")).toBeTruthy();
-    expect(screen.getAllByText("speaker_1")).toHaveLength(1);
-    expect(screen.getByText("speaker_2")).toBeTruthy();
-    expect(screen.getByText("C")).toBeTruthy();
-  });
-
-  test("never calls the non_diarised endpoint (no wrong-mode)", async () => {
+  test("does not call chunks or structured transcription endpoints", async () => {
     const fetchMock = stubFetch({
-      segments: [
-        {
-          speaker_label: "speaker_1",
-          text: "Texte",
-          start_seconds: 0,
-          end_seconds: 1,
-        },
-      ],
+      markdown: "Texte",
     });
     renderViewer("diarised");
-    await screen.findByText("Texte");
+    await screen.findByText(/Texte/);
     const urls = calledUrls(fetchMock);
-    expect(urls.some((u) => u.includes("/transcription"))).toBe(true);
-    expect(urls.some((u) => u.includes("/chunks"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("/transcription.md"))).toBe(true);
+    expect(urls.some((u) => u.endsWith("/chunks"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("/transcription"))).toBe(false);
   });
 });
 
@@ -252,18 +241,14 @@ describe("TranscriptionViewer — download (.md)", () => {
     screen.queryByRole("button", { name: /Télécharger/ });
 
   test("shows the download button once content is rendered (non_diarised)", async () => {
-    stubFetch({ chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }] });
+    stubFetch({ markdown: "Texte" });
     renderViewer("non_diarised");
     await screen.findByText("Texte");
     expect(downloadButton()).toBeTruthy();
   });
 
   test("shows the download button once content is rendered (diarised)", async () => {
-    stubFetch({
-      segments: [
-        { speaker_label: "speaker_1", text: "Salut", start_seconds: 0, end_seconds: 1 },
-      ],
-    });
+    stubFetch({ markdown: "Salut" });
     renderViewer("diarised");
     await screen.findByText("Salut");
     expect(downloadButton()).toBeTruthy();
@@ -279,14 +264,14 @@ describe("TranscriptionViewer — download (.md)", () => {
   });
 
   test("hides the button on a not-ready (404) transcription", async () => {
-    stubFetch({ chunksStatus: 404 });
+    stubFetch({ markdownStatus: 404 });
     renderViewer("non_diarised");
     await screen.findByText("La transcription n'est pas encore disponible.");
     expect(downloadButton()).toBeNull();
   });
 
   test("hides the button on an empty transcription", async () => {
-    stubFetch({ chunks: [] });
+    stubFetch({ markdown: "   " });
     renderViewer("non_diarised");
     await screen.findByText("Transcription vide.");
     expect(downloadButton()).toBeNull();
@@ -294,7 +279,6 @@ describe("TranscriptionViewer — download (.md)", () => {
 
   test("clicking saves the markdown via downloadTextFile with a title-based filename", async () => {
     stubFetch({
-      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
       markdown: "# Ma Séance\n\nTexte",
     });
     renderViewer("non_diarised", "Ma Séance");
@@ -310,10 +294,24 @@ describe("TranscriptionViewer — download (.md)", () => {
   });
 
   test("a failed download raises a toast and writes no file", async () => {
-    stubFetch({
-      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
-      markdownStatus: 500,
-    });
+    let markdownGetCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/transcription.md")) {
+          markdownGetCount += 1;
+          if (markdownGetCount === 1) {
+            return new Response("Texte", {
+              status: 200,
+              headers: { "content-type": "text/markdown" },
+            });
+          }
+          return json({ type: "about:blank", title: "boom", status: 500 }, 500);
+        }
+        return json({});
+      }),
+    );
     renderViewer("non_diarised");
     const button = await screen.findByRole("button", { name: /Télécharger/ });
     fireEvent.click(button);
@@ -323,5 +321,130 @@ describe("TranscriptionViewer — download (.md)", () => {
       ),
     );
     expect(downloadTextFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("TranscriptionViewer — inline edit", () => {
+  const editButton = () => screen.queryByRole("button", { name: "Modifier" });
+
+  test("hides the edit action by default", async () => {
+    stubFetch({ markdown: "# Transcription\n\nTexte" });
+    renderViewer("non_diarised");
+    await screen.findByText(/Texte/);
+    expect(editButton()).toBeNull();
+  });
+
+  test("shows a GM-only edit action and pre-fills the Markdown textarea", async () => {
+    stubFetch({ markdown: "# Transcription\n\nTexte" });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Texte/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    expect(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+    ).toHaveValue("# Transcription\n\nTexte");
+  });
+
+  test("cancel discards local edits without sending PUT", async () => {
+    const fetchMock = stubFetch({ markdown: "# Original\n\nTexte" });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Texte/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "# Brouillon" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Annuler" }));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(await screen.findByText(/Original/)).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const input = call[0] as Request | string;
+        return typeof input !== "string" && input.method === "PUT";
+      }),
+    ).toBe(false);
+  });
+
+  test("saving persists the edited markdown and re-renders it", async () => {
+    const fetchMock = stubFetch({
+      markdown: "# Original",
+      updatedMarkdown: "# Corrige\n\nTexte relu",
+    });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Original/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "# Corrige\n\nTexte relu" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await screen.findByText(/Texte relu/);
+    const putCall = fetchMock.mock.calls.find((call) => {
+      const input = call[0] as Request | string;
+      return typeof input !== "string" && input.method === "PUT";
+    });
+    expect(putCall).toBeTruthy();
+    expect(await ((putCall?.[0] as Request).clone().json())).toEqual({
+      content_md: "# Corrige\n\nTexte relu",
+    });
+  });
+
+  test("does not save blank content", async () => {
+    const fetchMock = stubFetch({ markdown: "# Original" });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Original/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "   " } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(
+      await screen.findByText("La transcription ne peut pas être vide."),
+    ).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const input = call[0] as Request | string;
+        return typeof input !== "string" && input.method === "PUT";
+      }),
+    ).toBe(false);
+  });
+
+  test("disables editing while a transcription job is active", async () => {
+    const fetchMock = stubFetch({ markdown: "# Original" });
+    renderViewer("non_diarised", "Ma Séance", {
+      canEdit: true,
+      editingBlocked: true,
+    });
+    await screen.findByText(/Original/);
+    const button = screen.getByRole("button", { name: "Modifier" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      "title",
+      "Transcription en cours — modification bloquée.",
+    );
+    fireEvent.click(button);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const input = call[0] as Request | string;
+        return typeof input !== "string" && input.method === "PUT";
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps the editor open and maps a 409 backend error", async () => {
+    stubFetch({ markdown: "# Original", editStatus: 409 });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    await screen.findByText(/Original/);
+    fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Transcription Markdown" }),
+      { target: { value: "# Corrige" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(
+      await screen.findByText("La transcription n'est pas encore disponible."),
+    ).toBeTruthy();
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });

@@ -1,16 +1,18 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { useState } from "react";
+import { Download, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { ApiError } from "@/lib/core/api/errors";
 import { downloadTextFile } from "@/lib/core/browser/downloadTextFile";
 import { isArtifactAbsentError } from "@/lib/jdr/sessions/artifacts";
 import {
   useDownloadTranscriptionMarkdown,
-  useSessionChunks,
-  useSessionTranscription,
-  type TranscriptionSegmentOut,
+  useSessionTranscriptionMarkdown,
+  useUpdateTranscriptionMarkdown,
 } from "@/lib/jdr/sessions/transcription";
 import type { components } from "@/types/api";
 
@@ -20,6 +22,8 @@ interface TranscriptionViewerProps {
   sessionId: string;
   transcriptionMode: TranscriptionMode;
   sessionTitle: string;
+  canEdit?: boolean;
+  editingBlocked?: boolean;
 }
 
 const SECTION_CARD_CLASSES =
@@ -45,7 +49,6 @@ function ViewerShell({
   );
 }
 
-// Combining diacritical marks (U+0300–U+036F), stripped after NFD normalisation.
 const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
 
 /** Build a filesystem-friendly `.md` filename from the session title. */
@@ -59,12 +62,6 @@ function transcriptionFileName(sessionTitle: string): string {
   return slug ? `transcription-${slug}.md` : "transcription.md";
 }
 
-/**
- * Story 4.14 — exports the finished transcription via the mode-agnostic
- * `GET /transcription.md` endpoint and saves it client-side. Disabled while the
- * request is in flight (no overlapping downloads); a failure raises a toast and
- * writes no file.
- */
 function DownloadTranscriptionButton({
   sessionId,
   sessionTitle,
@@ -100,47 +97,42 @@ function DownloadTranscriptionButton({
   );
 }
 
-interface SpeakerGroup {
-  speakerLabel: string;
-  text: string;
-}
-
-/** Merge consecutive segments sharing the same raw speaker label into one turn. */
-function groupSegments(segments: TranscriptionSegmentOut[]): SpeakerGroup[] {
-  const groups: SpeakerGroup[] = [];
-  for (const segment of segments) {
-    const last = groups[groups.length - 1];
-    if (last && last.speakerLabel === segment.speaker_label) {
-      last.text = `${last.text} ${segment.text}`.trim();
-    } else {
-      groups.push({ speakerLabel: segment.speaker_label, text: segment.text });
+function formatEditError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.problem.status === 404) {
+      return "Cette session est introuvable. Recharge la page.";
+    }
+    if (error.problem.status === 409) {
+      return "La transcription n'est pas encore disponible.";
     }
   }
-  return groups;
+  return "Sauvegarde impossible. Réessaie.";
 }
 
 /**
- * Story 4.13 — read-only viewer of a finished transcription, mounted in the
- * session page's Transcription tab once `state === "transcribed"`. Branches on
- * `transcription_mode`: non_diarised stitches `GET /chunks` into prose (sorted by
- * `ordre`); diarised renders `GET /transcription` segments with their raw speaker
- * labels. The non-matching query stays disabled so only one endpoint is ever hit
- * (no `409 wrong-mode`). Plain-text rendering on purpose — long-form Markdown
- * typography is owned by Story 5.1.
+ * Story 4.17 - viewer/editor of the canonical Markdown transcription. BD-13
+ * makes `GET /transcription.md` return the edited override when it exists, so
+ * this single source covers both transcription modes without structured edits.
+ * Plain-text Markdown rendering remains intentional until Epic 5 owns long-form
+ * typography.
  */
 export function TranscriptionViewer({
   sessionId,
-  transcriptionMode,
   sessionTitle,
+  canEdit = false,
+  editingBlocked = false,
 }: TranscriptionViewerProps) {
-  const isNonDiarised = transcriptionMode === "non_diarised";
-  const chunksQuery = useSessionChunks(sessionId, { enabled: isNonDiarised });
-  const transcriptionQuery = useSessionTranscription(sessionId, {
-    enabled: !isNonDiarised,
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const markdownQuery = useSessionTranscriptionMarkdown(sessionId, {
+    enabled: true,
   });
-  const query = isNonDiarised ? chunksQuery : transcriptionQuery;
+  const updateTranscription = useUpdateTranscriptionMarkdown(sessionId);
+  const renderedMarkdown =
+    updateTranscription.data?.content_md ?? markdownQuery.data ?? "";
 
-  if (query.isPending) {
+  if (markdownQuery.isPending) {
     return (
       <ViewerShell ariaLabel="Chargement de la transcription">
         <p className="text-text-chrome-muted text-sm">
@@ -150,8 +142,8 @@ export function TranscriptionViewer({
     );
   }
 
-  if (query.isError) {
-    const absent = isArtifactAbsentError(query.error);
+  if (markdownQuery.isError) {
+    const absent = isArtifactAbsentError(markdownQuery.error);
     return (
       <ViewerShell
         ariaLabel={
@@ -175,71 +167,132 @@ export function TranscriptionViewer({
     );
   }
 
-  if (isNonDiarised) {
-    const items = [...(chunksQuery.data?.items ?? [])].sort(
-      (a, b) => a.ordre - b.ordre,
-    );
-    if (items.length === 0) {
-      return (
-        <ViewerShell ariaLabel="Transcription de la séance">
-          <p className="text-text-chrome-muted text-sm">Transcription vide.</p>
-        </ViewerShell>
-      );
-    }
-    return (
-      <ViewerShell
-        ariaLabel="Transcription de la séance"
-        action={
-          <DownloadTranscriptionButton
-            sessionId={sessionId}
-            sessionTitle={sessionTitle}
-          />
-        }
-      >
-        <div className="text-text-chrome flex flex-col gap-4 leading-relaxed">
-          {items.map((chunk) => (
-            <p key={chunk.chunk_id} className="whitespace-pre-wrap">
-              {chunk.text}
-            </p>
-          ))}
-        </div>
-      </ViewerShell>
-    );
-  }
-
-  const groups = groupSegments(transcriptionQuery.data?.segments ?? []);
-  if (groups.length === 0) {
+  if (renderedMarkdown.trim() === "") {
     return (
       <ViewerShell ariaLabel="Transcription de la séance">
         <p className="text-text-chrome-muted text-sm">Transcription vide.</p>
       </ViewerShell>
     );
   }
+
+  function startEditing() {
+    if (editingBlocked) return;
+    setDraft(renderedMarkdown);
+    setFormError(null);
+    updateTranscription.reset();
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setDraft(renderedMarkdown);
+    setFormError(null);
+    updateTranscription.reset();
+    setIsEditing(false);
+  }
+
+  function saveEditing() {
+    if (editingBlocked) {
+      setFormError("Transcription en cours — modification bloquée.");
+      return;
+    }
+    if (draft.trim() === "") {
+      setFormError("La transcription ne peut pas être vide.");
+      return;
+    }
+    setFormError(null);
+    updateTranscription.mutate(
+      { content_md: draft },
+      {
+        onSuccess: (data) => {
+          setDraft(data.content_md);
+          setIsEditing(false);
+        },
+        onError: (error) => {
+          setFormError(formatEditError(error));
+        },
+      },
+    );
+  }
+
+  const action = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {canEdit && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={startEditing}
+          disabled={editingBlocked}
+          title={
+            editingBlocked
+              ? "Transcription en cours — modification bloquée."
+              : undefined
+          }
+        >
+          <Pencil />
+          Modifier
+        </Button>
+      )}
+      <DownloadTranscriptionButton
+        sessionId={sessionId}
+        sessionTitle={sessionTitle}
+      />
+    </div>
+  );
+
   return (
-    <ViewerShell
-      ariaLabel="Transcription de la séance"
-      action={
-        <DownloadTranscriptionButton
-          sessionId={sessionId}
-          sessionTitle={sessionTitle}
-        />
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {groups.map((group, index) => (
-          <div
-            key={`${group.speakerLabel}-${index}`}
-            className="flex flex-col gap-1"
+    <ViewerShell ariaLabel="Transcription de la séance" action={action}>
+      {isEditing ? (
+        <div className="flex flex-col gap-3">
+          <label
+            htmlFor={`transcription-editor-${sessionId}`}
+            className="text-text-chrome text-sm font-medium"
           >
-            <strong className="text-accent-gold text-sm font-semibold">
-              {group.speakerLabel}
-            </strong>
-            <p className="text-text-chrome whitespace-pre-wrap leading-relaxed">
-              {group.text}
+            Transcription Markdown
+          </label>
+          <Textarea
+            id={`transcription-editor-${sessionId}`}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (formError) setFormError(null);
+            }}
+            aria-invalid={Boolean(formError)}
+            className="text-text-chrome min-h-72 font-mono text-sm leading-relaxed"
+            disabled={updateTranscription.isPending}
+          />
+          {formError && (
+            <p className="text-state-error text-sm" role="alert">
+              {formError}
             </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={cancelEditing}
+              disabled={updateTranscription.isPending}
+            >
+              <X />
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              onClick={saveEditing}
+              disabled={updateTranscription.isPending || editingBlocked}
+            >
+              <Save />
+              {updateTranscription.isPending
+                ? "Enregistrement…"
+                : "Enregistrer"}
+            </Button>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="text-text-chrome whitespace-pre-wrap leading-relaxed">
+          {renderedMarkdown}
+        </div>
+      )}
     </ViewerShell>
   );
 }

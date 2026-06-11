@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError } from "@/lib/core/api/errors";
 import type { components } from "@/types/api";
@@ -10,6 +10,7 @@ type ChunkListOut = components["schemas"]["ChunkListOut"];
 type ChunkOut = components["schemas"]["ChunkOut"];
 type TranscriptionOut = components["schemas"]["TranscriptionOut"];
 type TranscriptionSegmentOut = components["schemas"]["TranscriptionSegmentOut"];
+type TranscriptionEditOut = components["schemas"]["TranscriptionEditOut"];
 
 /**
  * Status-preserving unwrap (mirrors lib/jdr/sessions/artifacts.ts). The error
@@ -50,6 +51,9 @@ export const chunksQueryKey = (sessionId: string) =>
 
 export const transcriptionQueryKey = (sessionId: string) =>
   ["jdr", "transcription", "diarised", sessionId] as const;
+
+export const transcriptionMarkdownQueryKey = (sessionId: string) =>
+  ["jdr", "transcription", "markdown", sessionId] as const;
 
 interface TranscriptionQueryOptions {
   /**
@@ -108,6 +112,68 @@ export function useSessionTranscription(
 }
 
 /**
+ * Story 4.17 - canonical Markdown transcription of a session
+ * (`GET /transcription.md`). BD-13 makes this endpoint the read source for the
+ * edited override while still rendering the auto transcription before edits.
+ */
+export function useSessionTranscriptionMarkdown(
+  sessionId: string,
+  { enabled }: TranscriptionQueryOptions,
+) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: transcriptionMarkdownQueryKey(sessionId),
+    queryFn: async () => {
+      const result = await apiClient.GET(
+        "/services/jdr/sessions/{session_id}/transcription.md",
+        { params: { path: { session_id: sessionId } }, parseAs: "text" },
+      );
+      return unwrap<string>(result);
+    },
+    enabled: enabled && sessionId !== "",
+    retry: false,
+  });
+}
+
+interface UpdateTranscriptionMarkdownInput {
+  content_md: string;
+}
+
+/**
+ * Story 4.17 - persist an edited Markdown transcription (`PUT /transcription`).
+ * The backend stores an override and generation jobs consume it first.
+ */
+export function useUpdateTranscriptionMarkdown(sessionId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateTranscriptionMarkdownInput) => {
+      const result = await apiClient.PUT(
+        "/services/jdr/sessions/{session_id}/transcription",
+        {
+          params: { path: { session_id: sessionId } },
+          body: { content_md: input.content_md },
+        },
+      );
+      return unwrap<TranscriptionEditOut>(result);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(
+        transcriptionMarkdownQueryKey(sessionId),
+        data.content_md,
+      );
+      queryClient.invalidateQueries({
+        queryKey: transcriptionMarkdownQueryKey(sessionId),
+      });
+      queryClient.invalidateQueries({ queryKey: chunksQueryKey(sessionId) });
+      queryClient.invalidateQueries({
+        queryKey: transcriptionQueryKey(sessionId),
+      });
+    },
+  });
+}
+
+/**
  * Story 4.14 — export the finished transcription as Markdown
  * (`GET /transcription.md`, text/markdown). One mode-agnostic endpoint covers
  * both `transcription_mode` values (the backend renders the Markdown), so there
@@ -135,4 +201,5 @@ export type {
   ChunkOut,
   TranscriptionOut,
   TranscriptionSegmentOut,
+  TranscriptionEditOut,
 };
