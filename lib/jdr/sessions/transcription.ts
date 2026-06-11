@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError } from "@/lib/core/api/errors";
 import type { components } from "@/types/api";
@@ -104,6 +104,29 @@ export function useSessionTranscription(
     },
     enabled: enabled && sessionId !== "",
     retry: false,
+  });
+}
+
+/**
+ * Story 4.14 — export the finished transcription as Markdown
+ * (`GET /transcription.md`, text/markdown). One mode-agnostic endpoint covers
+ * both `transcription_mode` values (the backend renders the Markdown), so there
+ * is no wrong-mode hazard here. The `200` body is typed `content?: never` in the
+ * generated contract (FastAPI omits the text/markdown schema), hence
+ * `parseAs: "text"` to read the raw string and the `unwrap<string>` cast. The
+ * download is imperative (triggered on click) → a mutation, not a query. The
+ * caller owns the file-save side effect.
+ */
+export function useDownloadTranscriptionMarkdown(sessionId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.GET(
+        "/services/jdr/sessions/{session_id}/transcription.md",
+        { params: { path: { session_id: sessionId } }, parseAs: "text" },
+      );
+      return unwrap<string>(result);
+    },
   });
 }
 

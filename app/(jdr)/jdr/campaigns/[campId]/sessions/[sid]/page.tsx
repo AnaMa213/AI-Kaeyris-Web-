@@ -552,6 +552,7 @@ export default function SessionDetailPage() {
               <TranscriptionViewer
                 sessionId={session.id}
                 transcriptionMode={session.transcription_mode}
+                sessionTitle={session.title}
               />
             </div>
           )}

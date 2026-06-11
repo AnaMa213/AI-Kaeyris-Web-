@@ -13,10 +13,13 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
-const { useSessionChunks, useSessionTranscription } = await import(
-  "@/lib/jdr/sessions/transcription"
-);
+const {
+  useSessionChunks,
+  useSessionTranscription,
+  useDownloadTranscriptionMarkdown,
+} = await import("@/lib/jdr/sessions/transcription");
 const { isArtifactAbsentError } = await import("@/lib/jdr/sessions/artifacts");
+const { ApiError } = await import("@/lib/core/api/errors");
 
 const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
 
@@ -136,5 +139,40 @@ describe("useSessionTranscription (diarised)", () => {
     );
     expect(result.current.fetchStatus).toBe("idle");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useDownloadTranscriptionMarkdown", () => {
+  function markdown(body: string, status = 200) {
+    return new Response(body, {
+      status,
+      headers: { "content-type": "text/markdown" },
+    });
+  }
+
+  test("hits /transcription.md with parseAs:text and returns the raw markdown", async () => {
+    const fetchMock = stubFetch(async () => markdown("# Séance\n\nBonjour."));
+    const { result } = renderHook(
+      () => useDownloadTranscriptionMarkdown(SESSION_ID),
+      { wrapper: wrapper(makeClient()) },
+    );
+    const text = await result.current.mutateAsync();
+    expect(text).toBe("# Séance\n\nBonjour.");
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/transcription.md")).toBe(true);
+  });
+
+  test("surfaces an ApiError on >=400", async () => {
+    stubFetch(async () =>
+      json({ type: "about:blank", title: "boom", status: 500 }, 500),
+    );
+    const { result } = renderHook(
+      () => useDownloadTranscriptionMarkdown(SESSION_ID),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError);
   });
 });

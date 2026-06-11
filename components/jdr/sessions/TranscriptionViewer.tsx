@@ -1,7 +1,13 @@
 "use client";
 
+import { Download } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { downloadTextFile } from "@/lib/core/browser/downloadTextFile";
 import { isArtifactAbsentError } from "@/lib/jdr/sessions/artifacts";
 import {
+  useDownloadTranscriptionMarkdown,
   useSessionChunks,
   useSessionTranscription,
   type TranscriptionSegmentOut,
@@ -13,6 +19,7 @@ type TranscriptionMode = components["schemas"]["TranscriptionMode"];
 interface TranscriptionViewerProps {
   sessionId: string;
   transcriptionMode: TranscriptionMode;
+  sessionTitle: string;
 }
 
 const SECTION_CARD_CLASSES =
@@ -20,16 +27,76 @@ const SECTION_CARD_CLASSES =
 
 function ViewerShell({
   ariaLabel,
+  action,
   children,
 }: {
   ariaLabel: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className={SECTION_CARD_CLASSES} aria-label={ariaLabel}>
-      <h2 className="font-display mb-3 text-xl font-semibold">Transcription</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="font-display text-xl font-semibold">Transcription</h2>
+        {action}
+      </div>
       {children}
     </section>
+  );
+}
+
+// Combining diacritical marks (U+0300–U+036F), stripped after NFD normalisation.
+const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
+
+/** Build a filesystem-friendly `.md` filename from the session title. */
+function transcriptionFileName(sessionTitle: string): string {
+  const slug = sessionTitle
+    .normalize("NFD")
+    .replace(COMBINING_MARKS, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `transcription-${slug}.md` : "transcription.md";
+}
+
+/**
+ * Story 4.14 — exports the finished transcription via the mode-agnostic
+ * `GET /transcription.md` endpoint and saves it client-side. Disabled while the
+ * request is in flight (no overlapping downloads); a failure raises a toast and
+ * writes no file.
+ */
+function DownloadTranscriptionButton({
+  sessionId,
+  sessionTitle,
+}: {
+  sessionId: string;
+  sessionTitle: string;
+}) {
+  const download = useDownloadTranscriptionMarkdown(sessionId);
+
+  function handleDownload() {
+    if (download.isPending) return;
+    download.mutate(undefined, {
+      onSuccess: (markdown) => {
+        downloadTextFile(transcriptionFileName(sessionTitle), markdown);
+      },
+      onError: () => {
+        toast.error("Impossible de télécharger la transcription.");
+      },
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleDownload}
+      disabled={download.isPending}
+    >
+      <Download />
+      {download.isPending ? "Téléchargement…" : "Télécharger (.md)"}
+    </Button>
   );
 }
 
@@ -64,6 +131,7 @@ function groupSegments(segments: TranscriptionSegmentOut[]): SpeakerGroup[] {
 export function TranscriptionViewer({
   sessionId,
   transcriptionMode,
+  sessionTitle,
 }: TranscriptionViewerProps) {
   const isNonDiarised = transcriptionMode === "non_diarised";
   const chunksQuery = useSessionChunks(sessionId, { enabled: isNonDiarised });
@@ -119,7 +187,15 @@ export function TranscriptionViewer({
       );
     }
     return (
-      <ViewerShell ariaLabel="Transcription de la séance">
+      <ViewerShell
+        ariaLabel="Transcription de la séance"
+        action={
+          <DownloadTranscriptionButton
+            sessionId={sessionId}
+            sessionTitle={sessionTitle}
+          />
+        }
+      >
         <div className="text-text-chrome flex flex-col gap-4 leading-relaxed">
           {items.map((chunk) => (
             <p key={chunk.chunk_id} className="whitespace-pre-wrap">
@@ -140,7 +216,15 @@ export function TranscriptionViewer({
     );
   }
   return (
-    <ViewerShell ariaLabel="Transcription de la séance">
+    <ViewerShell
+      ariaLabel="Transcription de la séance"
+      action={
+        <DownloadTranscriptionButton
+          sessionId={sessionId}
+          sessionTitle={sessionTitle}
+        />
+      }
+    >
       <div className="flex flex-col gap-4">
         {groups.map((group, index) => (
           <div
