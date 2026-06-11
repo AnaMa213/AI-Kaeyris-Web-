@@ -1488,4 +1488,316 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       expect(chip.className).toContain("text-state-success");
     });
   });
+
+  // Story 4.18 — Pipeline verification after the BD-11 worker→LLM unblock. The
+  // `summaryExists` gate (4.3) and the regeneration flow (4.5) were already built,
+  // but the *live* transitions through a SUCCEEDING summary job were untestable
+  // while every job failed on httpx.ConnectError. These lock them as regressions.
+  // BD-11 is infra-only: no contract change, no gen:api.
+  describe("Story 4.18 — Pipeline verification after LLM unblock (BD-11)", () => {
+    const ARTIFACT_GATED = ["Récit", "Éléments", "POVs"];
+
+    function gotoSummaryTab() {
+      window.localStorage.setItem(seenKey, "1");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentPathname}?tab=artefacts&sub=summary`,
+      );
+    }
+
+    // AC2 — the summary GET starts 404 (absent) and flips to 200 once the GM has
+    // POSTed the generation; the polled job reaches `succeeded`. Mirrors the 4.3
+    // stub shape but drives the dynamic absent→present transition.
+    function stubLiveSummaryGeneration() {
+      let summaryGenerated = false;
+      const derivedPosts: string[] = [];
+      const jobId = "job-summary-418";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            (typeof input === "string" ? init?.method : input.method) ?? "GET";
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({ items: [{ id: "pj-1", name: "Eldrin", campaign_id: campId, created_at: "2026-05-30T10:00:00Z" }], total: 1 }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          // Guard: derived artifacts must never be POSTed by this flow (no cascade).
+          if (
+            (url.includes("/artifacts/narrative") ||
+              url.includes("/artifacts/elements") ||
+              url.includes("/artifacts/povs")) &&
+            method.toUpperCase() === "POST"
+          ) {
+            derivedPosts.push(url);
+            return new Response(
+              JSON.stringify({ id: "job-derived", kind: "narrative", session_id: sessionIdFixture, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+              { status: 202, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
+            summaryGenerated = true;
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+              { status: 202, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            if (!summaryGenerated) {
+              return new Response(
+                JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+                { status: 404, headers: { "content-type": "application/problem+json" } },
+              );
+            }
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, text: "Les héros pénètrent dans la crypte oubliée.", model_used: "claude-x", generated_at: "2026-06-01T10:05:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:05Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+      return { derivedPosts };
+    }
+
+    test("AC2 — Récit/Éléments/POVs un-grey live when the summary job succeeds (no reload)", async () => {
+      gotoSummaryTab();
+      const { derivedPosts } = stubLiveSummaryGeneration();
+      const user = userEvent.setup();
+      renderPage();
+
+      // Gate closed on load: the summary is absent (404).
+      await screen.findByRole("tab", { name: "Résumé" });
+      for (const name of ARTIFACT_GATED) {
+        expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-disabled", "true");
+      }
+
+      // The GM generates the summary; the trigger is enabled once the declared PJ loads.
+      const trigger = await screen.findByRole("button", { name: "Générer le Résumé" });
+      await waitFor(() => expect(trigger).toBeEnabled());
+      await user.click(trigger);
+
+      // On the job's `succeeded`, the shared summary cache key is invalidated; the
+      // page's summaryExists flips and the three derived sub-tabs un-grey in place.
+      await waitFor(
+        () =>
+          expect(screen.getByRole("tab", { name: "Récit" })).not.toHaveAttribute(
+            "aria-disabled",
+            "true",
+          ),
+        { timeout: 4000 },
+      );
+      expect(screen.getByRole("tab", { name: "Éléments" })).not.toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("tab", { name: "POVs" })).not.toHaveAttribute("aria-disabled", "true");
+      // No cascade: generating the summary never POSTed a derived artifact.
+      expect(derivedPosts).toEqual([]);
+    });
+
+    // AC3 — regeneration against a succeeding job, driven through the page. The
+    // post-regen GET returns a NEW generated_at so the flow's settle loop stops.
+    test("AC3 — regenerate replaces the summary in place end-to-end; sub-tabs stay enabled, no cascade", async () => {
+      gotoSummaryTab();
+      let summaryPostCount = 0;
+      const derivedPosts: string[] = [];
+      const jobId = "job-summary-regen-418";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            (typeof input === "string" ? init?.method : input.method) ?? "GET";
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({ items: [{ id: "pj-1", name: "Eldrin", campaign_id: campId, created_at: "2026-05-30T10:00:00Z" }], total: 1 }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (
+            (url.includes("/artifacts/narrative") ||
+              url.includes("/artifacts/elements") ||
+              url.includes("/artifacts/povs")) &&
+            method.toUpperCase() === "POST"
+          ) {
+            derivedPosts.push(url);
+            return new Response(null, { status: 202 });
+          }
+          if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
+            summaryPostCount += 1;
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "queued", queued_at: "2026-06-01T11:00:00Z" }),
+              { status: 202, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            // New version after the regen POST so artifactVersion (generated_at) changes.
+            const regenerated = summaryPostCount > 0;
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                text: regenerated ? "Récit régénéré : la crypte révèle un autre secret." : "Récit initial de la séance.",
+                model_used: "claude-x",
+                generated_at: regenerated ? "2026-06-01T11:05:00Z" : "2026-06-01T10:05:00Z",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "succeeded", failure_reason: null, queued_at: "2026-06-01T11:00:00Z", started_at: "2026-06-01T11:00:01Z", ended_at: "2026-06-01T11:00:05Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+
+      const user = userEvent.setup();
+      renderPage();
+
+      // Summary present on load → content shown, sub-tabs already enabled.
+      expect(await screen.findByText("Récit initial de la séance.")).toBeInTheDocument();
+      for (const name of ARTIFACT_GATED) {
+        expect(screen.getByRole("tab", { name })).not.toHaveAttribute("aria-disabled", "true");
+      }
+
+      // Regenerate → confirm Dialog → second POST → new content replaces the old.
+      await user.click(screen.getByRole("button", { name: "Régénérer le Résumé" }));
+      await user.click(screen.getByRole("button", { name: "Régénérer" }));
+
+      expect(
+        await screen.findByText("Récit régénéré : la crypte révèle un autre secret.", {}, { timeout: 4000 }),
+      ).toBeInTheDocument();
+      expect(summaryPostCount).toBe(1);
+      // The gate stays open and nothing cascaded onto the derived artifacts.
+      for (const name of ARTIFACT_GATED) {
+        expect(screen.getByRole("tab", { name })).not.toHaveAttribute("aria-disabled", "true");
+      }
+      expect(derivedPosts).toEqual([]);
+    });
+
+    // AC4 — a failed summary job (BD-11 AC-B2: status `failed` + failure_reason)
+    // keeps the gate closed and surfaces the failure (inline + toast, Story 4.10).
+    test("AC4 — a failed summary job keeps sub-tabs greyed and surfaces the failure", async () => {
+      gotoSummaryTab();
+      const jobId = "job-summary-fail-418";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            (typeof input === "string" ? init?.method : input.method) ?? "GET";
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({ items: [{ id: "pj-1", name: "Eldrin", campaign_id: campId, created_at: "2026-05-30T10:00:00Z" }], total: 1 }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({ session_id: sessionIdFixture, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary") && method.toUpperCase() === "POST") {
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+              { status: 202, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            // The generation failed → the artifact never materialises.
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              { status: 404, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({ id: jobId, kind: "summary", session_id: sessionIdFixture, status: "failed", failure_reason: "llm-unreachable", queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:02Z" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+
+      const user = userEvent.setup();
+      renderPage();
+
+      const trigger = await screen.findByRole("button", { name: "Générer le Résumé" });
+      await waitFor(() => expect(trigger).toBeEnabled());
+      await user.click(trigger);
+
+      await waitFor(
+        () =>
+          expect(toastErrorMock).toHaveBeenCalledWith(
+            expect.stringContaining("llm-unreachable"),
+          ),
+        { timeout: 4000 },
+      );
+      // The gate is still closed: derived sub-tabs remain disabled after the failure.
+      for (const name of ARTIFACT_GATED) {
+        expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-disabled", "true");
+      }
+      // The retry affordance is offered.
+      expect(screen.getByRole("button", { name: "Réessayer" })).toBeInTheDocument();
+    });
+  });
 });
