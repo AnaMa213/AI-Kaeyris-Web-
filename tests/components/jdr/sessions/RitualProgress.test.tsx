@@ -165,4 +165,73 @@ describe("<RitualProgress>", () => {
     await user.click(screen.getByRole("button", { name: "Ouvrir le récit" }));
     expect(onOpenStory).toHaveBeenCalledTimes(1);
   });
+
+  // Story 4.15 (T2) — when a transcription job is active the page passes a
+  // `replaceDisabledHint` instead of `onReplace`: the replace trigger stays
+  // visible but disabled, so no second transcription can be launched.
+  describe("Story 4.15 — replace trigger guard", () => {
+    test("transcribing + replaceDisabledHint → disabled 'Remplacer' carrying the hint", () => {
+      render(
+        <RitualProgress
+          uiState="transcribing"
+          sessionTitle="Séance 12"
+          replaceDisabledHint="Transcription en cours — patiente."
+        />,
+      );
+      const replace = screen.getByRole("button", {
+        name: "Remplacer l'enregistrement",
+      });
+      expect(replace).toBeDisabled();
+      expect(replace).toHaveAttribute(
+        "title",
+        "Transcription en cours — patiente.",
+      );
+    });
+
+    test("transcribing + onReplace (no hint) → enabled 'Remplacer' (legacy path)", () => {
+      render(
+        <RitualProgress
+          uiState="transcribing"
+          sessionTitle="Séance 12"
+          onReplace={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
+      ).toBeEnabled();
+    });
+
+    test("the disabled replace button does not fire onReplace when clicked", async () => {
+      const onReplace = vi.fn();
+      render(
+        <RitualProgress
+          uiState="transcribing"
+          sessionTitle="Séance 12"
+          onReplace={onReplace}
+          replaceDisabledHint="Transcription en cours."
+        />,
+      );
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
+      );
+      expect(onReplace).not.toHaveBeenCalled();
+    });
+
+    test("failed act also honours replaceDisabledHint (disabled + hint)", () => {
+      render(
+        <RitualProgress
+          uiState="failed"
+          sessionTitle="Séance 12"
+          onRetry={vi.fn()}
+          replaceDisabledHint="Transcription en cours."
+        />,
+      );
+      const replace = screen.getByRole("button", {
+        name: "Remplacer l'enregistrement",
+      });
+      expect(replace).toBeDisabled();
+      expect(replace).toHaveAttribute("title", "Transcription en cours.");
+    });
+  });
 });

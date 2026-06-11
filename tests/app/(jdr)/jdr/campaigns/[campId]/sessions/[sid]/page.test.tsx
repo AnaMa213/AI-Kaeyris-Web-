@@ -658,6 +658,80 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     });
   });
 
+  describe("Story 4.15 — guard against concurrent transcriptions (T2)", () => {
+    const REPLACE_BLOCKED_HINT =
+      "Transcription en cours — patiente avant de remplacer l'enregistrement.";
+
+    // audio_uploaded + a NON-terminal polled job → a transcription is genuinely
+    // active. The replace trigger must be disabled (with the hint), not removed,
+    // so the GM cannot launch a second concurrent transcription.
+    function stubWithActiveJob(jobStatus: "queued" | "running") {
+      const jobId = "job-active-guard";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: jobStatus,
+                failure_reason: null,
+                queued_at: new Date().toISOString(),
+                started_at: jobStatus === "running" ? new Date().toISOString() : null,
+                ended_at: null,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: "audio_uploaded",
+                current_job_id: jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("disables the replace trigger (with a hint) while a job is active", async () => {
+      stubWithActiveJob("running");
+      renderPage();
+      await screen.findByText("Les scribes transcrivent");
+      const replace = await screen.findByRole("button", {
+        name: "Remplacer l'enregistrement",
+      });
+      expect(replace).toBeDisabled();
+      expect(replace).toHaveAttribute("title", REPLACE_BLOCKED_HINT);
+    });
+
+    test("a disabled replace trigger does not open the replace dropzone", async () => {
+      stubWithActiveJob("queued");
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText("Les scribes transcrivent");
+      await user.click(
+        screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
+      );
+      expect(
+        screen.queryByRole("button", { name: /Glisse ton M4A/ }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe("Story 4.13 — Transcription viewer", () => {
     test("renders the stitched chunks for a transcribed non_diarised session", async () => {
       stubFetch({

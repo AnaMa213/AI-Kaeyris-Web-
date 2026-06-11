@@ -47,6 +47,10 @@ import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
 const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
 const ARTIFACT_DISABLED_HINT = "Génère cet artefact d'abord";
+// Story 4.15 (T2) : indice porté par le déclencheur de remplacement quand un job
+// de transcription est actif — verrou anti-double transcription concurrente.
+const TRANSCRIPTION_ACTIVE_REPLACE_HINT =
+  "Transcription en cours — patiente avant de remplacer l'enregistrement.";
 const TRANSCRIPTION_SEEN_STORAGE_PREFIX =
   "kaeyris:jdr:session-transcription-seen:";
 // Story 4.7 (S4) : flag DÉDIÉ pour le toast « terminée », distinct du flag
@@ -377,6 +381,17 @@ export default function SessionDetailPage() {
   // Masqué pendant le remplacement (la dropzone prend le relais).
   const showRitual =
     !showReplaceCard && ritualState !== "idle" && ritualState !== "uploading";
+  // Story 4.15 (T2) : un job actif (acte « transcribing » + current_job_id)
+  // verrouille le remplacement → pas de seconde transcription concurrente.
+  // L'acte terminal `failed` n'est jamais bloqué (current_job_id nul → la
+  // récupération reste offerte). On se base sur l'acte affiché et non sur le
+  // `current_job_id` brut, qui peut rester en cache après un poll terminal.
+  const replaceEligible =
+    canReplace &&
+    (ritualState === "failed" || ritualState === "transcribing");
+  const transcriptionActive =
+    ritualState === "transcribing" && Boolean(currentJobId);
+  const replaceBlocked = replaceEligible && transcriptionActive;
   const ritualProgress = estimateJobProgress({
     job,
     durationSeconds,
@@ -535,10 +550,12 @@ export default function SessionDetailPage() {
                 // échec). Gaté sur `ritualState` → masqué dès que le job est terminal
                 // (transcribed/failed-handled), jamais dupliqué ni affiché sur un récit.
                 onReplace={
-                  canReplace &&
-                  (ritualState === "failed" || ritualState === "transcribing")
+                  replaceEligible && !replaceBlocked
                     ? () => setReplacing(true)
                     : undefined
+                }
+                replaceDisabledHint={
+                  replaceBlocked ? TRANSCRIPTION_ACTIVE_REPLACE_HINT : undefined
                 }
               />
             </div>
