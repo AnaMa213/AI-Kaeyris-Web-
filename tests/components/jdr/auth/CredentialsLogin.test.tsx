@@ -47,6 +47,14 @@ describe("<CredentialsLogin>", () => {
     expect(screen.getByLabelText("Nom d'utilisateur")).toHaveFocus();
   });
 
+  test("autofocuses the username field even with the page's initial clearPasswordTrigger=0", () => {
+    // app/login/page.tsx initializes clearPasswordTrigger to 0 (not
+    // undefined) and always passes it. The clear-password effect must not
+    // run on the first render, or it steals focus to the password field.
+    renderForm({ clearPasswordTrigger: 0 });
+    expect(screen.getByLabelText("Nom d'utilisateur")).toHaveFocus();
+  });
+
   test("submitting an empty password (with username) surfaces the zod validation error", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
