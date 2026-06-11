@@ -56,6 +56,35 @@ export function useCreateCampaignPj(campaignId: string) {
   });
 }
 
+export interface UpdateCampaignPjInput {
+  pjId: string;
+  name: string;
+  /** UUID to link a user, or `null` to unlink (BD-12 expects explicit null). */
+  userId: string | null;
+}
+
+export function useUpdateCampaignPj(campaignId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pjId, name, userId }: UpdateCampaignPjInput) => {
+      const result = await apiClient.PATCH("/services/jdr/pjs/{pj_id}", {
+        params: { path: { pj_id: pjId } },
+        body: { name, user_id: userId },
+      });
+      return unwrap<PjOut>(result);
+    },
+    // Real persisted endpoint (BD-12) — refetch so the canonical PjOut
+    // (server-confirmed user_id) comes back. Unlike useDeleteCampaignPj, which
+    // mutates the cache locally only because the BD-3 DELETE is still unshipped.
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: campaignPjsListQueryKey(campaignId),
+      });
+    },
+  });
+}
+
 export function useDeleteCampaignPj(campaignId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
@@ -75,7 +104,8 @@ export function useDeleteCampaignPj(campaignId: string) {
     },
     // V1 mocked: BD-3 endpoint still pending, so a refetch would resurrect
     // the PJ. We mutate the cache directly — the row hides locally, a refresh
-    // restores it. <MockBadge> in <CampaignPjsCard> signals the limitation.
+    // restores it. <PjDeleteConfirm> carries the honest "not persisted until
+    // BD-3" caveat at the point of action.
     onSuccess: (deletedId) => {
       queryClient.setQueryData<PageOfPjOut>(
         campaignPjsListQueryKey(campaignId),

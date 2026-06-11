@@ -16,6 +16,7 @@ vi.mock("@/lib/core/env", () => ({
 const {
   useListCampaignPjs,
   useCreateCampaignPj,
+  useUpdateCampaignPj,
   useDeleteCampaignPj,
   campaignPjsListQueryKey,
 } = await import("@/lib/jdr/pjs/queries");
@@ -71,6 +72,15 @@ beforeEach(() => {
           status: 201,
           headers: { "content-type": "application/json" },
         });
+      }
+      if (
+        url.includes("/services/jdr/pjs/") &&
+        method.toUpperCase() === "PATCH"
+      ) {
+        return new Response(
+          JSON.stringify({ ...samplePj, name: "Aragorn", user_id: null }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       }
       if (
         url.includes("/services/jdr/pjs/") &&
@@ -218,6 +228,110 @@ describe("useCreateCampaignPj", () => {
     });
     await expect(
       result.current.mutateAsync({ name: "Eldrin" }),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("useUpdateCampaignPj", () => {
+  test("PATCHes /services/jdr/pjs/{id} with name + user_id and unwraps PjOut", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useUpdateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    const updated = await result.current.mutateAsync({
+      pjId: samplePj.id,
+      name: "Aragorn",
+      userId: "22222222-2222-2222-2222-222222222222",
+    });
+    expect(updated.name).toBe("Aragorn");
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith(`/services/jdr/pjs/${samplePj.id}`) &&
+        request.method === "PATCH"
+      );
+    });
+    if (!call) throw new Error("No PATCH /pjs/:id call found");
+    expect((call[0] as Request).credentials).toBe("include");
+    await expect((call[0] as Request).clone().json()).resolves.toEqual({
+      name: "Aragorn",
+      user_id: "22222222-2222-2222-2222-222222222222",
+    });
+  });
+
+  test("sends user_id: null when unlinking", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useUpdateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({
+      pjId: samplePj.id,
+      name: "Aragorn",
+      userId: null,
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith(`/services/jdr/pjs/${samplePj.id}`) &&
+        request.method === "PATCH"
+      );
+    });
+    if (!call) throw new Error("No PATCH /pjs/:id call found");
+    await expect((call[0] as Request).clone().json()).resolves.toEqual({
+      name: "Aragorn",
+      user_id: null,
+    });
+  });
+
+  test("invalidates the campaign-scoped key on success (real endpoint)", async () => {
+    const queryClient = makeClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const { result } = renderHook(() => useUpdateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({
+      pjId: samplePj.id,
+      name: "Aragorn",
+      userId: null,
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: campaignPjsListQueryKey(CAMPAIGN_ID),
+    });
+  });
+
+  test("propagates a 409 duplicate as ApiError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "https://kaeyris.local/errors/duplicate-pj",
+            title: "Duplicate PJ",
+            status: 409,
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/problem+json" },
+          },
+        ),
+      ),
+    );
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useUpdateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await expect(
+      result.current.mutateAsync({
+        pjId: samplePj.id,
+        name: "Eldrin",
+        userId: null,
+      }),
     ).rejects.toBeInstanceOf(ApiError);
   });
 });

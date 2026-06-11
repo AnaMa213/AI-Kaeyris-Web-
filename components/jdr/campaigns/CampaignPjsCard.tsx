@@ -5,9 +5,8 @@ import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
-import { MockBadge } from "@/components/common/MockBadge";
 import { PjDeleteConfirm } from "@/components/jdr/pjs/PjDeleteConfirm";
-import { PjForm } from "@/components/jdr/pjs/PjForm";
+import { PjForm, type PjFormSubmitPayload } from "@/components/jdr/pjs/PjForm";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import { canManageCampaignPjs } from "@/lib/jdr/campaigns/permissions";
@@ -16,8 +15,10 @@ import {
   useCreateCampaignPj,
   useDeleteCampaignPj,
   useListCampaignPjs,
+  useUpdateCampaignPj,
   type PjOut,
 } from "@/lib/jdr/pjs/queries";
+import { useUsers, type UserOut } from "@/lib/jdr/users/queries";
 
 const SECTION_CARD_CLASSES =
   "bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)";
@@ -39,6 +40,26 @@ function formatCreateError(error: unknown): string | null {
   return null;
 }
 
+function formatUpdateError(error: unknown): string | null {
+  if (!error) return null;
+  if (error instanceof ApiError) {
+    const { status, type, title } = error.problem;
+    const haystack = `${type ?? ""} ${title ?? ""}`.toLowerCase();
+    if (status === 409 || haystack.includes("duplicate")) {
+      return "Ce nom de PJ existe déjà dans cette campagne.";
+    }
+    if (status === 422 || haystack.includes("invalid-user")) {
+      return "Utilisateur invalide ou introuvable.";
+    }
+    if (status === 404) {
+      return "Ce PJ est introuvable. Recharge la page.";
+    }
+    return "Modification impossible. Réessaie.";
+  }
+  if (error instanceof Error) return error.message;
+  return null;
+}
+
 function formatDeleteError(error: unknown): string | null {
   if (!error) return null;
   if (error instanceof ApiError) return "Suppression impossible. Réessaie.";
@@ -54,20 +75,51 @@ function sortByCreatedAtDesc(items: PjOut[]): PjOut[] {
   );
 }
 
+// Resolve a PJ's link to a short, human label. Never surface a raw UUID:
+// a linked-but-unresolved user_id (still loading, or a user not in the list)
+// degrades to a neutral "Joueur lié".
+function linkLabel(pj: PjOut, users: UserOut[]): string {
+  if (!pj.user_id) return "Non lié";
+  const linked = users.find((user) => user.id === pj.user_id);
+  return linked ? `Joueur : @${linked.username}` : "Joueur lié";
+}
+
 export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
   const pjsQuery = useListCampaignPjs(campaign.id);
+  const usersQuery = useUsers();
   const createMutation = useCreateCampaignPj(campaign.id);
+  const updateMutation = useUpdateCampaignPj(campaign.id);
   const deleteMutation = useDeleteCampaignPj(campaign.id);
 
   const [creating, setCreating] = useState(false);
+  const [editingPj, setEditingPj] = useState<PjOut | null>(null);
   const [deletingPj, setDeletingPj] = useState<PjOut | null>(null);
 
   const canManage = canManageCampaignPjs(campaign);
   const createErrorMessage = formatCreateError(createMutation.error);
+  const updateErrorMessage = formatUpdateError(updateMutation.error);
   const deleteErrorMessage = formatDeleteError(deleteMutation.error);
 
   const items = pjsQuery.data?.items ?? [];
   const sorted = sortByCreatedAtDesc(items);
+  const users = usersQuery.data?.items ?? [];
+
+  const handleSubmit = (payload: PjFormSubmitPayload) => {
+    if (payload.mode === "create") {
+      createMutation.mutate(payload.values, {
+        onSuccess: () => setCreating(false),
+      });
+      return;
+    }
+    updateMutation.mutate(
+      {
+        pjId: payload.id,
+        name: payload.values.name,
+        userId: payload.values.user_id,
+      },
+      { onSuccess: () => setEditingPj(null) },
+    );
+  };
 
   return (
     <section className={SECTION_CARD_CLASSES}>
@@ -140,37 +192,41 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{pj.name}</p>
-                  <time
-                    dateTime={pj.created_at}
-                    title={absolute}
-                    className="text-text-chrome-muted text-xs"
-                  >
-                    {relative}
-                  </time>
+                  <p className="text-text-chrome-muted text-xs">
+                    {linkLabel(pj, users)}
+                    <span aria-hidden="true"> · </span>
+                    <time dateTime={pj.created_at} title={absolute}>
+                      {relative}
+                    </time>
+                  </p>
                 </div>
                 {canManage && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setDeletingPj(pj)}
-                    aria-label={`Supprimer le PJ ${pj.name}`}
-                    className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
-                  >
-                    Supprimer
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingPj(pj)}
+                      aria-label={`Éditer le PJ ${pj.name}`}
+                    >
+                      Éditer
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeletingPj(pj)}
+                      aria-label={`Supprimer le PJ ${pj.name}`}
+                      className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
                 )}
               </li>
             );
           })}
         </ul>
-      )}
-
-      {canManage && (
-        <p className="text-text-chrome-muted mt-3 flex items-center gap-2 text-xs">
-          <MockBadge tooltip="Suppression locale, non persistée — endpoint backend en attente (BD-3)" />
-          <span>La suppression d&apos;un PJ est encore mockée localement.</span>
-        </p>
       )}
 
       <PjForm
@@ -181,13 +237,23 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
         }}
         submitting={createMutation.isPending}
         errorMessage={createErrorMessage}
-        onSubmit={(values) => {
-          createMutation.mutate(values, {
-            onSuccess: () => {
-              setCreating(false);
-            },
-          });
+        onSubmit={handleSubmit}
+      />
+
+      <PjForm
+        mode="edit"
+        pj={editingPj}
+        users={users}
+        open={editingPj !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingPj(null);
+            updateMutation.reset();
+          }
         }}
+        submitting={updateMutation.isPending}
+        errorMessage={updateErrorMessage}
+        onSubmit={handleSubmit}
       />
 
       <PjDeleteConfirm
