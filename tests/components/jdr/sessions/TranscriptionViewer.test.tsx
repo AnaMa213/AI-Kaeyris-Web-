@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/lib/core/env", () => ({
@@ -13,8 +13,17 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("@/lib/core/browser/downloadTextFile", () => ({
+  downloadTextFile: vi.fn(),
+}));
+
 const { TranscriptionViewer } = await import(
   "@/components/jdr/sessions/TranscriptionViewer"
+);
+const { toast } = await import("sonner");
+const { downloadTextFile } = await import(
+  "@/lib/core/browser/downloadTextFile"
 );
 
 const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
@@ -42,9 +51,24 @@ function stubFetch(opts: {
   segments?: Segment[];
   chunksStatus?: number;
   transcriptionStatus?: number;
+  markdown?: string;
+  markdownStatus?: number;
 }) {
   const fetchMock = vi.fn(async (input: Request | string) => {
     const url = typeof input === "string" ? input : input.url;
+    // `.md` must be matched before `/transcription` (it is a sub-path of it).
+    if (url.endsWith("/transcription.md")) {
+      if (opts.markdownStatus && opts.markdownStatus >= 400) {
+        return json(
+          { type: "about:blank", title: "boom", status: opts.markdownStatus },
+          opts.markdownStatus,
+        );
+      }
+      return new Response(opts.markdown ?? "# Transcription\n\nContenu.", {
+        status: 200,
+        headers: { "content-type": "text/markdown" },
+      });
+    }
     if (url.includes("/chunks")) {
       if (opts.chunksStatus && opts.chunksStatus >= 400) {
         return json(
@@ -80,13 +104,23 @@ function stubFetch(opts: {
   return fetchMock;
 }
 
-function renderViewer(mode: "non_diarised" | "diarised") {
+function renderViewer(
+  mode: "non_diarised" | "diarised",
+  sessionTitle = "Ma Séance",
+) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <TranscriptionViewer sessionId={SESSION_ID} transcriptionMode={mode} />
+      <TranscriptionViewer
+        sessionId={SESSION_ID}
+        transcriptionMode={mode}
+        sessionTitle={sessionTitle}
+      />
     </QueryClientProvider>,
   );
 }
@@ -210,5 +244,84 @@ describe("TranscriptionViewer — loading", () => {
     );
     renderViewer("non_diarised");
     expect(screen.getByText("Chargement de la transcription…")).toBeTruthy();
+  });
+});
+
+describe("TranscriptionViewer — download (.md)", () => {
+  const downloadButton = () =>
+    screen.queryByRole("button", { name: /Télécharger/ });
+
+  test("shows the download button once content is rendered (non_diarised)", async () => {
+    stubFetch({ chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }] });
+    renderViewer("non_diarised");
+    await screen.findByText("Texte");
+    expect(downloadButton()).toBeTruthy();
+  });
+
+  test("shows the download button once content is rendered (diarised)", async () => {
+    stubFetch({
+      segments: [
+        { speaker_label: "speaker_1", text: "Salut", start_seconds: 0, end_seconds: 1 },
+      ],
+    });
+    renderViewer("diarised");
+    await screen.findByText("Salut");
+    expect(downloadButton()).toBeTruthy();
+  });
+
+  test("hides the button while loading", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    renderViewer("non_diarised");
+    expect(downloadButton()).toBeNull();
+  });
+
+  test("hides the button on a not-ready (404) transcription", async () => {
+    stubFetch({ chunksStatus: 404 });
+    renderViewer("non_diarised");
+    await screen.findByText("La transcription n'est pas encore disponible.");
+    expect(downloadButton()).toBeNull();
+  });
+
+  test("hides the button on an empty transcription", async () => {
+    stubFetch({ chunks: [] });
+    renderViewer("non_diarised");
+    await screen.findByText("Transcription vide.");
+    expect(downloadButton()).toBeNull();
+  });
+
+  test("clicking saves the markdown via downloadTextFile with a title-based filename", async () => {
+    stubFetch({
+      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
+      markdown: "# Ma Séance\n\nTexte",
+    });
+    renderViewer("non_diarised", "Ma Séance");
+    const button = await screen.findByRole("button", { name: /Télécharger/ });
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        "transcription-ma-seance.md",
+        "# Ma Séance\n\nTexte",
+      ),
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test("a failed download raises a toast and writes no file", async () => {
+    stubFetch({
+      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
+      markdownStatus: 500,
+    });
+    renderViewer("non_diarised");
+    const button = await screen.findByRole("button", { name: /Télécharger/ });
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Impossible de télécharger la transcription.",
+      ),
+    );
+    expect(downloadTextFile).not.toHaveBeenCalled();
   });
 });
