@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -30,11 +30,22 @@ const sampleCampaign = {
   created_at: "2026-01-12T18:00:00+00:00",
 };
 
+const alice = {
+  id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  username: "alice",
+  system_role: "user" as const,
+  status: "active" as const,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  last_login_at: null,
+};
+
 const aragorn = {
   id: "pj-aragorn",
   name: "Aragorn",
   campaign_id: CAMPAIGN_ID,
   created_at: "2026-05-30T10:00:00Z",
+  user_id: null as string | null,
 };
 
 const legolas = {
@@ -42,6 +53,7 @@ const legolas = {
   name: "Legolas",
   campaign_id: CAMPAIGN_ID,
   created_at: "2026-05-29T10:00:00Z",
+  user_id: alice.id as string | null,
 };
 
 afterEach(() => {
@@ -53,6 +65,7 @@ function stubFetch(opts: {
   pjs?: Array<typeof aragorn>;
   pjsStatus?: number;
   pjsPending?: boolean;
+  users?: Array<typeof alice>;
 }) {
   if (opts.pjsPending) {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
@@ -62,6 +75,32 @@ function stubFetch(opts: {
     "fetch",
     vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
+      const method =
+        typeof input === "string" ? "GET" : (input.method ?? "GET");
+      const upper = method.toUpperCase();
+      if (url.includes("/services/jdr/users")) {
+        return new Response(
+          JSON.stringify({
+            items: opts.users ?? [alice],
+            total: (opts.users ?? [alice]).length,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      // PATCH /services/jdr/pjs/{id} — return the updated PjOut.
+      if (url.includes("/services/jdr/pjs/") && upper === "PATCH") {
+        const body = (await (input as Request).clone().json()) as {
+          name?: string;
+          user_id?: string | null;
+        };
+        return new Response(
+          JSON.stringify({
+            ...aragorn,
+            ...body,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
       if (url.includes("/services/jdr/pjs")) {
         if (opts.pjsStatus && opts.pjsStatus >= 400) {
           return new Response(
@@ -191,5 +230,68 @@ describe("<CampaignPjsCard>", () => {
     expect(
       await screen.findByRole("heading", { name: "Supprimer Aragorn ?" }),
     ).toBeInTheDocument();
+  });
+
+  test("does NOT render the stray Mock chip (C2)", async () => {
+    stubFetch({ pjs: [aragorn] });
+    renderCard();
+    await screen.findByText("Aragorn");
+    expect(screen.queryByText("Mock")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/suppression d'un PJ est encore mockée/i),
+    ).not.toBeInTheDocument();
+  });
+
+  test("shows the link state in each row (linked username / Non lié)", async () => {
+    stubFetch({ pjs: [aragorn, legolas], users: [alice] });
+    renderCard();
+    // legolas is linked to alice, aragorn is unlinked.
+    expect(await screen.findByText(/Joueur : @alice/)).toBeInTheDocument();
+    expect(screen.getByText(/Non lié/)).toBeInTheDocument();
+  });
+
+  test("clicking a row Éditer button opens the edit dialog prefilled", async () => {
+    stubFetch({ pjs: [legolas], users: [alice] });
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(
+      await screen.findByRole("button", { name: "Éditer le PJ Legolas" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Modifier le PJ" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom du PJ")).toHaveValue("Legolas");
+    expect(
+      (screen.getByLabelText("Joueur lié") as HTMLSelectElement).value,
+    ).toBe(alice.id);
+  });
+
+  test("submitting the edit dialog PATCHes the PJ and closes", async () => {
+    stubFetch({ pjs: [aragorn], users: [alice] });
+    const user = userEvent.setup();
+    renderCard();
+    await user.click(
+      await screen.findByRole("button", { name: "Éditer le PJ Aragorn" }),
+    );
+    await screen.findByRole("heading", { name: "Modifier le PJ" });
+    await user.selectOptions(screen.getByLabelText("Joueur lié"), alice.id);
+    await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const patched = fetchMock.mock.calls.some((args) => {
+        const request = args[0] as Request;
+        return (
+          request.url.includes("/services/jdr/pjs/") &&
+          request.method === "PATCH"
+        );
+      });
+      expect(patched).toBe(true);
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { name: "Modifier le PJ" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });
