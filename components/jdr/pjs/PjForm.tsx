@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { pjUpdateSchema, type PjCreateInput } from "@/lib/jdr/schemas/pjs";
 import type { PjOut } from "@/lib/jdr/pjs/queries";
 import type { UserOut } from "@/lib/jdr/users/queries";
@@ -80,6 +87,15 @@ export function PjForm({
   const nameError = form.formState.errors.name?.message;
   const unresolvedUserId = isEdit ? unresolvedLinkedUser(pj, users) : null;
 
+  // Libellés affichés par <SelectValue> (Base UI résout la valeur via `items`).
+  const userItems: Record<string, string> = { "": "Aucun (non lié)" };
+  users.forEach((user) => {
+    userItems[user.id] = user.username;
+  });
+  if (unresolvedUserId) {
+    userItems[unresolvedUserId] = "Joueur lié (non résolu)";
+  }
+
   const handleSubmit = (values: FormShape) => {
     if (mode === "edit" && pj) {
       onSubmit({
@@ -92,7 +108,13 @@ export function PjForm({
       });
       return;
     }
-    onSubmit({ mode: "create", values: { name: values.name } });
+    onSubmit({
+      mode: "create",
+      values: {
+        name: values.name,
+        userId: values.userId === "" ? undefined : values.userId,
+      },
+    });
   };
 
   return (
@@ -134,28 +156,37 @@ export function PjForm({
             )}
           </div>
 
-          {isEdit && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="pj-user">Joueur lié</Label>
-              <select
-                id="pj-user"
-                className="border-border-chrome bg-surface-raised rounded-md border px-3 py-2 text-sm"
-                {...form.register("userId")}
-              >
-                <option value="">Aucun (non lié)</option>
-                {unresolvedUserId && (
-                  <option value={unresolvedUserId}>
-                    Joueur lié (non résolu)
-                  </option>
-                )}
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.username}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pj-user">Joueur lié</Label>
+            <Controller
+              control={form.control}
+              name="userId"
+              render={({ field }) => (
+                <Select
+                  items={userItems}
+                  value={field.value ?? ""}
+                  onValueChange={(value) => field.onChange(value ?? "")}
+                >
+                  <SelectTrigger id="pj-user" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Aucun (non lié)</SelectItem>
+                    {unresolvedUserId && (
+                      <SelectItem value={unresolvedUserId}>
+                        Joueur lié (non résolu)
+                      </SelectItem>
+                    )}
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
 
           {errorMessage && (
             <div

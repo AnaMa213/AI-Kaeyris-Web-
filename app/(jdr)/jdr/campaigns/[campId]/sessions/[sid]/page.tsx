@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Volume2 } from "lucide-react";
+import { Pencil, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/common/IconButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
@@ -482,15 +483,13 @@ export default function SessionDetailPage() {
             </time>
           </div>
 
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             {canEdit && (
-              <Button
-                type="button"
-                variant="ghost"
+              <IconButton
+                label="Modifier la séance"
+                icon={<Pencil aria-hidden="true" />}
                 onClick={() => setEditing(true)}
-              >
-                Modifier
-              </Button>
+              />
             )}
             {audioReady && (
               <Button
@@ -594,8 +593,9 @@ export default function SessionDetailPage() {
         <TabsContent value="artefacts" className="space-y-6">
           <Tabs value={tabState.sub} onValueChange={handleArtifactSubTabChange}>
             {/* Story 4.7 (S6) : la déclaration des présents est un dropdown
-                compact sur la même ligne que les sous-onglets, à droite. */}
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                compact sur la même ligne que les sous-onglets. Bug 5 : collé à
+                gauche, juste après les sous-onglets (et non plus à droite). */}
+            <div className="mb-6 flex flex-wrap items-center gap-3">
               <TabsList
                 variant="line"
                 className="bg-surface-raised border-border-chrome flex-wrap rounded-md border px-3"

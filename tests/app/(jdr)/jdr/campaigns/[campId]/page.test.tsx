@@ -167,10 +167,10 @@ describe("/jdr/campaigns/[campId] page", () => {
     expect(screen.getByText("Une trahison ancienne.")).toBeInTheDocument();
     expect(screen.getByText(/sessions · démarrée le/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Modifier" }),
+      screen.getByRole("button", { name: "Modifier la campagne" }),
     ).not.toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Supprimer" }),
+      screen.getByRole("button", { name: "Supprimer la campagne" }),
     ).not.toBeDisabled();
   });
 
@@ -201,10 +201,10 @@ describe("/jdr/campaigns/[campId] page", () => {
     renderPage();
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Modifier" }),
+      screen.queryByRole("button", { name: "Modifier la campagne" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Supprimer" }),
+      screen.queryByRole("button", { name: "Supprimer la campagne" }),
     ).not.toBeInTheDocument();
   });
 
@@ -213,7 +213,7 @@ describe("/jdr/campaigns/[campId] page", () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole("heading", { level: 1, name: campaign.name });
-    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.click(screen.getByRole("button", { name: "Modifier la campagne" }));
     expect(
       await screen.findByRole("heading", { name: "Modifier la campagne" }),
     ).toBeInTheDocument();
@@ -227,7 +227,9 @@ describe("/jdr/campaigns/[campId] page", () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole("heading", { level: 1, name: campaign.name });
-    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer la campagne" }),
+    );
     expect(
       await screen.findByRole("heading", {
         name: `Supprimer ${campaign.name} ?`,

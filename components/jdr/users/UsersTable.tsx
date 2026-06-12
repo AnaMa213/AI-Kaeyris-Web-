@@ -1,9 +1,10 @@
 "use client";
 
+import { Pencil, UserX } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/common/IconButton";
 import type { UserOut } from "@/lib/jdr/users/queries";
 
 interface UsersTableProps {
@@ -65,24 +66,18 @@ export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
             <td className="text-text-chrome-muted px-4 py-3 text-sm">
               {format(new Date(user.created_at), "dd/MM/yyyy", { locale: fr })}
             </td>
-            <td className="flex gap-2 px-4 py-3">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
+            <td className="flex gap-1 px-4 py-3">
+              <IconButton
+                label="Modifier le compte"
+                icon={<Pencil aria-hidden="true" />}
                 onClick={() => onEdit(user)}
-              >
-                Modifier
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
+              />
+              <IconButton
+                label="Désactiver"
+                icon={<UserX aria-hidden="true" />}
                 onClick={() => onDelete(user)}
-                className="text-state-error hover:text-state-error"
-              >
-                Désactiver
-              </Button>
+                className="text-state-error-strong hover:text-state-error-strong! hover:bg-state-error/10!"
+              />
             </td>
           </tr>
         ))}

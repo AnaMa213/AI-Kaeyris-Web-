@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
+import { BackLink } from "@/components/common/BackLink";
 import { CampaignForm } from "@/components/jdr/campaigns/CampaignForm";
 import { ApiError } from "@/lib/core/api/errors";
 import { useCreateCampaign } from "@/lib/jdr/campaigns/queries";
@@ -29,6 +30,9 @@ export default function NewCampaignPage() {
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
+      <div className="mb-4">
+        <BackLink href="/jdr/campaigns" label="Campagnes" />
+      </div>
       <header className="mx-auto mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-semibold">
           Nouvelle campagne

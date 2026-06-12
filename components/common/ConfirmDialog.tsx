@@ -17,7 +17,7 @@ import {
  * legible on the dark dialog footer surface.
  */
 export const DESTRUCTIVE_CONFIRM_CLASSES =
-  "border border-state-error/40 bg-state-error/10 text-state-error hover:bg-state-error/20! hover:text-state-error!";
+  "border border-state-error-strong/50 bg-state-error/10 text-state-error-strong hover:bg-state-error/20! hover:text-state-error-strong!";
 
 interface ConfirmDialogProps {
   open: boolean;

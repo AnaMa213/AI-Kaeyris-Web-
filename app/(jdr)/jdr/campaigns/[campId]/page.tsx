@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/common/IconButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { CampaignDeleteConfirm } from "@/components/jdr/campaigns/CampaignDeleteConfirm";
@@ -129,25 +131,21 @@ export default function CampaignDetailPage() {
               le {createdLabel}
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             {canEdit && (
-              <Button
-                type="button"
-                variant="ghost"
+              <IconButton
+                label="Modifier la campagne"
+                icon={<Pencil aria-hidden="true" />}
                 onClick={() => setEditing(true)}
-              >
-                Modifier
-              </Button>
+              />
             )}
             {canDelete && (
-              <Button
-                type="button"
-                variant="ghost"
+              <IconButton
+                label="Supprimer la campagne"
+                icon={<Trash2 aria-hidden="true" />}
                 onClick={() => setDeleting(true)}
-                className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
-              >
-                Supprimer
-              </Button>
+                className="text-state-error-strong hover:text-state-error-strong! hover:bg-state-error/10!"
+              />
             )}
           </div>
         </div>
@@ -166,7 +164,9 @@ export default function CampaignDetailPage() {
               <span className="text-text-chrome-muted text-xs tracking-wide uppercase">
                 {sortedSessions.length} · zone de recherche future
               </span>
-              {canCreateSession && (
+              {/* Bug 1 : sur liste vide, l'empty state porte déjà le CTA —
+                  on masque ici le doublon du header. */}
+              {canCreateSession && sortedSessions.length > 0 && (
                 <Button
                   type="button"
                   size="sm"
