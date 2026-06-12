@@ -52,6 +52,7 @@
   --color-state-success: var(--state-success);
   --color-state-warning: var(--state-warning);
   --color-state-error: var(--state-error);
+  --color-state-error-strong: var(--state-error-strong);
   --color-state-info: var(--state-info);
 
   /* Fonts — next/font/google variables exposed as Tailwind tokens */
@@ -71,6 +72,11 @@
 }
 
 :root {
+  /* Bichromie sombre par défaut : informe les contrôles natifs (date picker,
+   * indicateur de calendrier datetime-local, scrollbars) pour qu'ils s'affichent
+   * en thème sombre au lieu du blanc système (Bug Epic 4bis). */
+  color-scheme: dark;
+
   /* Chrome dark-fantasy surfaces (sidebar, login, modals, dialogs) */
   --surface-base: oklch(0.18 0.02 270);
   --surface-raised: oklch(0.23 0.025 270);
@@ -110,6 +116,10 @@
   --state-success: oklch(0.55 0.10 150);
   --state-warning: oklch(0.70 0.13 75);
   --state-error: var(--accent-action);
+  /* Rouge éclairci pour le PREMIER PLAN (icônes/texte destructifs) sur surfaces
+   * sombres : `--state-error` (= accent-action, L≈0.42) reste pour fonds/bordures
+   * mais manque de contraste en texte. (Bug 4 Epic 4bis) */
+  --state-error-strong: oklch(0.68 0.17 25);
   --state-info: var(--accent-info);
 
   --radius: 0.625rem;
@@ -146,6 +156,7 @@
   --state-success: oklch(0.55 0.10 150);
   --state-warning: oklch(0.70 0.13 75);
   --state-error: var(--accent-action);
+  --state-error-strong: oklch(0.68 0.17 25);
   --state-info: var(--accent-info);
 }
 

@@ -169,7 +169,7 @@ describe("useListCampaignPjs", () => {
 });
 
 describe("useCreateCampaignPj", () => {
-  test("POSTs /services/jdr/pjs with name + campaign_id in the body", async () => {
+  test("POSTs /services/jdr/pjs with name + campaign_id (user_id null when unlinked)", async () => {
     const queryClient = makeClient();
     const { result } = renderHook(() => useCreateCampaignPj(CAMPAIGN_ID), {
       wrapper: wrapper(queryClient),
@@ -188,6 +188,32 @@ describe("useCreateCampaignPj", () => {
     await expect((call[0] as Request).clone().json()).resolves.toEqual({
       name: "Aragorn",
       campaign_id: CAMPAIGN_ID,
+      user_id: null,
+    });
+  });
+
+  test("POSTs /services/jdr/pjs with user_id when linking at creation", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => useCreateCampaignPj(CAMPAIGN_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({
+      name: "Aragorn",
+      userId: "22222222-2222-2222-2222-222222222222",
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const call = fetchMock.mock.calls.find((args) => {
+      const request = args[0] as Request;
+      return (
+        request.url.endsWith("/services/jdr/pjs") && request.method === "POST"
+      );
+    });
+    if (!call) throw new Error("No POST /pjs call found");
+    await expect((call[0] as Request).clone().json()).resolves.toEqual({
+      name: "Aragorn",
+      campaign_id: CAMPAIGN_ID,
+      user_id: "22222222-2222-2222-2222-222222222222",
     });
   });
 

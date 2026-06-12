@@ -49,7 +49,9 @@ describe("<UsersTable>", () => {
     render(
       <UsersTable users={users} onEdit={onEdit} onDelete={vi.fn()} />,
     );
-    const editButtons = screen.getAllByRole("button", { name: "Modifier" });
+    const editButtons = screen.getAllByRole("button", {
+      name: "Modifier le compte",
+    });
     await user.click(editButtons[0]);
     expect(onEdit).toHaveBeenCalledWith(users[0]);
   });

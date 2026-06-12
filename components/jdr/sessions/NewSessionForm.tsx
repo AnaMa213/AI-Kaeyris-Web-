@@ -1,15 +1,27 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   sessionCreateSchema,
   type SessionCreateInput,
   type SessionCreateFormInput,
 } from "@/lib/jdr/schemas/sessions";
+
+const TRANSCRIPTION_MODE_ITEMS: Record<string, string> = {
+  non_diarised: "Sans distinction des intervenants",
+  diarised: "Avec distinction des intervenants",
+};
 
 interface NewSessionFormProps {
   onSubmit: (values: SessionCreateInput) => void;
@@ -107,17 +119,33 @@ export function NewSessionForm({
         <Label htmlFor="session-transcription-mode">
           Type de transcription
         </Label>
-        <select
-          id="session-transcription-mode"
-          disabled={submitting}
-          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 disabled:bg-input/50 dark:bg-input/30 h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:ring-3 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-          {...form.register("transcription_mode")}
-        >
-          <option value="non_diarised">
-            Sans distinction des intervenants
-          </option>
-          <option value="diarised">Avec distinction des intervenants</option>
-        </select>
+        <Controller
+          control={form.control}
+          name="transcription_mode"
+          render={({ field }) => (
+            <Select
+              items={TRANSCRIPTION_MODE_ITEMS}
+              value={field.value ?? "non_diarised"}
+              onValueChange={(value) => field.onChange(value)}
+              disabled={submitting}
+            >
+              <SelectTrigger
+                id="session-transcription-mode"
+                className="w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="non_diarised">
+                  Sans distinction des intervenants
+                </SelectItem>
+                <SelectItem value="diarised">
+                  Avec distinction des intervenants
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
         <p className="text-text-chrome-muted text-sm">
           Choisis si la transcription doit distinguer qui parle. Non modifiable
           après la création.

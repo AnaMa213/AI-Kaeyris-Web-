@@ -9,6 +9,9 @@ const pjNameField = z
 
 export const pjCreateSchema = z.object({
   name: pjNameField,
+  // Liaison joueur optionnelle dès la création (Bug 3). "" = non lié → mappé en
+  // `null` à la frontière de la mutation, comme en édition.
+  userId: z.string().optional(),
 });
 
 // Edit payload. `userId` is the picker's value: "" means "unlinked" (mapped to

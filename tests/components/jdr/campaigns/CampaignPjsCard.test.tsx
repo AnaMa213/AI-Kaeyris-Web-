@@ -253,9 +253,9 @@ describe("<CampaignPjsCard>", () => {
   test("shows the link state in each row (linked username / Non lié)", async () => {
     stubFetch({ pjs: [aragorn, legolas], users: [alice] });
     renderCard();
-    // legolas is linked to alice, aragorn is unlinked.
-    expect(await screen.findByText(/Joueur : @alice/)).toBeInTheDocument();
-    expect(screen.getByText(/Non lié/)).toBeInTheDocument();
+    // Liaison inline (Bug 3) : le trigger affiche "@alice" (lié) ou "Non lié".
+    expect(await screen.findByText("@alice")).toBeInTheDocument();
+    expect(screen.getByText("Non lié")).toBeInTheDocument();
   });
 
   test("clicking a row Éditer button opens the edit dialog prefilled", async () => {
@@ -269,9 +269,8 @@ describe("<CampaignPjsCard>", () => {
       await screen.findByRole("heading", { name: "Modifier le PJ" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Nom du PJ")).toHaveValue("Legolas");
-    expect(
-      (screen.getByLabelText("Joueur lié") as HTMLSelectElement).value,
-    ).toBe(alice.id);
+    // Dialog picker (themed Select) : le trigger affiche le username lié.
+    expect(screen.getByLabelText("Joueur lié")).toHaveTextContent("alice");
   });
 
   test("submitting the edit dialog PATCHes the PJ and closes", async () => {
@@ -282,7 +281,8 @@ describe("<CampaignPjsCard>", () => {
       await screen.findByRole("button", { name: "Éditer le PJ Aragorn" }),
     );
     await screen.findByRole("heading", { name: "Modifier le PJ" });
-    await user.selectOptions(screen.getByLabelText("Joueur lié"), alice.id);
+    await user.click(screen.getByLabelText("Joueur lié"));
+    await user.click(await screen.findByRole("option", { name: "alice" }));
     await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
 
     await waitFor(() => {

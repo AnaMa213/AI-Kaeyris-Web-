@@ -251,7 +251,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     stubFetch({});
     renderPage();
     expect(
-      await screen.findByRole("button", { name: "Modifier" }),
+      await screen.findByRole("button", { name: "Modifier la séance" }),
     ).toBeInTheDocument();
   });
 
@@ -261,7 +261,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     // Wait for the page to settle (h1 rendered)
     await screen.findByRole("heading", { level: 1 });
     expect(
-      screen.queryByRole("button", { name: "Modifier" }),
+      screen.queryByRole("button", { name: "Modifier la séance" }),
     ).not.toBeInTheDocument();
   });
 
@@ -529,7 +529,9 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     stubFetch({});
     const user = userEvent.setup();
     renderPage();
-    const editButton = await screen.findByRole("button", { name: "Modifier" });
+    const editButton = await screen.findByRole("button", {
+      name: "Modifier la séance",
+    });
     await user.click(editButton);
     expect(
       await screen.findByRole("heading", { name: "Modifier la session" }),

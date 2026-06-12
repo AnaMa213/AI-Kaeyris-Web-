@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { Link2, Pencil, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { IconButton } from "@/components/common/IconButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PjDeleteConfirm } from "@/components/jdr/pjs/PjDeleteConfirm";
 import { PjForm, type PjFormSubmitPayload } from "@/components/jdr/pjs/PjForm";
@@ -75,13 +85,78 @@ function sortByCreatedAtDesc(items: PjOut[]): PjOut[] {
   );
 }
 
-// Resolve a PJ's link to a short, human label. Never surface a raw UUID:
+// Resolve a user_id to a short, human label. Never surface a raw UUID:
 // a linked-but-unresolved user_id (still loading, or a user not in the list)
 // degrades to a neutral "Joueur lié".
-function linkLabel(pj: PjOut, users: UserOut[]): string {
-  if (!pj.user_id) return "Non lié";
-  const linked = users.find((user) => user.id === pj.user_id);
-  return linked ? `Joueur : @${linked.username}` : "Joueur lié";
+function linkLabelForUser(
+  userId: string | null | undefined,
+  users: UserOut[],
+): string {
+  if (!userId) return "Non lié";
+  const linked = users.find((user) => user.id === userId);
+  return linked ? `@${linked.username}` : "Joueur lié";
+}
+
+// Bug 3 (v2) — liaison joueur via une petite icône de liaison + dropdown compact
+// (l'ancien Select pleine largeur mangeait toute la ligne). La ligne « @user · date »
+// dessous reflète la sélection ; côté parent, un feedback optimiste évite l'attente
+// du refetch.
+function PjLinkControl({
+  pj,
+  users,
+  pending,
+  onLink,
+}: {
+  pj: PjOut;
+  users: UserOut[];
+  pending: boolean;
+  onLink: (userId: string | null) => void;
+}) {
+  const linked = Boolean(pj.user_id);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            disabled={pending}
+            aria-label={
+              linked
+                ? `Modifier la liaison joueur de ${pj.name}`
+                : `Lier ${pj.name} à un joueur`
+            }
+            title={linked ? "Modifier la liaison" : "Lier à un joueur"}
+            className={linked ? "text-accent-gold" : "text-text-chrome-muted"}
+          />
+        }
+      >
+        <Link2 aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        <p className="text-text-chrome-muted px-1.5 py-1 text-xs font-medium">
+          Lier à un joueur
+        </p>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={!pj.user_id}
+          onCheckedChange={() => onLink(null)}
+        >
+          Non lié
+        </DropdownMenuCheckboxItem>
+        {users.map((user) => (
+          <DropdownMenuCheckboxItem
+            key={user.id}
+            checked={pj.user_id === user.id}
+            onCheckedChange={() => onLink(user.id)}
+          >
+            @{user.username}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
@@ -121,11 +196,26 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
     );
   };
 
+  // Liaison joueur inline (dropdown icône) — réutilise la mutation de mise à
+  // jour (le nom est conservé tel quel). Erreur surfacée en toast (pas de dialog).
+  const handleLink = (pj: PjOut, userId: string | null) => {
+    if ((pj.user_id ?? null) === userId) return;
+    updateMutation.mutate(
+      { pjId: pj.id, name: pj.name, userId },
+      {
+        onError: (error) =>
+          toast.error(formatUpdateError(error) ?? "Modification impossible."),
+      },
+    );
+  };
+
   return (
     <section className={SECTION_CARD_CLASSES}>
       <header className="mb-4 flex items-center justify-between gap-3">
         <h2 className="font-display text-xl">PJs</h2>
-        {canManage && (
+        {/* Bug 1 : sur roster vide, l'empty state porte déjà le CTA —
+            on masque ici le doublon du header. */}
+        {canManage && sorted.length > 0 && (
           <Button
             type="button"
             variant="ghost"
@@ -185,15 +275,36 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
               locale: fr,
             });
             const absolute = format(createdAt, "dd/MM/yyyy", { locale: fr });
+            // Feedback optimiste de la liaison : `mutation.variables` + `isPending`
+            // → la ligne « @user » se met à jour avant le refetch ; au repli (échec)
+            // `isPending` retombe et on revient à la valeur serveur.
+            const pendingUserId =
+              updateMutation.isPending &&
+              updateMutation.variables?.pjId === pj.id
+                ? updateMutation.variables.userId
+                : undefined;
+            const effectiveUserId =
+              pendingUserId !== undefined ? pendingUserId : pj.user_id;
             return (
               <li
                 key={pj.id}
                 className="flex items-center justify-between gap-3 py-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{pj.name}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="truncate font-medium">{pj.name}</p>
+                    {/* Item 2 : icône de liaison compacte → dropdown joueur. */}
+                    {canManage && (
+                      <PjLinkControl
+                        pj={pj}
+                        users={users}
+                        pending={pendingUserId !== undefined}
+                        onLink={(userId) => handleLink(pj, userId)}
+                      />
+                    )}
+                  </div>
                   <p className="text-text-chrome-muted text-xs">
-                    {linkLabel(pj, users)}
+                    {linkLabelForUser(effectiveUserId, users)}
                     <span aria-hidden="true"> · </span>
                     <time dateTime={pj.created_at} title={absolute}>
                       {relative}
@@ -202,25 +313,17 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
                 </div>
                 {canManage && (
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
+                    <IconButton
+                      label={`Éditer le PJ ${pj.name}`}
+                      icon={<Pencil aria-hidden="true" />}
                       onClick={() => setEditingPj(pj)}
-                      aria-label={`Éditer le PJ ${pj.name}`}
-                    >
-                      Éditer
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
+                    />
+                    <IconButton
+                      label={`Supprimer le PJ ${pj.name}`}
+                      icon={<Trash2 aria-hidden="true" />}
                       onClick={() => setDeletingPj(pj)}
-                      aria-label={`Supprimer le PJ ${pj.name}`}
-                      className="text-state-error hover:text-state-error! hover:bg-state-error/10!"
-                    >
-                      Supprimer
-                    </Button>
+                      className="text-state-error-strong hover:text-state-error-strong! hover:bg-state-error/10!"
+                    />
                   </div>
                 )}
               </li>
@@ -231,6 +334,7 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
 
       <PjForm
         open={creating}
+        users={users}
         onOpenChange={(open) => {
           setCreating(open);
           if (!open) createMutation.reset();

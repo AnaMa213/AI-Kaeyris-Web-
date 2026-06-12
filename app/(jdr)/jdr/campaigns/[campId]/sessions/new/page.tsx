@@ -33,12 +33,12 @@ export default function NewSessionPage() {
   const errorMessage = formatCreateError(createMutation.error);
 
   return (
-    <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
+    <section className="bg-background text-foreground min-h-full p-8">
       <div className="mb-4">
         <CampaignBreadcrumb campaignId={campId} />
       </div>
 
-      <header className="mb-8">
+      <header className="mx-auto mb-8 max-w-2xl">
         <h1 className="font-display text-3xl font-semibold">
           Nouvelle session
         </h1>
@@ -48,7 +48,7 @@ export default function NewSessionPage() {
         </p>
       </header>
 
-      <section className="max-w-2xl">
+      <section className="mx-auto max-w-2xl">
         {campaignQuery.isPending ? (
           <p role="status" className="text-text-chrome-muted text-sm">
             Vérification des droits de campagne...

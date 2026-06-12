@@ -3,6 +3,7 @@
 // Legacy dense table surface: Story 2.7 leaves `/jdr/users` chrome as-is.
 // UI polish will come with the future users administration refactor.
 import { useState } from "react";
+import { BackLink } from "@/components/common/BackLink";
 import { Button } from "@/components/ui/button";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { UserDeactivateConfirm } from "@/components/jdr/users/UserDeactivateConfirm";
@@ -43,6 +44,9 @@ export default function UsersPage() {
 
   return (
     <section className="bg-background text-foreground min-h-full p-8">
+      <div className="mb-4">
+        <BackLink href="/jdr/campaigns" label="Campagnes" />
+      </div>
       <header className="mx-auto mb-8 flex max-w-5xl items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold">Utilisateurs</h1>

@@ -65,9 +65,9 @@ describe("<PjForm> create mode", () => {
     ).toBeInTheDocument();
   });
 
-  test("does NOT render the user picker in create mode", () => {
+  test("renders the user picker in create mode (link at creation)", () => {
     renderForm();
-    expect(screen.queryByLabelText("Joueur lié")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Joueur lié")).toBeInTheDocument();
   });
 
   test("submits the typed name as a create payload on Créer click", async () => {
@@ -120,24 +120,26 @@ describe("<PjForm> edit mode", () => {
     users: [alice, bob],
   };
 
-  test("renders the edit heading, prefilled name, and the user picker", () => {
+  test("renders the edit heading, prefilled name, and the user picker", async () => {
+    const user = userEvent.setup();
     renderForm(editProps);
     expect(
       screen.getByRole("heading", { name: "Modifier le PJ" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Nom du PJ")).toHaveValue("Eldrin");
-    const picker = screen.getByLabelText("Joueur lié") as HTMLSelectElement;
-    expect(picker).toBeInTheDocument();
-    // Prefilled with the currently linked user.
-    expect(picker.value).toBe(alice.id);
-    expect(
-      screen.getByRole("option", { name: "Aucun (non lié)" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "alice" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "bob" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Mettre à jour" }),
     ).toBeInTheDocument();
+    // Themed Select : le trigger affiche le libellé du joueur lié (alice).
+    const picker = screen.getByLabelText("Joueur lié");
+    expect(picker).toHaveTextContent("alice");
+    // Les options ne sont montées qu'à l'ouverture du popup.
+    await user.click(picker);
+    expect(
+      await screen.findByRole("option", { name: "Aucun (non lié)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "alice" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "bob" })).toBeInTheDocument();
   });
 
   test("submits an edit payload with the renamed name + linked user_id", async () => {
@@ -146,7 +148,8 @@ describe("<PjForm> edit mode", () => {
     const nameInput = screen.getByLabelText("Nom du PJ");
     await user.clear(nameInput);
     await user.type(nameInput, "Aragorn");
-    await user.selectOptions(screen.getByLabelText("Joueur lié"), bob.id);
+    await user.click(screen.getByLabelText("Joueur lié"));
+    await user.click(await screen.findByRole("option", { name: "bob" }));
     await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith({
@@ -159,7 +162,10 @@ describe("<PjForm> edit mode", () => {
   test("sends user_id: null when 'Aucun' is selected (unlink)", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm(editProps);
-    await user.selectOptions(screen.getByLabelText("Joueur lié"), "");
+    await user.click(screen.getByLabelText("Joueur lié"));
+    await user.click(
+      await screen.findByRole("option", { name: "Aucun (non lié)" }),
+    );
     await user.click(screen.getByRole("button", { name: "Mettre à jour" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit).toHaveBeenCalledWith({
@@ -172,11 +178,9 @@ describe("<PjForm> edit mode", () => {
   test("preserves an unresolved current user link on rename-only submit", async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm({ mode: "edit", pj: eldrin, users: [] });
-    const picker = screen.getByLabelText("Joueur lié") as HTMLSelectElement;
-    expect(picker.value).toBe(alice.id);
-    expect(
-      screen.getByRole("option", { name: "Joueur lié (non résolu)" }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Joueur lié")).toHaveTextContent(
+      "Joueur lié (non résolu)",
+    );
 
     const nameInput = screen.getByLabelText("Nom du PJ");
     await user.clear(nameInput);
@@ -193,8 +197,9 @@ describe("<PjForm> edit mode", () => {
 
   test("defaults the picker to 'Aucun' when the PJ has no linked user", () => {
     renderForm({ mode: "edit", pj: { ...eldrin, user_id: null }, users: [alice] });
-    const picker = screen.getByLabelText("Joueur lié") as HTMLSelectElement;
-    expect(picker.value).toBe("");
+    expect(screen.getByLabelText("Joueur lié")).toHaveTextContent(
+      "Aucun (non lié)",
+    );
   });
 
   test("Escape does not close the edit dialog (Story 4.6 inherited)", async () => {

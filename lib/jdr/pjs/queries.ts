@@ -44,7 +44,12 @@ export function useCreateCampaignPj(campaignId: string) {
   return useMutation({
     mutationFn: async (input: PjCreateInput) => {
       const result = await apiClient.POST("/services/jdr/pjs", {
-        body: { name: input.name, campaign_id: campaignId },
+        body: {
+          name: input.name,
+          campaign_id: campaignId,
+          // "" / undefined → null explicite (PjCreate accepte user_id nullable).
+          user_id: input.userId ? input.userId : null,
+        },
       });
       return unwrap<PjOut>(result);
     },

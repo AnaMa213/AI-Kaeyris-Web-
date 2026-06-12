@@ -96,7 +96,7 @@ export function PjPresenceDropdown({
         <Users className="h-4 w-4" aria-hidden="true" />
         Qui était présent ?{selectedCount > 0 ? ` (${selectedCount})` : ""}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="start" className="w-64">
         <p className="text-text-chrome-muted px-1.5 py-1 text-xs font-medium">
           PJs présents à la séance
         </p>

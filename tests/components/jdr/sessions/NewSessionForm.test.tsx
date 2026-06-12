@@ -101,15 +101,17 @@ describe("<NewSessionForm>", () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  test("exposes a 'Type de transcription' picker with functional labels, defaulting to non_diarised", () => {
+  test("exposes a 'Type de transcription' picker with functional labels, defaulting to non_diarised", async () => {
+    const user = userEvent.setup();
     renderForm();
-    const select = screen.getByLabelText(
-      "Type de transcription",
-    ) as HTMLSelectElement;
-    expect(select).toBeInTheDocument();
-    // Functional French labels, never the raw enum codes.
+    const trigger = screen.getByLabelText("Type de transcription");
+    expect(trigger).toBeInTheDocument();
+    // Default pre-selection shown on the trigger.
+    expect(trigger).toHaveTextContent("Sans distinction des intervenants");
+    // Options only mount when the popup opens.
+    await user.click(trigger);
     expect(
-      screen.getByRole("option", {
+      await screen.findByRole("option", {
         name: "Sans distinction des intervenants",
       }),
     ).toBeInTheDocument();
@@ -118,10 +120,9 @@ describe("<NewSessionForm>", () => {
         name: "Avec distinction des intervenants",
       }),
     ).toBeInTheDocument();
+    // Functional French labels, never the raw enum codes.
     expect(screen.queryByText(/non_diarised/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\bdiarised\b/i)).not.toBeInTheDocument();
-    // Default pre-selection.
-    expect(select.value).toBe("non_diarised");
   });
 
   test("includes the default transcription_mode (non_diarised) in the submit payload", async () => {
@@ -138,9 +139,11 @@ describe("<NewSessionForm>", () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
     await user.type(screen.getByLabelText("Titre"), "Session 7");
-    await user.selectOptions(
-      screen.getByLabelText("Type de transcription"),
-      "diarised",
+    await user.click(screen.getByLabelText("Type de transcription"));
+    await user.click(
+      await screen.findByRole("option", {
+        name: "Avec distinction des intervenants",
+      }),
     );
     await user.click(screen.getByRole("button", { name: "Créer la session" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
