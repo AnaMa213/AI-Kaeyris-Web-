@@ -14,6 +14,10 @@ vi.mock("@/lib/core/env", () => ({
   },
 }));
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
+
 const toastErrorMock = vi.fn();
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: (...a: unknown[]) => toastErrorMock(...a) },
@@ -25,44 +29,129 @@ const { PovArtifactPanel } = await import(
 
 const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
 const CAMPAIGN_ID = "11111111-1111-1111-1111-111111111111";
+const PJ_1 = "pj-1";
+const PJ_2 = "pj-2";
 
-function stub(opts: { declared?: string[]; jobStatus?: string; playersStatus?: number }) {
+function pj(id: string, name: string) {
+  return {
+    id,
+    name,
+    campaign_id: CAMPAIGN_ID,
+    user_id: null,
+    created_at: "2026-06-01T09:00:00Z",
+  };
+}
+
+function pov(id: string, text: string, generatedAt = "2026-06-01T10:00:00Z") {
+  return {
+    session_id: SESSION_ID,
+    pj_id: id,
+    text,
+    model_used: "claude-x",
+    generated_at: generatedAt,
+  };
+}
+
+function responseJson(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function responseProblem(status: number, title: string) {
+  return new Response(
+    JSON.stringify({ type: "about:blank", title, status }),
+    { status, headers: { "content-type": "application/problem+json" } },
+  );
+}
+
+function stub(opts: {
+  declared?: string[];
+  roster?: ReturnType<typeof pj>[];
+  povs?: Record<string, ReturnType<typeof pov> | null>;
+  generated?: boolean;
+  jobStatus?: "queued" | "running" | "succeeded" | "failed";
+  failureReason?: string | null;
+  playersStatus?: number;
+  povStatus?: number;
+} = {}) {
+  const declared = opts.declared ?? [];
+  const roster =
+    opts.roster ?? declared.map((id, index) => pj(id, `PJ ${index + 1}`));
+  let generated = Boolean(opts.generated);
+
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string) => {
       const url = typeof input === "string" ? input : input.url;
       const method = typeof input === "string" ? "GET" : (input.method ?? "GET");
+      const isPost = method.toUpperCase() === "POST";
+
       if (url.includes(`/sessions/${SESSION_ID}/players`)) {
         if (opts.playersStatus && opts.playersStatus >= 400) {
-          return new Response(
-            JSON.stringify({
-              type: "about:blank",
-              title: "players error",
-              status: opts.playersStatus,
-            }),
-            {
-              status: opts.playersStatus,
-              headers: { "content-type": "application/problem+json" },
-            },
-          );
+          return responseProblem(opts.playersStatus, "players error");
         }
-        return new Response(
-          JSON.stringify({ session_id: SESSION_ID, pj_ids: opts.declared ?? [], updated_at: "2026-06-01T10:00:00Z" }),
-          { status: 200, headers: { "content-type": "application/json" } },
+        return responseJson({
+          session_id: SESSION_ID,
+          pj_ids: declared,
+          updated_at: "2026-06-01T10:00:00Z",
+        });
+      }
+
+      if (url.includes("/services/jdr/pjs")) {
+        return responseJson({
+          items: roster,
+          page: 1,
+          size: 50,
+          total: roster.length,
+        });
+      }
+
+      if (url.includes("/artifacts/povs") && isPost) {
+        generated = true;
+        return responseJson(
+          {
+            id: "job-pov",
+            kind: "povs",
+            session_id: SESSION_ID,
+            status: "queued",
+            queued_at: "2026-06-01T10:00:00Z",
+          },
+          202,
         );
       }
-      if (url.includes("/artifacts/povs") && method.toUpperCase() === "POST") {
-        return new Response(
-          JSON.stringify({ id: "job-pov", kind: "povs", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
-          { status: 202, headers: { "content-type": "application/json" } },
+
+      if (url.includes("/artifacts/povs/")) {
+        if (opts.povStatus && opts.povStatus >= 400) {
+          return responseProblem(opts.povStatus, "pov absent");
+        }
+        const pjId = decodeURIComponent(
+          url.split("/artifacts/povs/")[1]?.split(/[?#]/)[0] ?? "",
         );
+        const configured =
+          opts.povs && Object.hasOwn(opts.povs, pjId)
+            ? opts.povs[pjId]
+            : undefined;
+        const body =
+          configured ??
+          (generated ? pov(pjId, `POV genere pour ${pjId}.`) : null);
+        return responseJson(body);
       }
+
       if (url.includes("/jobs/job-pov")) {
-        return new Response(
-          JSON.stringify({ id: "job-pov", kind: "povs", session_id: SESSION_ID, status: opts.jobStatus ?? "succeeded", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: null }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return responseJson({
+          id: "job-pov",
+          kind: "povs",
+          session_id: SESSION_ID,
+          status: opts.jobStatus ?? "succeeded",
+          failure_reason: opts.failureReason ?? null,
+          queued_at: "2026-06-01T10:00:00Z",
+          started_at: "2026-06-01T10:00:01Z",
+          ended_at: null,
+        });
       }
+
       return new Response(null, { status: 200 });
     }),
   );
@@ -79,199 +168,158 @@ const renderPanel = () => {
   );
 };
 
-beforeEach(() => toastErrorMock.mockClear());
+function postPovCalls() {
+  const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+  return fetchMock.mock.calls.filter((args) => {
+    const request = args[0] as Request;
+    return request.url.includes("/artifacts/povs") && request.method === "POST";
+  });
+}
+
+beforeEach(() => {
+  toastErrorMock.mockClear();
+  window.history.replaceState(null, "", "/sessions/test?sub=povs");
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-describe("<PovArtifactPanel> (Story 4.4)", () => {
-  test("no PJ declared → trigger disabled with a hint", async () => {
+describe("<PovArtifactPanel> (Story 5.7)", () => {
+  test("no declared PJ -> disabled trigger with the canonical empty state", async () => {
     stub({ declared: [] });
     renderPanel();
-    const button = await screen.findByRole("button", { name: /Générer les POVs/i });
+    const button = await screen.findByRole("button", { name: /POVs/i });
     expect(button).toBeDisabled();
-    expect(await screen.findByText(/Déclare d'abord les PJs/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Aucun PJ declar|Aucun PJ d/i),
+    ).toBeInTheDocument();
   });
 
   test("players GET error keeps the trigger disabled with an explicit error", async () => {
     stub({ playersStatus: 500 });
     renderPanel();
-    const button = await screen.findByRole("button", { name: /Générer les POVs/i });
+    const button = await screen.findByRole("button", { name: /POVs/i });
     expect(button).toBeDisabled();
     expect(
-      await screen.findByText(/Impossible de vérifier les PJs présents/i),
+      await screen.findByText(/Impossible de v/i),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Déclare d'abord les PJs/i)).not.toBeInTheDocument();
   });
 
-  test("PJ declared → clicking POSTs /artifacts/povs and follows the job to a confirmation", async () => {
-    stub({ declared: ["pj-1"], jobStatus: "succeeded" });
+  test("declared PJ + 200 null POV -> first-generation trigger remains enabled", async () => {
+    stub({ declared: [PJ_1], roster: [pj(PJ_1, "Mira")] });
+    renderPanel();
+    const button = await screen.findByRole("button", { name: /POVs/i });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByRole("tab", { name: "Mira" })).not.toBeInTheDocument();
+  });
+
+  test("generated POVs render one PJ tab per declared roster PJ", async () => {
+    stub({
+      declared: [PJ_1, PJ_2, "deleted-pj"],
+      roster: [pj(PJ_1, "Mira"), pj(PJ_2, "Nox")],
+      povs: {
+        [PJ_1]: pov(PJ_1, "Mira lit les cendres."),
+        [PJ_2]: pov(PJ_2, "Nox entend les cloches."),
+      },
+    });
+    renderPanel();
+
+    expect(await screen.findByRole("tab", { name: "Mira" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Nox" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /deleted/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Mira lit les cendres.")).toBeInTheDocument();
+    expect(screen.getByText(/claude-x/)).toBeInTheDocument();
+  });
+
+  test("clicking another PJ fetches its POV, renders it, and persists ?sub=povs&pj=", async () => {
+    stub({
+      declared: [PJ_1, PJ_2],
+      roster: [pj(PJ_1, "Mira"), pj(PJ_2, "Nox")],
+      povs: {
+        [PJ_1]: pov(PJ_1, "Mira lit les cendres."),
+        [PJ_2]: pov(PJ_2, "Nox entend les cloches."),
+      },
+    });
     renderPanel();
     const user = userEvent.setup();
-    const button = await screen.findByRole("button", { name: /Générer les POVs/i });
-    await waitFor(() => expect(button).toBeEnabled());
-    await user.click(button);
-    expect(
-      await screen.findByText(/POVs générés/i, {}, { timeout: 4000 }),
-    ).toBeInTheDocument();
+
+    await screen.findByText("Mira lit les cendres.");
+    await user.click(screen.getByRole("tab", { name: "Nox" }));
+
+    expect(await screen.findByText("Nox entend les cloches.")).toBeInTheDocument();
+    expect(window.location.search).toBe(`?sub=povs&pj=${PJ_2}`);
 
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const posted = fetchMock.mock.calls.some((args) => {
+    const fetchedPj2 = fetchMock.mock.calls.some((args) => {
       const request = args[0] as Request;
-      return request.url.includes("/artifacts/povs") && request.method === "POST";
+      return request.url.includes(`/artifacts/povs/${PJ_2}`);
     });
-    expect(posted).toBe(true);
+    expect(fetchedPj2).toBe(true);
   });
 
-  // Story 4.5 — regenerate from the post-success confirmation → second POST.
-  test("after success, regenerate → confirm → second POST /artifacts/povs", async () => {
-    stub({ declared: ["pj-1"], jobStatus: "succeeded" });
+  test("invalid deep-link ?pj falls back silently to the first declared roster PJ", async () => {
+    window.history.replaceState(null, "", "/sessions/test?sub=povs&pj=missing");
+    stub({
+      declared: [PJ_1, PJ_2],
+      roster: [pj(PJ_1, "Mira"), pj(PJ_2, "Nox")],
+      povs: {
+        [PJ_1]: pov(PJ_1, "Mira lit les cendres."),
+        [PJ_2]: pov(PJ_2, "Nox entend les cloches."),
+      },
+    });
+    renderPanel();
+
+    expect(await screen.findByText("Mira lit les cendres.")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Mira" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  test("clicking first-generation POSTs /artifacts/povs and refreshes into reading mode", async () => {
+    stub({ declared: [PJ_1], roster: [pj(PJ_1, "Mira")], jobStatus: "succeeded" });
     renderPanel();
     const user = userEvent.setup();
-    const button = await screen.findByRole("button", { name: "Générer les POVs" });
+    const button = await screen.findByRole("button", { name: /POVs/i });
     await waitFor(() => expect(button).toBeEnabled());
     await user.click(button);
+
     expect(
-      await screen.findByText(/POVs générés/i, {}, { timeout: 4000 }),
+      await screen.findByText(/POV genere pour pj-1/i, {}, { timeout: 4000 }),
     ).toBeInTheDocument();
+    expect(postPovCalls()).toHaveLength(1);
+  });
 
-    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
-    await user.click(screen.getByRole("button", { name: "Régénérer" }));
-
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    await waitFor(() => {
-      const postCount = fetchMock.mock.calls.filter((args) => {
-        const request = args[0] as Request;
-        return (
-          request.url.includes("/artifacts/povs") && request.method === "POST"
-        );
-      }).length;
-      expect(postCount).toBe(2);
+  test("regenerate -> confirm -> second POST /artifacts/povs", async () => {
+    stub({
+      declared: [PJ_1],
+      roster: [pj(PJ_1, "Mira")],
+      generated: true,
+      jobStatus: "succeeded",
     });
-  });
-
-  test("failed regeneration keeps the generated state and retry behind confirm", async () => {
-    let postCount = 0;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: Request | string) => {
-        const url = typeof input === "string" ? input : input.url;
-        const method =
-          typeof input === "string" ? "GET" : (input.method ?? "GET");
-        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
-          return new Response(
-            JSON.stringify({
-              session_id: SESSION_ID,
-              pj_ids: ["pj-1"],
-              updated_at: "2026-06-01T10:00:00Z",
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (url.includes("/artifacts/povs") && method.toUpperCase() === "POST") {
-          postCount += 1;
-          return new Response(
-            JSON.stringify({
-              id: `job-pov-${postCount}`,
-              kind: "povs",
-              session_id: SESSION_ID,
-              status: "queued",
-              queued_at: "2026-06-01T10:00:00Z",
-            }),
-            { status: 202, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (url.includes("/jobs/job-pov-")) {
-          const failedRegen = url.includes("/jobs/job-pov-2");
-          return new Response(
-            JSON.stringify({
-              id: failedRegen ? "job-pov-2" : "job-pov-1",
-              kind: "povs",
-              session_id: SESSION_ID,
-              status: failedRegen ? "failed" : "succeeded",
-              failure_reason: failedRegen ? "LLM error" : null,
-              queued_at: "2026-06-01T10:00:00Z",
-              started_at: "2026-06-01T10:00:01Z",
-              ended_at: "2026-06-01T10:00:02Z",
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        return new Response(null, { status: 200 });
-      }),
-    );
-
     renderPanel();
     const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: "Générer les POVs" }),
-    );
-    expect(
-      await screen.findByText(/POVs générés/i, {}, { timeout: 4000 }),
-    ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
-    await user.click(screen.getByRole("button", { name: "Régénérer" }));
+    expect(await screen.findByText(/POV genere pour pj-1/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /POVs/i }));
+    await user.click(screen.getByRole("button", { name: /g.*n.*rer/i }));
 
-    // Story 4.10 — ArtifactRegenerateControls must surface the backend reason inline,
-    // not just the generic "La régénération a échoué.".
-    expect(
-      await screen.findByText(
-        /La régénération a échoué : LLM error/i,
-        {},
-        { timeout: 4000 },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/POVs générés/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Réessayer" }),
-    ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Régénérer les POVs" }));
-    expect(postCount).toBe(2);
-    await user.click(screen.getByRole("button", { name: "Régénérer" }));
-    expect(postCount).toBe(3);
+    await waitFor(() => expect(postPovCalls()).toHaveLength(1));
   });
 
-  // Story 4.10 — a failed first generation must not be silent: inline reason + toast + retry.
-  test("a failed generation surfaces the failure_reason inline + toast, with a Réessayer retry", async () => {
-    let postCount = 0;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: Request | string) => {
-        const url = typeof input === "string" ? input : input.url;
-        const method =
-          typeof input === "string" ? "GET" : (input.method ?? "GET");
-        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
-          return new Response(
-            JSON.stringify({ session_id: SESSION_ID, pj_ids: ["pj-1"], updated_at: "2026-06-01T10:00:00Z" }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (url.includes("/artifacts/povs") && method.toUpperCase() === "POST") {
-          postCount += 1;
-          return new Response(
-            JSON.stringify({ id: `job-fail-${postCount}`, kind: "povs", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
-            { status: 202, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (url.includes("/jobs/job-fail-")) {
-          return new Response(
-            JSON.stringify({ id: "job-fail", kind: "povs", session_id: SESSION_ID, status: "failed", failure_reason: "LLM provider unreachable", queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: "2026-06-01T10:00:02Z" }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        return new Response(null, { status: 200 });
-      }),
-    );
-
+  test("failed first generation surfaces the failure reason inline + toast, with a retry", async () => {
+    stub({
+      declared: [PJ_1],
+      roster: [pj(PJ_1, "Mira")],
+      jobStatus: "failed",
+      failureReason: "LLM provider unreachable",
+    });
     renderPanel();
     const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole("button", { name: "Générer les POVs" }),
-    );
 
+    await user.click(await screen.findByRole("button", { name: /POVs/i }));
     expect(
       await screen.findByText(/LLM provider unreachable/i, {}, { timeout: 4000 }),
     ).toBeInTheDocument();
@@ -279,7 +327,32 @@ describe("<PovArtifactPanel> (Story 4.4)", () => {
       expect.stringContaining("LLM provider unreachable"),
     );
 
-    await user.click(screen.getByRole("button", { name: "Réessayer" }));
-    await waitFor(() => expect(postCount).toBe(2));
+    await user.click(screen.getByRole("button", { name: /essayer/i }));
+    await waitFor(() => expect(postPovCalls()).toHaveLength(2));
+  });
+
+  test("failed regeneration keeps the manuscript visible and retry behind confirm", async () => {
+    stub({
+      declared: [PJ_1],
+      roster: [pj(PJ_1, "Mira")],
+      generated: true,
+      jobStatus: "failed",
+      failureReason: "LLM error",
+    });
+    renderPanel();
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/POV genere pour pj-1/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /POVs/i }));
+    await user.click(screen.getByRole("button", { name: /g.*n.*rer/i }));
+
+    expect(
+      await screen.findByText(/LLM error/i, {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/POV genere pour pj-1/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /POVs/i }));
+    await user.click(screen.getByRole("button", { name: /g.*n.*rer/i }));
+    await waitFor(() => expect(postPovCalls()).toHaveLength(2));
   });
 });

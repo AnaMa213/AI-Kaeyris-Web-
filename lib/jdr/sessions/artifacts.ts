@@ -10,6 +10,7 @@ import type { components } from "@/types/api";
 type SummaryArtifactOut = components["schemas"]["SummaryArtifactOut"];
 type NarrativeArtifactOut = components["schemas"]["NarrativeArtifactOut"];
 type ElementsArtifactOut = components["schemas"]["ElementsArtifactOut"];
+type PovArtifactOut = components["schemas"]["PovArtifactOut"];
 type JobQueuedOut = components["schemas"]["JobQueuedOut"];
 
 function problemFromUnknown(error: unknown) {
@@ -35,7 +36,7 @@ function problemFromUnknown(error: unknown) {
   });
 }
 
-function unwrap<T>(result: { data?: T; error?: unknown }): T {
+function unwrap<T>(result: { data?: unknown; error?: unknown }): T {
   if (result.error !== undefined) {
     problemFromUnknown(result.error);
   }
@@ -117,6 +118,12 @@ export const narrativeArtifactQueryKey = (sessionId: string) =>
 export const elementsArtifactQueryKey = (sessionId: string) =>
   ["jdr", "artifact", "elements", sessionId] as const;
 
+export const povArtifactQueryKey = (sessionId: string, pjId: string) =>
+  ["jdr", "artifact", "pov", sessionId, pjId] as const;
+
+export const povArtifactSessionKey = (sessionId: string) =>
+  ["jdr", "artifact", "pov", sessionId] as const;
+
 /**
  * Story 4.4 — récupère le Récit (`GET /artifacts/narrative`). Mêmes règles que
  * le Résumé : un récit non encore généré remonte en `isError` (404/422), traité
@@ -155,6 +162,31 @@ export function useElementsArtifact(sessionId: string) {
       return unwrap<ElementsArtifactOut>(result);
     },
     enabled: sessionId !== "",
+    retry: false,
+  });
+}
+
+/**
+ * Story 5.7 — récupère le POV d'un PJ donné. La route renvoie `unknown` dans le
+ * contrat car elle sert aussi le `.md` ; le consommateur décide la présence via
+ * `Boolean(data?.text)` pour couvrir le 200/null historique.
+ */
+export function usePovArtifact(sessionId: string, pjId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: povArtifactQueryKey(sessionId, pjId),
+    queryFn: async () => {
+      const result = await apiClient.GET(
+        "/services/jdr/sessions/{session_id}/artifacts/povs/{pj_id_str}",
+        {
+          params: {
+            path: { session_id: sessionId, pj_id_str: pjId },
+          },
+        },
+      );
+      return unwrap<PovArtifactOut>(result);
+    },
+    enabled: sessionId !== "" && pjId !== "",
     retry: false,
   });
 }
@@ -224,4 +256,10 @@ export function useGeneratePovs(sessionId: string) {
   });
 }
 
-export type { SummaryArtifactOut, NarrativeArtifactOut, ElementsArtifactOut, JobQueuedOut };
+export type {
+  SummaryArtifactOut,
+  NarrativeArtifactOut,
+  ElementsArtifactOut,
+  PovArtifactOut,
+  JobQueuedOut,
+};
