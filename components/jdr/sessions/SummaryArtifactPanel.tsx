@@ -15,7 +15,7 @@ import {
   useSummaryArtifact,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
-import { NarrativeArtifact } from "@/components/narrative/NarrativeArtifact";
+import { NarrativeReader } from "@/components/narrative/NarrativeReader";
 
 interface SummaryArtifactPanelProps {
   sessionId: string;
@@ -60,8 +60,9 @@ export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
       <section className={SECTION_CARD_CLASSES} aria-label="Résumé de la séance">
         <h2 className="font-display mb-3 text-xl font-semibold">Résumé</h2>
         {/* Story 5.1 — rendu long-form Markdown sur parchemin (drop-cap, ornement,
-            pull-quote). Le composant ne fetch rien : il reçoit le markdown brut. */}
-        <NarrativeArtifact markdown={summary.text} kind="summary" />
+            pull-quote). Story 5.2 — NarrativeReader ajoute le sommaire/scrollspy.
+            Le composant ne fetch rien : il reçoit le markdown brut. */}
+        <NarrativeReader markdown={summary.text} kind="summary" />
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {summary.model_used}
         </p>
