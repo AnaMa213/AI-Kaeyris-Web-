@@ -11,6 +11,30 @@ type ChunkOut = components["schemas"]["ChunkOut"];
 type TranscriptionOut = components["schemas"]["TranscriptionOut"];
 type TranscriptionSegmentOut = components["schemas"]["TranscriptionSegmentOut"];
 type TranscriptionEditOut = components["schemas"]["TranscriptionEditOut"];
+type TranscriptionMode = components["schemas"]["TranscriptionMode"];
+
+/** Réponse brute exposée au download JSON (Story 4.21) selon le mode. */
+type RawTranscriptionPayload = TranscriptionOut | ChunkListOut;
+
+const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
+
+/**
+ * Build a filesystem-friendly transcription filename from the session title.
+ * Shared by the Markdown export (Story 4.14) and the raw JSON export
+ * (Story 4.21) so both stay in sync on slugging rules.
+ */
+export function transcriptionFileName(
+  sessionTitle: string,
+  extension: "md" | "json",
+): string {
+  const slug = sessionTitle
+    .normalize("NFD")
+    .replace(COMBINING_MARKS, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `transcription-${slug}.${extension}` : `transcription.${extension}`;
+}
 
 /**
  * Status-preserving unwrap (mirrors lib/jdr/sessions/artifacts.ts). The error
@@ -175,13 +199,12 @@ export function useUpdateTranscriptionMarkdown(sessionId: string) {
 
 /**
  * Story 4.14 — export the finished transcription as Markdown
- * (`GET /transcription.md`, text/markdown). One mode-agnostic endpoint covers
- * both `transcription_mode` values (the backend renders the Markdown), so there
- * is no wrong-mode hazard here. The `200` body is typed `content?: never` in the
- * generated contract (FastAPI omits the text/markdown schema), hence
- * `parseAs: "text"` to read the raw string and the `unwrap<string>` cast. The
- * download is imperative (triggered on click) → a mutation, not a query. The
- * caller owns the file-save side effect.
+ * (`GET /transcription.md`, text/markdown). This endpoint is diarised-only; the
+ * non_diarised viewer reads `/chunks` and hides the `.md` export. The `200` body
+ * is typed `content?: never` in the generated contract (FastAPI omits the
+ * text/markdown schema), hence `parseAs: "text"` to read the raw string and the
+ * `unwrap<string>` cast. The download is imperative (triggered on click) → a
+ * mutation, not a query. The caller owns the file-save side effect.
  */
 export function useDownloadTranscriptionMarkdown(sessionId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
@@ -196,10 +219,42 @@ export function useDownloadTranscriptionMarkdown(sessionId: string) {
   });
 }
 
+/**
+ * Story 4.21 — imperative download of the EXACT API transcription as JSON.
+ * Branches on `transcription_mode`: `diarised` → `GET /transcription`
+ * (`TranscriptionOut`), `non_diarised` → `GET /chunks` (`ChunkListOut`). Exactly
+ * one endpoint is hit per mode, so the backend's `409 wrong-mode` can never fire.
+ * Imperative (triggered on click) → a mutation; the caller owns the file save.
+ */
+export function useDownloadTranscriptionJson(
+  sessionId: string,
+  transcriptionMode: TranscriptionMode,
+) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useMutation({
+    mutationFn: async (): Promise<RawTranscriptionPayload> => {
+      if (transcriptionMode === "diarised") {
+        const result = await apiClient.GET(
+          "/services/jdr/sessions/{session_id}/transcription",
+          { params: { path: { session_id: sessionId } } },
+        );
+        return unwrap<TranscriptionOut>(result);
+      }
+      const result = await apiClient.GET(
+        "/services/jdr/sessions/{session_id}/chunks",
+        { params: { path: { session_id: sessionId } } },
+      );
+      return unwrap<ChunkListOut>(result);
+    },
+  });
+}
+
 export type {
   ChunkListOut,
   ChunkOut,
   TranscriptionOut,
   TranscriptionSegmentOut,
   TranscriptionEditOut,
+  TranscriptionMode,
+  RawTranscriptionPayload,
 };

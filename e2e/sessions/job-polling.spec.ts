@@ -143,7 +143,8 @@ test("the job polls live from running (with %) to succeeded, surfaces the final 
   await expect(page.getByRole("progressbar")).toBeVisible();
 
   // No reload: the job converges to succeeded → final act + completion toast.
-  await expect(page.getByText("Le récit est consigné")).toBeVisible();
+  // Story 4.21: the transcribed-act gate title is now "Ton récit est consigné."
+  await expect(page.getByText("Ton récit est consigné")).toBeVisible();
   await expect(
     page.getByText("Transcription terminée — ton récit est consigné."),
   ).toBeVisible();

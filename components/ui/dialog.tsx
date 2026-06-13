@@ -17,13 +17,20 @@ const NON_DISMISSIBLE_REASONS = new Set([
   "close-watcher",
 ]);
 
-function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
+function Dialog({
+  onOpenChange,
+  dismissOnOutsidePress = false,
+  ...props
+}: DialogPrimitive.Root.Props & { dismissOnOutsidePress?: boolean }) {
+  const blocked = dismissOnOutsidePress
+    ? new Set(["escape-key", "close-watcher"])
+    : NON_DISMISSIBLE_REASONS;
   return (
     <DialogPrimitive.Root
       data-slot="dialog"
-      disablePointerDismissal
+      {...(dismissOnOutsidePress ? {} : { disablePointerDismissal: true })}
       onOpenChange={(open, eventDetails) => {
-        if (!open && NON_DISMISSIBLE_REASONS.has(eventDetails.reason)) {
+        if (!open && blocked.has(eventDetails.reason)) {
           eventDetails.cancel();
           return;
         }

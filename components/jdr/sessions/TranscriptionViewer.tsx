@@ -10,7 +10,9 @@ import { ApiError } from "@/lib/core/api/errors";
 import { downloadTextFile } from "@/lib/core/browser/downloadTextFile";
 import { isArtifactAbsentError } from "@/lib/jdr/sessions/artifacts";
 import {
+  transcriptionFileName,
   useDownloadTranscriptionMarkdown,
+  useSessionChunks,
   useSessionTranscriptionMarkdown,
   useUpdateTranscriptionMarkdown,
 } from "@/lib/jdr/sessions/transcription";
@@ -49,19 +51,6 @@ function ViewerShell({
   );
 }
 
-const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
-
-/** Build a filesystem-friendly `.md` filename from the session title. */
-function transcriptionFileName(sessionTitle: string): string {
-  const slug = sessionTitle
-    .normalize("NFD")
-    .replace(COMBINING_MARKS, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug ? `transcription-${slug}.md` : "transcription.md";
-}
-
 function DownloadTranscriptionButton({
   sessionId,
   sessionTitle,
@@ -76,7 +65,7 @@ function DownloadTranscriptionButton({
     download.mutate(undefined, {
       onSuccess: (markdown) => {
         try {
-          downloadTextFile(transcriptionFileName(sessionTitle), markdown);
+          downloadTextFile(transcriptionFileName(sessionTitle, "md"), markdown);
         } catch {
           toast.error("Impossible de télécharger la transcription.");
         }
@@ -113,14 +102,76 @@ function formatEditError(error: unknown): string {
   return "Sauvegarde impossible. Réessaie.";
 }
 
+function NonDiarisedTranscriptionViewer({
+  sessionId,
+}: {
+  sessionId: string;
+}) {
+  const chunksQuery = useSessionChunks(sessionId, { enabled: true });
+
+  if (chunksQuery.isPending) {
+    return (
+      <ViewerShell ariaLabel="Chargement de la transcription">
+        <p className="text-text-chrome-muted text-sm">
+          Chargement de la transcription…
+        </p>
+      </ViewerShell>
+    );
+  }
+
+  if (chunksQuery.isError) {
+    const absent = isArtifactAbsentError(chunksQuery.error);
+    return (
+      <ViewerShell
+        ariaLabel={
+          absent
+            ? "Transcription indisponible"
+            : "Erreur de chargement de la transcription"
+        }
+      >
+        <p
+          className={
+            absent
+              ? "text-text-chrome-muted text-sm"
+              : "text-state-error text-sm"
+          }
+        >
+          {absent
+            ? "La transcription n'est pas encore disponible."
+            : "Impossible de charger la transcription. Réessaie plus tard."}
+        </p>
+      </ViewerShell>
+    );
+  }
+
+  const renderedText = (chunksQuery.data?.items ?? [])
+    .slice()
+    .sort((a, b) => a.ordre - b.ordre)
+    .map((chunk) => chunk.text)
+    .join("\n\n");
+
+  if (renderedText.trim() === "") {
+    return (
+      <ViewerShell ariaLabel="Transcription de la séance">
+        <p className="text-text-chrome-muted text-sm">Transcription vide.</p>
+      </ViewerShell>
+    );
+  }
+
+  return (
+    <ViewerShell ariaLabel="Transcription de la séance">
+      <div className="text-text-chrome whitespace-pre-wrap leading-relaxed">
+        {renderedText}
+      </div>
+    </ViewerShell>
+  );
+}
+
 /**
- * Story 4.17 - viewer/editor of the canonical Markdown transcription. BD-13
- * makes `GET /transcription.md` return the edited override when it exists, so
- * this single source covers both transcription modes without structured edits.
- * Plain-text Markdown rendering remains intentional until Epic 5 owns long-form
- * typography.
+ * Story 4.17 - viewer/editor of the canonical Markdown transcription. Markdown
+ * read/edit stays diarised-only; non_diarised renders raw chunks read-only.
  */
-export function TranscriptionViewer({
+function DiarisedTranscriptionViewer({
   sessionId,
   sessionTitle,
   canEdit = false,
@@ -320,4 +371,11 @@ export function TranscriptionViewer({
       )}
     </ViewerShell>
   );
+}
+
+export function TranscriptionViewer(props: TranscriptionViewerProps) {
+  if (props.transcriptionMode === "non_diarised") {
+    return <NonDiarisedTranscriptionViewer sessionId={props.sessionId} />;
+  }
+  return <DiarisedTranscriptionViewer {...props} />;
 }

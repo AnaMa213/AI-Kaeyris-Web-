@@ -577,7 +577,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     test("hides the replace affordance once transcribed (locked)", async () => {
       stubFetch({ session: { ...baseSession, state: "transcribed" } });
       renderPage();
-      await screen.findByText("Le récit est consigné");
+      await screen.findByText("Ton récit est consigné.");
       expect(
         screen.queryByRole("button", { name: "Remplacer l'enregistrement" }),
       ).not.toBeInTheDocument();
@@ -629,12 +629,20 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
     }
 
-    test("no replace CTA over the success act when the polled job succeeded (session cache stale at audio_uploaded)", async () => {
+    test("no replace CTA or story gate while the polled job succeeded but session cache is still stale", async () => {
       stubWithPolledJob("succeeded");
       renderPage();
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText("État de la transcription : Transcrite"),
+        ).toBeInTheDocument(),
+      );
       expect(
-        await screen.findByText("Le récit est consigné"),
-      ).toBeInTheDocument();
+        screen.queryByText("Ton récit est consigné."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Ouvrir le récit" }),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "Remplacer l'enregistrement" }),
       ).not.toBeInTheDocument();
@@ -731,7 +739,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       stubWithActiveJob("queued");
       const user = userEvent.setup();
       renderPage();
-      await screen.findByText("Les scribes transcrivent");
+      await screen.findByText("En attente dans la file...");
       await user.click(
         screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
       );
@@ -795,20 +803,50 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
   });
 
-  describe("Story 4.13 — Transcription viewer", () => {
-    test("renders canonical Markdown for a transcribed non_diarised session", async () => {
+  // Story 4.13 viewer behaviour preserved, but Story 4.21 moves the raw
+  // transcription off the main flow into a header-triggered pop-up.
+  describe("Story 4.13 / 4.21 — Transcription viewer (in pop-up)", () => {
+    async function openTranscriptionDialog() {
+      const user = userEvent.setup();
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Afficher la transcription",
+        }),
+      );
+    }
+
+    test("is NOT inline: the raw transcription stays hidden until the pop-up opens", async () => {
+      stubFetch({
+        session: { ...baseSession, state: "transcribed" },
+        markdown: "# Transcription\n\nLe héros entre dans la crypte.",
+      });
+      renderPage();
+      // The story gate is the first surface; the raw transcription is not inline.
+      await screen.findByText("Ton récit est consigné.");
+      expect(
+        screen.queryByText(/Le héros entre dans la crypte/),
+      ).not.toBeInTheDocument();
+    });
+
+    test("renders sorted chunks for a transcribed non_diarised session", async () => {
       stubFetch({
         session: {
           ...baseSession,
           state: "transcribed",
           transcription_mode: "non_diarised",
         },
-        markdown: "# Transcription\n\nLe héros entre dans la crypte.",
+        chunks: [
+          { chunk_id: "c2", ordre: 2, text: "Puis la porte s'ouvre." },
+          { chunk_id: "c1", ordre: 1, text: "Le héros entre dans la crypte." },
+        ],
       });
       renderPage();
-      expect(
-        await screen.findByText(/Le héros entre dans la crypte/),
-      ).toBeInTheDocument();
+      await openTranscriptionDialog();
+      await screen.findByText(/Le héros entre dans la crypte/);
+      const text = document.body.textContent ?? "";
+      expect(text.indexOf("Le héros")).toBeLessThan(
+        text.indexOf("Puis la porte"),
+      );
     });
 
     test("renders canonical Markdown for a transcribed diarised session", async () => {
@@ -821,6 +859,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         markdown: "**speaker_1** : Salutations, aventuriers.",
       });
       renderPage();
+      await openTranscriptionDialog();
       expect(
         await screen.findByText(/Salutations, aventuriers/),
       ).toBeInTheDocument();
@@ -953,11 +992,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
     test("shows the presence dropdown for a GM on a transcribed session", async () => {
       window.localStorage.setItem(seenKey, "1");
-      window.history.replaceState(
-        null,
-        "",
-        `${currentPathname}?tab=artefacts&sub=summary`,
-      );
+      window.history.replaceState(null, "", `${currentPathname}?sub=summary`);
       stubFor({ state: "transcribed", role: "gm" });
       renderPage();
       // Story 4.7 (S6): the presence card became a compact dropdown trigger.
@@ -969,7 +1004,8 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     test("hides the presence control for a PJ", async () => {
       stubFor({ state: "transcribed", role: "pj" });
       renderPage();
-      await screen.findByRole("tab", { name: "Artefacts" });
+      // Story 4.21 : un lecteur atterrit directement sur les sous-onglets.
+      await screen.findByRole("tab", { name: "Résumé" });
       expect(
         screen.queryByRole("button", { name: /Qui était présent/i }),
       ).not.toBeInTheDocument();
@@ -1034,52 +1070,27 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
     }
 
-    test("renders top tabs and defaults an unfinished session to Transcription", async () => {
+    // Story 4.21 — the top-level Transcription/Artefacts tabs are gone; a
+    // `created` GM session lands straight on the upload card.
+    test("drops the top-level tabs; a created GM session shows the upload card", async () => {
       stubForTabs({ state: "created", role: "gm" });
       renderPage();
 
-      const transcriptionTab = await screen.findByRole("tab", {
-        name: "Transcription",
-      });
-      expect(transcriptionTab).toHaveAttribute("aria-selected", "true");
-      expect(transcriptionTab.className).toContain("after:bg-accent-gold");
       expect(
-        screen.getByRole("tab", { name: "Artefacts" }),
+        await screen.findByRole("button", { name: /Glisse ton M4A/ }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: /Glisse ton M4A/ }),
-      ).toBeInTheDocument();
-      await waitFor(() => {
-        expect(window.location.search).toBe("?tab=transcription");
-      });
-    });
-
-    test("clicking Artefacts writes tab and sub in the URL while preserving other params", async () => {
-      window.history.replaceState(null, "", `${currentPathname}?ritual=failed`);
-      stubForTabs({ state: "transcribed", role: "gm" });
-      const user = userEvent.setup();
-      renderPage();
-
-      await screen.findByRole("tab", { name: "Transcription" });
-      await user.click(screen.getByRole("tab", { name: "Artefacts" }));
-
-      await waitFor(() => {
-        expect(window.location.search).toContain("ritual=failed");
-        expect(window.location.search).toContain("tab=artefacts");
-        expect(window.location.search).toContain("sub=summary");
-      });
+        screen.queryByRole("tab", { name: "Transcription" }),
+      ).not.toBeInTheDocument();
       expect(
-        await screen.findByRole("button", { name: /Qui était présent/i }),
-      ).toBeInTheDocument();
+        screen.queryByRole("tab", { name: "Artefacts" }),
+      ).not.toBeInTheDocument();
     });
 
     test("disabled artifact sub-tabs expose the required tooltip copy", async () => {
+      // seenKey set → récit déjà ouvert → on atterrit sur les sous-onglets.
       window.localStorage.setItem(seenKey, "1");
-      window.history.replaceState(
-        null,
-        "",
-        `${currentPathname}?tab=artefacts&sub=summary`,
-      );
+      window.history.replaceState(null, "", `${currentPathname}?sub=summary`);
       stubForTabs({ state: "transcribed", role: "gm" });
       renderPage();
 
@@ -1091,31 +1102,6 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         expect(tab).toHaveAttribute("aria-disabled", "true");
         expect(tab).toHaveAttribute("title", "Génère cet artefact d'abord");
       }
-    });
-
-    test("auto-opens the completed transcription only once per session", async () => {
-      stubForTabs({ state: "transcribed", role: "gm" });
-      const firstVisit = renderPage();
-
-      expect(
-        await screen.findByRole("tab", { name: "Transcription" }),
-      ).toHaveAttribute("aria-selected", "true");
-      await waitFor(() => {
-        expect(window.localStorage.getItem(seenKey)).toBe("1");
-        expect(window.location.search).toBe("?tab=transcription");
-      });
-
-      firstVisit.unmount();
-      window.history.replaceState(null, "", currentPathname);
-      renderPage();
-
-      await waitFor(() => {
-        expect(screen.getByRole("tab", { name: "Artefacts" })).toHaveAttribute(
-          "aria-selected",
-          "true",
-        );
-        expect(window.location.search).toBe("?tab=artefacts&sub=summary");
-      });
     });
   });
 
@@ -1170,7 +1156,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
     function gotoArtefacts() {
       window.localStorage.setItem(seenKey, "1");
-      window.history.replaceState(null, "", `${currentPathname}?tab=artefacts&sub=summary`);
+      window.history.replaceState(null, "", `${currentPathname}?sub=summary`);
     }
 
     test("keeps Récit/Éléments/POVs disabled while no summary exists", async () => {
@@ -1269,11 +1255,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
     function gotoSub(sub: string) {
       window.localStorage.setItem(seenKey, "1");
-      window.history.replaceState(
-        null,
-        "",
-        `${currentPathname}?tab=artefacts&sub=${sub}`,
-      );
+      window.history.replaceState(null, "", `${currentPathname}?sub=${sub}`);
     }
 
     test("Récit sub-tab renders the 'Générer le Récit' trigger (not a placeholder)", async () => {
@@ -1444,6 +1426,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
               JSON.stringify({
                 ...baseSession,
                 state: "transcribed",
+                transcription_mode: "diarised",
                 current_job_id: jobId,
               }),
               { status: 200, headers: { "content-type": "application/json" } },
@@ -1453,12 +1436,16 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         }),
       );
 
+      const user = userEvent.setup();
       renderPage();
+      // Story 4.21 : l'édition vit dans la pop-up transcription.
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Afficher la transcription",
+        }),
+      );
       await screen.findByText(/Texte corrigeable/);
-      const editButton = (await screen.findAllByRole("button", {
-        name: "Modifier",
-      })).find((button) => button.hasAttribute("disabled"));
-      expect(editButton).toBeDefined();
+      const editButton = screen.getByRole("button", { name: "Modifier" });
       expect(editButton).toBeDisabled();
       expect(editButton).toHaveAttribute(
         "title",
@@ -1508,6 +1495,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
               JSON.stringify({
                 ...baseSession,
                 state: "transcribed",
+                transcription_mode: "diarised",
                 current_job_id: jobId,
               }),
               { status: 200, headers: { "content-type": "application/json" } },
@@ -1518,6 +1506,12 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
       const user = userEvent.setup();
       renderPage();
+      // Story 4.21 : ouvrir la pop-up transcription pour accéder à l'éditeur.
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Afficher la transcription",
+        }),
+      );
       const viewer = await screen.findByLabelText("Transcription de la séance");
       const editButton = within(viewer).getByRole("button", {
         name: "Modifier",
@@ -1620,11 +1614,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
     function gotoSummaryTab() {
       window.localStorage.setItem(seenKey, "1");
-      window.history.replaceState(
-        null,
-        "",
-        `${currentPathname}?tab=artefacts&sub=summary`,
-      );
+      window.history.replaceState(null, "", `${currentPathname}?sub=summary`);
     }
 
     // AC2 — the summary GET starts 404 (absent) and flips to 200 only after the
@@ -1939,6 +1929,274 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       }
       // The retry affordance is offered.
       expect(screen.getByRole("button", { name: "Réessayer" })).toBeInTheDocument();
+    });
+  });
+
+  describe("Story 4.21 — unified narrative flow", () => {
+    function stubFor421(opts: {
+      role?: "gm" | "pj";
+      markdown?: string;
+      chunkText?: string;
+    }) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(
+              JSON.stringify({ ...baseCampaign, role: opts.role ?? "gm" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: "pj-1",
+                    name: "Eldrin",
+                    campaign_id: campId,
+                    created_at: "2026-05-30T10:00:00Z",
+                  },
+                ],
+                total: 1,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                pj_ids: [],
+                updated_at: "2026-06-01T10:00:00Z",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.endsWith(`/transcription.md`)) {
+            return new Response(opts.markdown ?? "# Transcription\n\nContenu.", {
+              status: 200,
+              headers: { "content-type": "text/markdown" },
+            });
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}/chunks`)) {
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                items: [
+                  {
+                    chunk_id: "chunk-1",
+                    ordre: 1,
+                    text: opts.chunkText ?? "Contenu brut de la séance.",
+                  },
+                ],
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(
+              JSON.stringify({ ...baseSession, state: "transcribed" }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("AC3 — a GM's first transcribed visit shows the story gate + a header Download icon, not the raw transcription", async () => {
+      stubFor421({ role: "gm" });
+      renderPage();
+
+      expect(
+        await screen.findByText("Ton récit est consigné."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Ouvrir le récit" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Afficher la transcription" }),
+      ).toBeInTheDocument();
+      // No artifact sub-tabs before the gate is opened.
+      expect(
+        screen.queryByRole("tab", { name: "Résumé" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("regression — job succeeded invalidates the stale session, then opening the story reveals artifact tabs", async () => {
+      const jobId = "job-transcription-succeeded-refetch";
+      let sessionFetchCount = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string) => {
+          const url = typeof input === "string" ? input : input.url;
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          if (url.includes(`/services/jdr/jobs/${jobId}`)) {
+            const now = new Date().toISOString();
+            return new Response(
+              JSON.stringify({
+                id: jobId,
+                kind: "transcription",
+                session_id: sessionIdFixture,
+                status: "succeeded",
+                failure_reason: null,
+                queued_at: now,
+                started_at: now,
+                ended_at: now,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/services/jdr/pjs")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: "pj-1",
+                    name: "Eldrin",
+                    campaign_id: campId,
+                    created_at: "2026-05-30T10:00:00Z",
+                  },
+                ],
+                total: 1,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes(`/sessions/${sessionIdFixture}/players`)) {
+            return new Response(
+              JSON.stringify({
+                session_id: sessionIdFixture,
+                pj_ids: [],
+                updated_at: "2026-06-01T10:00:00Z",
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.includes("/artifacts/summary")) {
+            return new Response(
+              JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+              {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              },
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            sessionFetchCount += 1;
+            const transcribed = sessionFetchCount > 1;
+            return new Response(
+              JSON.stringify({
+                ...baseSession,
+                state: transcribed ? "transcribed" : "transcribing",
+                current_job_id: transcribed ? null : jobId,
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+
+      const user = userEvent.setup();
+      renderPage();
+
+      const openStory = await screen.findByRole(
+        "button",
+        { name: "Ouvrir le récit" },
+        { timeout: 4000 },
+      );
+      expect(sessionFetchCount).toBeGreaterThan(1);
+      await user.click(openStory);
+
+      expect(
+        await screen.findByRole("tab", { name: "Résumé" }),
+      ).toHaveAttribute("aria-selected", "true");
+    });
+
+    test("AC4 — clicking 'Ouvrir le récit' reveals the artifact sub-tabs (Résumé) and persists the flag; the gate is gone", async () => {
+      stubFor421({ role: "gm" });
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(
+        await screen.findByRole("button", { name: "Ouvrir le récit" }),
+      );
+
+      expect(
+        await screen.findByRole("tab", { name: "Résumé" }),
+      ).toHaveAttribute("aria-selected", "true");
+      expect(
+        screen.queryByText("Ton récit est consigné."),
+      ).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(window.localStorage.getItem(seenKey)).toBe("1"),
+      );
+    });
+
+    test("AC4 — a previously opened session lands directly on the sub-tabs (no gate)", async () => {
+      window.localStorage.setItem(seenKey, "1");
+      stubFor421({ role: "gm" });
+      renderPage();
+
+      expect(
+        await screen.findByRole("tab", { name: "Résumé" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Ton récit est consigné."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Ouvrir le récit" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("AC6 — a non-GM never sees the gate and lands on read-only artifacts", async () => {
+      stubFor421({ role: "pj" });
+      renderPage();
+
+      expect(
+        await screen.findByRole("tab", { name: "Résumé" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Ton récit est consigné."),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Ouvrir le récit" }),
+      ).not.toBeInTheDocument();
+    });
+
+    test("AC5 — the header Download icon opens the raw transcription pop-up", async () => {
+      stubFor421({
+        role: "gm",
+        chunkText: "Contenu brut de la séance.",
+      });
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(
+        await screen.findByRole("button", {
+          name: "Afficher la transcription",
+        }),
+      );
+      expect(
+        await screen.findByText(/Contenu brut de la séance/),
+      ).toBeInTheDocument();
     });
   });
 });

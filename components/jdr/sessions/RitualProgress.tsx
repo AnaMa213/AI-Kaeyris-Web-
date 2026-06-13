@@ -20,6 +20,7 @@ interface RitualProgressProps {
    * la FSM. `null`/absent → dégradation vers l'acte des scribes.
    */
   phase?: JobOut["phase"];
+  queued?: boolean;
   /** Navigation vers le récit (Story 3.5). Bouton désactivé si absent. */
   onOpenStory?: () => void;
   /** Relancer la transcription (Story 3.4). Bouton inerte si absent. */
@@ -58,6 +59,12 @@ const REDUCING_LINES = [
 ];
 
 // Annonce concise pour lecteurs d'écran — distincte du titre décoratif.
+const QUEUED_LINES = [
+  "Le grimoire attend son tour...",
+  "Les scribes rangent leurs plumes.",
+  "La file avance doucement.",
+];
+
 const STATUS_ANNOUNCE: Record<
   Exclude<PipelineUIState, "idle">,
   string
@@ -78,6 +85,7 @@ export function RitualProgress({
   sessionTitle,
   progress,
   phase,
+  queued = false,
   onOpenStory,
   onRetry,
   onReplace,
@@ -90,9 +98,11 @@ export function RitualProgress({
     uiState === "uploading"
       ? UPLOADING_LINES
       : uiState === "transcribing"
-        ? transcribingVariant === "reducing"
-          ? REDUCING_LINES
-          : TRANSCRIBING_LINES
+        ? queued
+          ? QUEUED_LINES
+          : transcribingVariant === "reducing"
+            ? REDUCING_LINES
+            : TRANSCRIBING_LINES
         : [];
   const { current: rotatingSubtext } = useRotatingText(lines, {
     intervalMs: 4000,
@@ -107,13 +117,17 @@ export function RitualProgress({
       data-ritual-state={uiState}
     >
       <p role="status" aria-live="polite" className="sr-only">
-        {STATUS_ANNOUNCE[uiState]} — {sessionTitle}
+        {uiState === "transcribing" && queued
+          ? "Transcription en attente"
+          : STATUS_ANNOUNCE[uiState]}{" "}
+        — {sessionTitle}
       </p>
 
       {uiState === "uploading" && <UploadingAct subtext={rotatingSubtext} />}
       {uiState === "transcribing" && (
         <TranscribingAct
           variant={transcribingVariant}
+          queued={queued}
           subtext={rotatingSubtext}
           progress={progress}
           onReplace={onReplace}
@@ -306,12 +320,14 @@ function UploadingAct({ subtext }: { subtext: string }) {
 
 function TranscribingAct({
   variant,
+  queued,
   subtext,
   progress,
   onReplace,
   replaceDisabledHint,
 }: {
   variant: TranscribingActVariant;
+  queued: boolean;
   subtext: string;
   progress?: number | null;
   onReplace?: () => void;
@@ -323,11 +339,19 @@ function TranscribingAct({
   const isReducing = variant === "reducing";
   return (
     <ActShell
-      title={isReducing ? "Le grimoire se prépare" : "Les scribes transcrivent"}
-      subtext={subtext}
-      scene={isReducing ? <ParchmentScene /> : <QuillScene />}
+      title={
+        queued
+          ? "Le grimoire attend son tour"
+          : isReducing
+            ? "Le grimoire se prépare"
+            : "Les scribes transcrivent"
+      }
+      subtext={queued ? "En attente dans la file..." : subtext}
+      scene={queued || isReducing ? <ParchmentScene /> : <QuillScene />}
     >
-      {typeof progress === "number" ? (
+      {queued ? (
+        <CredibleBar />
+      ) : typeof progress === "number" ? (
         <DeterminateBar value={progress} />
       ) : (
         <CredibleBar />
@@ -344,7 +368,7 @@ function TranscribedAct({ onOpenStory }: { onOpenStory?: () => void }) {
   return (
     <ActShell
       tone="success"
-      title="Le récit est consigné"
+      title="Ton récit est consigné."
       subtext="Ta session est gravée dans le grimoire."
       scene={
         <div className="relative h-full w-full">

@@ -18,7 +18,9 @@ const {
   useSessionTranscription,
   useSessionTranscriptionMarkdown,
   useDownloadTranscriptionMarkdown,
+  useDownloadTranscriptionJson,
   useUpdateTranscriptionMarkdown,
+  transcriptionFileName,
   transcriptionMarkdownQueryKey,
 } = await import("@/lib/jdr/sessions/transcription");
 const { isArtifactAbsentError } = await import("@/lib/jdr/sessions/artifacts");
@@ -211,6 +213,82 @@ describe("useSessionTranscriptionMarkdown", () => {
     );
     expect(result.current.fetchStatus).toBe("idle");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("useDownloadTranscriptionJson (Story 4.21)", () => {
+  test("diarised mode hits /transcription and returns the raw TranscriptionOut", async () => {
+    const payload = {
+      session_id: SESSION_ID,
+      language: "fr",
+      model_used: "whisper-x",
+      provider: "mock",
+      completed_at: "2026-06-01T10:00:00Z",
+      segments: [
+        {
+          speaker_label: "speaker_1",
+          text: "Bonjour à tous.",
+          start_seconds: 0,
+          end_seconds: 1.5,
+        },
+      ],
+    };
+    const fetchMock = stubFetch(async () => json(payload));
+    const { result } = renderHook(
+      () => useDownloadTranscriptionJson(SESSION_ID, "diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).resolves.toEqual(payload);
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/transcription")).toBe(true);
+    expect(url.endsWith("/chunks")).toBe(false);
+  });
+
+  test("non_diarised mode hits /chunks and returns the raw ChunkListOut", async () => {
+    const payload = {
+      session_id: SESSION_ID,
+      items: [{ chunk_id: "c1", ordre: 1, text: "Premier morceau." }],
+    };
+    const fetchMock = stubFetch(async () => json(payload));
+    const { result } = renderHook(
+      () => useDownloadTranscriptionJson(SESSION_ID, "non_diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).resolves.toEqual(payload);
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/chunks")).toBe(true);
+  });
+
+  test("surfaces an ApiError on >=400", async () => {
+    stubFetch(async () =>
+      json({ type: "about:blank", title: "boom", status: 500 }, 500),
+    );
+    const { result } = renderHook(
+      () => useDownloadTranscriptionJson(SESSION_ID, "diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("transcriptionFileName (Story 4.21)", () => {
+  test("slugifies the session title with the requested extension", () => {
+    expect(transcriptionFileName("Ma Séance", "md")).toBe(
+      "transcription-ma-seance.md",
+    );
+    expect(transcriptionFileName("Ma Séance", "json")).toBe(
+      "transcription-ma-seance.json",
+    );
+  });
+
+  test("falls back to a bare name when the title has no usable characters", () => {
+    expect(transcriptionFileName("!!!", "json")).toBe("transcription.json");
   });
 });
 
