@@ -28,7 +28,7 @@ export function AudioPlayer({
     if (!audio) return;
 
     if (audio.paused) {
-      void audio.play();
+      void audio.play().catch(() => undefined);
       return;
     }
     audio.pause();

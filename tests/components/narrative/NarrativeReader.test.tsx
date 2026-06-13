@@ -19,7 +19,7 @@ describe("<NarrativeReader>", () => {
     expect(screen.getByText("Une phrase courte pour lire.")).toBeInTheDocument();
   });
 
-  test("does not reserve a side column next to the parchment", () => {
+  test("keeps the TOC as a right-side rail on xl viewports", () => {
     const { container } = render(
       <NarrativeReader
         markdown={"## Un\n\nTexte.\n\n## Deux\n\nSuite."}
@@ -29,8 +29,8 @@ describe("<NarrativeReader>", () => {
 
     const root = container.firstElementChild;
     const article = container.querySelector("article");
-    expect(root?.className).not.toContain("grid-cols");
-    expect(root?.className).not.toContain("xl:grid");
-    expect(article).toHaveClass("w-full");
+    expect(root).toHaveClass("xl:grid");
+    expect(root?.className).toContain("xl:grid-cols-[1fr_minmax(0,13rem)]");
+    expect(article).toHaveClass("max-w-[68ch]");
   });
 });

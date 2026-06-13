@@ -66,6 +66,7 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
   const rosterQuery = useListCampaignPjs(campaignId);
   const playersQuery = useSessionPlayers(sessionId);
   const generate = useGeneratePovs(sessionId);
+  const [povsWereReadable, setPovsWereReadable] = useState(false);
 
   const rosterById = useMemo(() => {
     const roster = rosterQuery.data?.items ?? [];
@@ -90,6 +91,7 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
   const povAbsent = povQuery.isError && isArtifactAbsentError(povQuery.error);
   const povLoadFailed = povQuery.isError && !povAbsent;
   const povMissing = !povQuery.isPending && !povPresent && !povLoadFailed;
+  const shouldKeepPjNavigation = povsWereReadable || povPresent;
 
   const flow = useArtifactJobFlow({
     sessionId,
@@ -109,6 +111,7 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
 
   const handleSelectPj = (pjId: string) => {
     if (!declaredInRoster.some((pj) => pj.id === pjId)) return;
+    if (povPresent) setPovsWereReadable(true);
     setSelectedPjId(pjId);
     writeSelectedPjUrl(pjId);
   };
@@ -116,6 +119,30 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
   const rosterLoading = rosterQuery.isPending || playersQuery.isPending;
   const rosterFailed = rosterQuery.isError || playersQuery.isError;
   const hasDeclaredPj = declaredInRoster.length > 0;
+
+  const pjTabs = (
+    <Tabs
+      value={activePjId}
+      onValueChange={handleSelectPj}
+      className="mb-4 w-full"
+    >
+      <TabsList
+        variant="line"
+        className="bg-surface-raised/70 border-border-card/70 flex-wrap rounded-md border px-2 py-1"
+      >
+        {declaredInRoster.map((pj) => (
+          <TabsTrigger
+            key={pj.id}
+            value={pj.id}
+            aria-current={pj.id === activePjId ? "page" : undefined}
+            className="after:bg-accent-gold data-active:text-accent-gold px-2 text-xs"
+          >
+            {pj.name}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
 
   if (rosterLoading) {
     return (
@@ -153,6 +180,49 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
           Générer les POVs
         </Button>
       </PovShell>
+    );
+  }
+
+  if (shouldKeepPjNavigation) {
+    const generatedAt = selectedPov?.generated_at
+      ? parseBackendDate(selectedPov.generated_at)
+      : null;
+    return (
+      <section className={SECTION_CARD_CLASSES} aria-label="POVs de la sÃ©ance">
+        <h2 className="font-display mb-3 text-xl font-semibold">POVs</h2>
+        {pjTabs}
+
+        {povQuery.isPending ? (
+          <p className="text-text-chrome-muted text-sm">Chargement du POV...</p>
+        ) : povLoadFailed ? (
+          <p className="text-state-error text-sm">
+            Impossible de charger le POV sÃ©lectionnÃ©. RÃ©essaie plus tard.
+          </p>
+        ) : povPresent && selectedPov && generatedAt ? (
+          <>
+            <NarrativeReader markdown={selectedPov.text} kind="pov" />
+            <p className="text-text-chrome-muted mt-4 text-xs">
+              GÃ©nÃ©rÃ© le {generatedAt.toLocaleString("fr-FR")} Â·{" "}
+              {selectedPov.model_used}
+            </p>
+          </>
+        ) : (
+          <p className="text-text-chrome-muted text-sm italic">
+            Aucun POV gÃ©nÃ©rÃ© pour le PJ sÃ©lectionnÃ©.
+          </p>
+        )}
+
+        <ArtifactRegenerateControls
+          artifactLabel="les POVs"
+          jobId={flow.jobId}
+          jobInFlight={flow.jobInFlight}
+          artifactSettling={flow.artifactSettling}
+          jobFailed={flow.jobFailed}
+          failureReason={flow.failureReason}
+          pending={generate.isPending}
+          onConfirm={handleGenerate}
+        />
+      </section>
     );
   }
 

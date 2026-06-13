@@ -14,8 +14,10 @@ import { TocSidebar } from "@/components/narrative/TocSidebar";
  * contenu et le passe à la TocSidebar, qui en lit les titres — `NarrativeArtifact`
  * n'est donc PAS modifié (on l'enveloppe).
  *
- * Layout : le sommaire reste au-dessus du manuscrit pour ne jamais réserver une
- * colonne latérale ; le parchemin peut ainsi remplir toute la carte d'artefact.
+ * Layout (AC8) : sur `xl+` la TOC est un rail sticky à droite de l'article
+ * `max-w-[68ch]` ; sous `xl` elle passe au-dessus du bloc (disclosure repliable).
+ * La TOC est posée en premier dans l'ordre source → au-dessus sur petit écran, et
+ * replacée en colonne 2 par la grille sur grand écran.
  */
 
 interface NarrativeReaderProps {
@@ -27,12 +29,13 @@ export function NarrativeReader({ markdown, kind }: NarrativeReaderProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="space-y-4">
+    <div className="xl:grid xl:grid-cols-[1fr_minmax(0,13rem)] xl:gap-8">
       <TocSidebar
         containerRef={contentRef}
         contentKey={markdown}
+        className="mb-4 xl:col-start-2 xl:row-start-1 xl:mb-0"
       />
-      <div ref={contentRef} className="min-w-0">
+      <div ref={contentRef} className="xl:col-start-1 xl:row-start-1">
         <ArtifactReadingAids markdown={markdown} />
         <NarrativeArtifact markdown={markdown} kind={kind} />
       </div>
