@@ -18,4 +18,19 @@ describe("<NarrativeReader>", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Une phrase courte pour lire.")).toBeInTheDocument();
   });
+
+  test("does not reserve a side column next to the parchment", () => {
+    const { container } = render(
+      <NarrativeReader
+        markdown={"## Un\n\nTexte.\n\n## Deux\n\nSuite."}
+        kind="summary"
+      />,
+    );
+
+    const root = container.firstElementChild;
+    const article = container.querySelector("article");
+    expect(root?.className).not.toContain("grid-cols");
+    expect(root?.className).not.toContain("xl:grid");
+    expect(article).toHaveClass("w-full");
+  });
 });

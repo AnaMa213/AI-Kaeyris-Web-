@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  * `"use client"` → il s'exécute en Client Component. react-markdown v10 le
  * supporte sans réserve. Ne PAS réintroduire de route `artefacts/[kind]`.
  *
- * Le budget typographique (UX-DR3 : Crimson Pro, 18px/1.65, max-w 68ch, drop-cap,
+ * Le budget typographique (UX-DR3 : Crimson Pro, 18px/1.65, drop-cap,
  * pull-quote, ornement) est porté par les classes `.narrative-body*` de
  * `app/globals.css` — scopées pour ne jamais fuir sur les surfaces chrome.
  */
@@ -63,7 +63,7 @@ export function NarrativeArtifact({ markdown, kind }: NarrativeArtifactProps) {
       className={cn(
         // AC2 — budget typo parchemin (tokens existants de globals.css).
         "narrative-body bg-surface-narrative text-text-narrative font-serif",
-        "max-w-[68ch] rounded-[8px] px-6 py-6 text-[18px] leading-[1.65] sm:px-8 sm:py-7",
+        "w-full rounded-[8px] px-6 py-6 text-[18px] leading-[1.65] sm:px-8 sm:py-7",
         // AC3 — lettrine conditionnée au kind.
         DROPCAP_KINDS.has(kind) && "narrative-body--dropcap",
       )}

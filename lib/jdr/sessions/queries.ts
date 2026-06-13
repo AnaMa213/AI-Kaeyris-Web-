@@ -118,6 +118,34 @@ export function useUpdateSession(sessionId: string, campaignId?: string) {
   });
 }
 
+export function useDeleteSession(sessionId: string, campaignId?: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.DELETE(
+        "/services/jdr/sessions/{session_id}",
+        { params: { path: { session_id: sessionId } } },
+      );
+      if (result.error !== undefined) {
+        throw new ApiError({
+          type: "about:blank",
+          title: "Request failed",
+          status: 0,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: sessionQueryKey(sessionId) });
+      if (campaignId) {
+        queryClient.invalidateQueries({
+          queryKey: sessionsListQueryKey(campaignId),
+        });
+      }
+    },
+  });
+}
+
 // openapi-fetch types the multipart body as { audio: string }, which does not
 // match a FormData payload — the audio POST/DELETE use plain fetch and re-parse
 // problem+json themselves (same shape as the openapi-fetch error middleware).
