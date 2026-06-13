@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Link2, Pencil, Trash2 } from "lucide-react";
+import { Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -216,14 +216,11 @@ export function CampaignPjsCard({ campaign }: CampaignPjsCardProps) {
         {/* Bug 1 : sur roster vide, l'empty state porte déjà le CTA —
             on masque ici le doublon du header. */}
         {canManage && sorted.length > 0 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          <IconButton
+            label="Ajouter un PJ"
+            icon={<Plus aria-hidden="true" />}
             onClick={() => setCreating(true)}
-          >
-            Ajouter un PJ
-          </Button>
+          />
         )}
       </header>
 

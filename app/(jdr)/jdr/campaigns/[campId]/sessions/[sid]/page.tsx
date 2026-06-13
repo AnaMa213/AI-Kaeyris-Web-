@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, usePathname, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Download, Pencil, Volume2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/common/IconButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
@@ -20,6 +24,7 @@ import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactP
 import { NarrativeArtifactPanel } from "@/components/jdr/sessions/NarrativeArtifactPanel";
 import { ElementsArtifactPanel } from "@/components/jdr/sessions/ElementsArtifactPanel";
 import { PovArtifactPanel } from "@/components/jdr/sessions/PovArtifactPanel";
+import { SessionDeleteConfirm } from "@/components/jdr/sessions/SessionDeleteConfirm";
 import { SessionEditDialog } from "@/components/jdr/sessions/SessionEditForm";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { ApiError } from "@/lib/core/api/errors";
@@ -46,6 +51,7 @@ import {
 } from "@/lib/jdr/sessions/pipelineState";
 import {
   sessionQueryKey,
+  useDeleteSession,
   useGetSession,
 } from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
@@ -187,15 +193,18 @@ function ReadOnlyArtifactPlaceholder({ title }: { title: string }) {
 export default function SessionDetailPage() {
   const params = useParams<{ campId: string; sid: string }>();
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const campId = typeof params.campId === "string" ? params.campId : "";
   const sid = typeof params.sid === "string" ? params.sid : "";
   const queryClient = useQueryClient();
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
+  const deleteMutation = useDeleteSession(sid, campId);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [urlRevision, setUrlRevision] = useState(0);
-  // Story 4.21 : pop-up transcription RAW (ouverte via l'icône Download header).
+  // Story 4.21 : pop-up transcription RAW (ouverte via l'icône Eye header).
   const [transcriptionOpen, setTranscriptionOpen] = useState(false);
   // Story 3.5 : mode remplacement (dropzone re-montée) déclenché par le MJ.
   const [replacing, setReplacing] = useState(false);
@@ -429,6 +438,16 @@ export default function SessionDetailPage() {
     setUrlRevision((revision) => revision + 1);
   }
 
+  function handleConfirmDelete() {
+    deleteMutation.mutate(undefined, {
+      onSuccess: () => {
+        setDeleting(false);
+        toast.success("Séance supprimée.");
+        router.push(`/jdr/campaigns/${campId}`);
+      },
+    });
+  }
+
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
       <div className="mb-4">
@@ -451,7 +470,7 @@ export default function SessionDetailPage() {
               {session.state === "transcribed" && (
                 <IconButton
                   label="Afficher la transcription"
-                  icon={<Download aria-hidden="true" />}
+                  icon={<Eye aria-hidden="true" />}
                   onClick={() => setTranscriptionOpen(true)}
                 />
               )}
@@ -473,16 +492,13 @@ export default function SessionDetailPage() {
                 onClick={() => setEditing(true)}
               />
             )}
-            {session.state === "transcribed" && (
-              <Button
-                type="button"
-                variant="outline"
-                aria-label="Lire l'audio de la séance"
-                onClick={() => setTranscriptionOpen(true)}
-              >
-                <Volume2 className="h-4 w-4" aria-hidden="true" />
-                Lire l&apos;audio
-              </Button>
+            {canEdit && (
+              <IconButton
+                label="Supprimer la séance"
+                icon={<Trash2 aria-hidden="true" />}
+                onClick={() => setDeleting(true)}
+                className="text-state-error-strong hover:text-state-error-strong! hover:bg-state-error/10!"
+              />
             )}
           </div>
         </div>
@@ -554,7 +570,7 @@ export default function SessionDetailPage() {
           <Tabs
             value={sub}
             onValueChange={handleArtifactSubTabChange}
-            className="space-y-6"
+            className="w-full space-y-6"
           >
             {/* Story 4.7 (S6) : la déclaration des présents est un dropdown
                 compact sur la même ligne que les sous-onglets. */}
@@ -652,9 +668,20 @@ export default function SessionDetailPage() {
         session={session}
         campaignId={campId}
       />
+      <SessionDeleteConfirm
+        open={deleting}
+        onOpenChange={(open) => {
+          setDeleting(open);
+          if (!open) deleteMutation.reset();
+        }}
+        session={session}
+        onConfirm={handleConfirmDelete}
+        submitting={deleteMutation.isPending}
+        error={deleteMutation.error}
+      />
 
       {/* Story 4.21 — pop-up transcription RAW (lecture + édition + export
-          JSON/.md), ouverte par l'icône Download du header. */}
+          JSON/.md), ouverte par l'icône Eye du header. */}
       {session.state === "transcribed" && (
         <TranscriptionDialog
           open={transcriptionOpen}

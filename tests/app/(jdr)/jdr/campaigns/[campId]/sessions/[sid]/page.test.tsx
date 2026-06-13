@@ -28,10 +28,12 @@ const campId = "11111111-1111-1111-1111-111111111111";
 const currentPathname = `/jdr/campaigns/${campId}/sessions/${sessionIdFixture}`;
 const seenKey = `kaeyris:jdr:session-transcription-seen:${sessionIdFixture}`;
 const toastSeenKey = `kaeyris:jdr:session-transcription-toast-seen:${sessionIdFixture}`;
+const pushMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ campId, sid: sessionIdFixture }),
   usePathname: () => currentPathname,
+  useRouter: () => ({ push: pushMock }),
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
@@ -88,8 +90,13 @@ function stubFetch(opts: {
 }) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: Request | string) => {
+    vi.fn(async (input: Request | string, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
+      const method =
+        typeof input === "string"
+          ? (init?.method ?? "GET")
+          : (input.method ?? "GET");
+      const upper = method.toUpperCase();
       if (url.includes(`/services/jdr/campaigns/${campId}`)) {
         return new Response(JSON.stringify(opts.campaign ?? baseCampaign), {
           status: 200,
@@ -129,6 +136,12 @@ function stubFetch(opts: {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
+      if (
+        url.includes(`/services/jdr/sessions/${sessionIdFixture}`) &&
+        upper === "DELETE"
+      ) {
+        return new Response(null, { status: 204 });
+      }
       if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
         if (opts.sessionStatus && opts.sessionStatus >= 400) {
           return new Response(
@@ -157,6 +170,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
   beforeEach(() => {
     toastSuccessMock.mockClear();
     toastErrorMock.mockClear();
+    pushMock.mockClear();
     window.localStorage.clear();
     window.history.replaceState(null, "", currentPathname);
   });
@@ -203,7 +217,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("hides the dead 'Lire l'audio' CTA before the transcription is ready, hides the dropzone", async () => {
+  test("hides the old 'Lire l'audio' CTA before the transcription is ready, hides the dropzone", async () => {
     stubFetch({ session: { ...baseSession, state: "audio_uploaded" } });
     renderPage();
     await screen.findByRole("heading", { level: 1 });
@@ -218,7 +232,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("wires 'Lire l'audio' to the transcription dialog once transcribed", async () => {
+  test("wires 'Afficher la transcription' to the transcription dialog once transcribed", async () => {
     stubFetch({
       session: { ...baseSession, state: "transcribed" },
       chunks: [{ chunk_id: "chunk-1", ordre: 1, text: "Audio et transcription." }],
@@ -228,10 +242,13 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: "Lire l'audio de la séance",
+        name: "Afficher la transcription",
       }),
     );
 
+    expect(
+      screen.queryByRole("button", { name: "Lire l'audio de la séance" }),
+    ).not.toBeInTheDocument();
     expect(
       await screen.findByLabelText("Lecteur audio de la séance"),
     ).toBeInTheDocument();
@@ -285,6 +302,49 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(
       screen.queryByRole("button", { name: "Modifier la séance" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("deletes the session after confirmation and returns to the campaign", async () => {
+    stubFetch({});
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Supprimer la séance" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: /Supprimer Session 7/ }),
+    ).toBeInTheDocument();
+    const confirmButton = within(dialog).getByRole("button", {
+      name: "Supprimer la séance",
+    });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(within(dialog).getByLabelText(/Tape/), baseSession.title);
+    await user.click(confirmButton);
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      expect(
+        fetchMock.mock.calls.some((args) => {
+          const input = args[0] as Request | string;
+          const init = args[1] as RequestInit | undefined;
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            typeof input === "string"
+              ? (init?.method ?? "GET")
+              : (input.method ?? "GET");
+          return (
+            url.includes(`/services/jdr/sessions/${sessionIdFixture}`) &&
+            method.toUpperCase() === "DELETE"
+          );
+        }),
+      ).toBe(true);
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith("Séance supprimée.");
+    expect(pushMock).toHaveBeenCalledWith(`/jdr/campaigns/${campId}`);
   });
 
   test("after upload success the JobStateBadge 'En file' appears in the header (Story 3.3)", async () => {
@@ -2037,7 +2097,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       );
     }
 
-    test("AC3 — a GM's first transcribed visit shows the story gate + a header Download icon, not the raw transcription", async () => {
+    test("AC3 — a GM's first transcribed visit shows the story gate + a header Eye icon, not the raw transcription", async () => {
       stubFor421({ role: "gm" });
       renderPage();
 
@@ -2203,7 +2263,7 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
       ).not.toBeInTheDocument();
     });
 
-    test("AC5 — the header Download icon opens the raw transcription pop-up", async () => {
+    test("AC5 — the header Eye icon opens the raw transcription pop-up", async () => {
       stubFor421({
         role: "gm",
         chunkText: "Contenu brut de la séance.",

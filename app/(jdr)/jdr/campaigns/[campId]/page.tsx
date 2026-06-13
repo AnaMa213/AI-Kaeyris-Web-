@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/common/IconButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
@@ -167,15 +166,13 @@ export default function CampaignDetailPage() {
               {/* Bug 1 : sur liste vide, l'empty state porte déjà le CTA —
                   on masque ici le doublon du header. */}
               {canCreateSession && sortedSessions.length > 0 && (
-                <Button
-                  type="button"
-                  size="sm"
+                <IconButton
+                  label="Nouvelle session"
+                  icon={<Plus aria-hidden="true" />}
                   onClick={() =>
                     router.push(`/jdr/campaigns/${campId}/sessions/new`)
                   }
-                >
-                  Nouvelle session
-                </Button>
+                />
               )}
             </div>
           </div>
