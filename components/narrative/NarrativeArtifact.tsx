@@ -63,7 +63,7 @@ export function NarrativeArtifact({ markdown, kind }: NarrativeArtifactProps) {
       className={cn(
         // AC2 — budget typo parchemin (tokens existants de globals.css).
         "narrative-body bg-surface-narrative text-text-narrative font-serif",
-        "max-w-[68ch] rounded-[8px] px-6 py-6 text-[18px] leading-[1.65] sm:px-8 sm:py-7",
+        "w-full rounded-[8px] px-6 py-6 text-[18px] leading-[1.65] sm:px-8 sm:py-7",
         // AC3 — lettrine conditionnée au kind.
         DROPCAP_KINDS.has(kind) && "narrative-body--dropcap",
       )}

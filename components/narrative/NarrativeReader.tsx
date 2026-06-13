@@ -14,10 +14,10 @@ import { TocSidebar } from "@/components/narrative/TocSidebar";
  * contenu et le passe à la TocSidebar, qui en lit les titres — `NarrativeArtifact`
  * n'est donc PAS modifié (on l'enveloppe).
  *
- * Layout (AC8) : sur `xl+` la TOC est un rail sticky à droite de l'article
- * `max-w-[68ch]` ; sous `xl` elle passe au-dessus du bloc (disclosure repliable).
- * La TOC est posée en premier dans l'ordre source → au-dessus sur petit écran, et
- * replacée en colonne 2 par la grille sur grand écran.
+ * Layout (AC8) : sur `xl+` la TOC est un rail sticky à droite de l'article, qui
+ * remplit le reste de la colonne (`w-full`) ; sous `xl` elle passe au-dessus du
+ * bloc (disclosure repliable). La TOC est posée en premier dans l'ordre source →
+ * au-dessus sur petit écran, et replacée en colonne 2 par la grille sur grand écran.
  */
 
 interface NarrativeReaderProps {

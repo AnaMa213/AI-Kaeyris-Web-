@@ -31,6 +31,6 @@ describe("<NarrativeReader>", () => {
     const article = container.querySelector("article");
     expect(root).toHaveClass("xl:grid");
     expect(root?.className).toContain("xl:grid-cols-[1fr_minmax(0,13rem)]");
-    expect(article).toHaveClass("max-w-[68ch]");
+    expect(article).toHaveClass("w-full");
   });
 });
