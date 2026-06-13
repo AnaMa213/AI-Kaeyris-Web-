@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/core/api/client";
 import { ApiError } from "@/lib/core/api/errors";
+import { slugifySessionTitle } from "@/lib/core/strings/slugify";
 import type { components } from "@/types/api";
 
 type ChunkListOut = components["schemas"]["ChunkListOut"];
@@ -16,23 +17,17 @@ type TranscriptionMode = components["schemas"]["TranscriptionMode"];
 /** Réponse brute exposée au download JSON (Story 4.21) selon le mode. */
 type RawTranscriptionPayload = TranscriptionOut | ChunkListOut;
 
-const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
-
 /**
  * Build a filesystem-friendly transcription filename from the session title.
  * Shared by the Markdown export (Story 4.14) and the raw JSON export
- * (Story 4.21) so both stay in sync on slugging rules.
+ * (Story 4.21) so both stay in sync on slugging rules (via
+ * `slugifySessionTitle`).
  */
 export function transcriptionFileName(
   sessionTitle: string,
   extension: "md" | "json",
 ): string {
-  const slug = sessionTitle
-    .normalize("NFD")
-    .replace(COMBINING_MARKS, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const slug = slugifySessionTitle(sessionTitle);
   return slug ? `transcription-${slug}.${extension}` : `transcription.${extension}`;
 }
 

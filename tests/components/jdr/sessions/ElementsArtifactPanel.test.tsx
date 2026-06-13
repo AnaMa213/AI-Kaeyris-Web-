@@ -92,7 +92,11 @@ const renderPanel = () => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <ElementsArtifactPanel sessionId={SESSION_ID} campaignId={CAMPAIGN_ID} />
+      <ElementsArtifactPanel
+        sessionId={SESSION_ID}
+        campaignId={CAMPAIGN_ID}
+        sessionTitle="Ma Séance"
+      />
     </QueryClientProvider>,
   );
 };
@@ -155,6 +159,10 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Régénérer les Éléments" }),
+    ).toBeInTheDocument();
+    // Story 5.5 — Markdown export CTA is available on the existing artifact.
+    expect(
+      screen.getByRole("button", { name: /Exporter \.md/i }),
     ).toBeInTheDocument();
   });
 

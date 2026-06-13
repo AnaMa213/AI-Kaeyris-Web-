@@ -16,12 +16,14 @@ import {
   useGenerateElements,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
+import { ArtifactExportButton } from "@/components/jdr/sessions/ArtifactExportButton";
 
 type Element = components["schemas"]["Element"];
 
 interface ElementsArtifactPanelProps {
   sessionId: string;
   campaignId: string;
+  sessionTitle: string;
 }
 
 const SECTION_CARD_CLASSES =
@@ -84,6 +86,7 @@ function ElementGroup({ title, items }: { title: string; items?: Element[] }) {
  */
 export function ElementsArtifactPanel({
   sessionId,
+  sessionTitle,
 }: ElementsArtifactPanelProps) {
   const elementsQuery = useElementsArtifact(sessionId);
   const generate = useGenerateElements(sessionId);
@@ -148,6 +151,13 @@ export function ElementsArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {elements.model_used}
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ArtifactExportButton
+            sessionId={sessionId}
+            sessionTitle={sessionTitle}
+            kind="elements"
+          />
+        </div>
         <ArtifactRegenerateControls
           artifactLabel="les Éléments"
           jobId={flow.jobId}

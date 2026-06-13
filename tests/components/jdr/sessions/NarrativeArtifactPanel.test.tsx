@@ -83,7 +83,11 @@ const renderPanel = () => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <NarrativeArtifactPanel sessionId={SESSION_ID} campaignId={CAMPAIGN_ID} />
+      <NarrativeArtifactPanel
+        sessionId={SESSION_ID}
+        campaignId={CAMPAIGN_ID}
+        sessionTitle="Ma Séance"
+      />
     </QueryClientProvider>,
   );
 };
@@ -144,6 +148,9 @@ describe("<NarrativeArtifactPanel> (Story 4.4)", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Régénérer le Récit" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Exporter \.md/i }),
     ).toBeInTheDocument();
   });
 
