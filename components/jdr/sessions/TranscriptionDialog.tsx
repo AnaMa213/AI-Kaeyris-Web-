@@ -3,6 +3,7 @@
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +18,7 @@ import {
   useDownloadTranscriptionJson,
   type TranscriptionMode,
 } from "@/lib/jdr/sessions/transcription";
+import { resolveSessionAudioSrc } from "@/lib/jdr/sessions/audio";
 
 interface TranscriptionDialogProps {
   open: boolean;
@@ -95,6 +97,7 @@ export function TranscriptionDialog({
             {jsonDownload.isPending ? "Téléchargement…" : "Télécharger en JSON"}
           </Button>
         </div>
+        <AudioPlayer src={resolveSessionAudioSrc(sessionId)} />
         <div className="max-h-[70vh] overflow-y-auto">
           <TranscriptionViewer
             sessionId={sessionId}

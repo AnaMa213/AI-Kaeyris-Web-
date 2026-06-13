@@ -47,11 +47,9 @@ import {
 import {
   sessionQueryKey,
   useGetSession,
-  type SessionOut,
 } from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
-const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
 const ARTIFACT_DISABLED_HINT = "Génère cet artefact d'abord";
 // Story 4.15 (T2) : indice porté par le déclencheur de remplacement quand un job
 // de transcription est actif — verrou anti-double transcription concurrente.
@@ -79,10 +77,6 @@ const VALID_RITUAL_OVERRIDES: PipelineUIState[] = [
   "transcribed",
   "failed",
 ];
-
-function hasAudio(state: SessionOut["state"]): boolean {
-  return state !== "created";
-}
 
 function isArtifactSubTab(value: string | null): value is ArtifactSubTab {
   return (
@@ -342,7 +336,6 @@ export default function SessionDetailPage() {
     addSuffix: true,
     locale: fr,
   });
-  const audioReady = hasAudio(session.state);
   const canEdit = canEditResolved;
   const canUploadAudio = canEdit && session.state === "created";
   // Story 3.5 : remplacement permis sur `audio_uploaded`/`transcription_failed`
@@ -480,13 +473,12 @@ export default function SessionDetailPage() {
                 onClick={() => setEditing(true)}
               />
             )}
-            {audioReady && (
+            {session.state === "transcribed" && (
               <Button
                 type="button"
                 variant="outline"
-                disabled
-                title={AUDIO_DISABLED_HINT}
                 aria-label="Lire l'audio de la séance"
+                onClick={() => setTranscriptionOpen(true)}
               >
                 <Volume2 className="h-4 w-4" aria-hidden="true" />
                 Lire l&apos;audio

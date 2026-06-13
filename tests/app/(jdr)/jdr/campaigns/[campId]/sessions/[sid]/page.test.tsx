@@ -203,17 +203,39 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("swaps to the 'Lire l'audio' (disabled) CTA once state >= audio_uploaded, hides the dropzone", async () => {
+  test("hides the dead 'Lire l'audio' CTA before the transcription is ready, hides the dropzone", async () => {
     stubFetch({ session: { ...baseSession, state: "audio_uploaded" } });
     renderPage();
-    const playCta = await screen.findByRole("button", {
-      name: "Lire l'audio de la séance",
-    });
-    expect(playCta).toBeDisabled();
-    expect(playCta.getAttribute("title")).toMatch(/Epic 3/);
+    await screen.findByRole("heading", { level: 1 });
+
+    expect(
+      screen.queryByRole("button", {
+        name: "Lire l'audio de la séance",
+      }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Glisse ton M4A/ }),
     ).not.toBeInTheDocument();
+  });
+
+  test("wires 'Lire l'audio' to the transcription dialog once transcribed", async () => {
+    stubFetch({
+      session: { ...baseSession, state: "transcribed" },
+      chunks: [{ chunk_id: "chunk-1", ordre: 1, text: "Audio et transcription." }],
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Lire l'audio de la séance",
+      }),
+    );
+
+    expect(
+      await screen.findByLabelText("Lecteur audio de la séance"),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Audio et transcription/)).toBeInTheDocument();
   });
 
   test("renders the CampaignBreadcrumb link to the parent campaign", async () => {
