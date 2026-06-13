@@ -85,4 +85,20 @@ describe("<AudioPlayer>", () => {
 
     expect(pauseMock).toHaveBeenCalledTimes(1);
   });
+
+  test("handles a rejected play() promise without surfacing it", async () => {
+    const playMock = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockRejectedValue(new DOMException("blocked", "NotAllowedError"));
+    const { AudioPlayer } = await importWithEnv(false);
+
+    const { container } = render(<AudioPlayer src="/audio.m4a" />);
+    const audio = container.querySelector("audio");
+    if (!audio) throw new Error("Expected audio element");
+
+    fireEvent.keyDown(audio, { code: "Space", key: " " });
+
+    expect(playMock).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+  });
 });

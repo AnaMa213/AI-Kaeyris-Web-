@@ -259,6 +259,28 @@ describe("<PovArtifactPanel> (Story 5.7)", () => {
     expect(fetchedPj2).toBe(true);
   });
 
+  test("keeps PJ tabs visible when the selected PJ POV is missing", async () => {
+    stub({
+      declared: [PJ_1, PJ_2],
+      roster: [pj(PJ_1, "Mira"), pj(PJ_2, "Nox")],
+      povs: {
+        [PJ_1]: pov(PJ_1, "Mira lit les cendres."),
+        [PJ_2]: null,
+      },
+    });
+    renderPanel();
+    const user = userEvent.setup();
+
+    await screen.findByText("Mira lit les cendres.");
+    await user.click(screen.getByRole("tab", { name: "Nox" }));
+
+    expect(await screen.findByRole("tab", { name: "Mira" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Nox" })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Aucun POV g/i),
+    ).toBeInTheDocument();
+  });
+
   test("invalid deep-link ?pj falls back silently to the first declared roster PJ", async () => {
     window.history.replaceState(null, "", "/sessions/test?sub=povs&pj=missing");
     stub({

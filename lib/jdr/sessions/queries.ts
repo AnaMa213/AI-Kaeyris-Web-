@@ -6,6 +6,7 @@ import { createApiClient } from "@/lib/core/api/client";
 import { env } from "@/lib/core/env";
 import { ApiError, AuthError } from "@/lib/core/api/errors";
 import { parseProblemDetails } from "@/lib/core/api/problemDetails";
+import { campaignQueryKey } from "@/lib/jdr/campaigns/queries";
 import { jobQueryKey } from "@/lib/jdr/jobs/queries";
 import {
   toIsoUtc,
@@ -141,6 +142,7 @@ export function useDeleteSession(sessionId: string, campaignId?: string) {
         queryClient.invalidateQueries({
           queryKey: sessionsListQueryKey(campaignId),
         });
+        queryClient.invalidateQueries({ queryKey: campaignQueryKey(campaignId) });
       }
     },
   });

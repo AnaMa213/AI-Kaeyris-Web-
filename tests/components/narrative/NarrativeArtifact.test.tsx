@@ -38,7 +38,7 @@ describe("<NarrativeArtifact> (Story 5.1)", () => {
     // Le corps long-form passe sur parchemin (séparation chrome/parchemin).
     expect(article).toHaveClass("bg-surface-narrative");
     expect(article).toHaveClass("font-serif");
-    // Le parchemin remplit la carte d'artefact (Résumé/Récit/Éléments/POVs).
+    // Le parchemin remplit son bloc (Résumé/Récit/Éléments/POVs) avec un padding.
     expect(article).toHaveClass("w-full");
     expect(article?.className).not.toContain("max-w-[68ch]");
     expect(container.textContent).toContain("Texte final du passage.");

@@ -18,11 +18,13 @@ const {
   useGetSession,
   useListSessions,
   useUpdateSession,
+  useDeleteSession,
   useSessionAudioMutation,
   sessionQueryKey,
   sessionsListQueryKey,
 } = await import("@/lib/jdr/sessions/queries");
 const { jobQueryKey } = await import("@/lib/jdr/jobs/queries");
+const { campaignQueryKey } = await import("@/lib/jdr/campaigns/queries");
 const { ApiError } = await import("@/lib/core/api/errors");
 
 const sampleSession = {
@@ -36,6 +38,8 @@ const sampleSession = {
   created_at: "2026-05-31T18:05:00.000Z",
   updated_at: "2026-05-31T18:05:00.000Z",
 };
+
+const campaignId = "11111111-1111-1111-1111-111111111111";
 
 const wrapper = (queryClient: QueryClient) => {
   function TestProvider({ children }: { children: React.ReactNode }) {
@@ -565,6 +569,24 @@ describe("useUploadSessionAudio", () => {
       // cache pour que le polling se réarme sans attendre le refetch.
       current_job_id: audioResponse.job_id,
       updated_at: audioResponse.uploaded_at,
+    });
+  });
+
+  test("invalidates the parent campaign after session deletion", async () => {
+    const client = makeClient();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const { result } = renderHook(
+      () => useDeleteSession(sampleSession.id, campaignId),
+      { wrapper: wrapper(client) },
+    );
+
+    await result.current.mutateAsync();
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: sessionsListQueryKey(campaignId),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: campaignQueryKey(campaignId),
     });
   });
 
