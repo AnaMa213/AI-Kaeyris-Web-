@@ -165,39 +165,48 @@ afterEach(() => {
 });
 
 describe("TranscriptionViewer — non_diarised", () => {
-  test("renders the canonical Markdown transcription", async () => {
+  test("renders chunks sorted by ordre as read-only text", async () => {
     stubFetch({
-      markdown: "# Transcription\n\nPREMIER\n\nDEUXIEME",
+      chunks: [
+        { chunk_id: "c2", ordre: 2, text: "DEUXIEME" },
+        { chunk_id: "c1", ordre: 1, text: "PREMIER" },
+      ],
     });
     const { container } = renderViewer("non_diarised");
     await screen.findByText(/PREMIER/);
     const text = container.textContent ?? "";
     expect(text.indexOf("PREMIER")).toBeLessThan(text.indexOf("DEUXIEME"));
+    expect(
+      screen.queryByRole("button", { name: "Modifier" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Télécharger/ }),
+    ).not.toBeInTheDocument();
   });
 
   test("404 not-ready shows a calm message, not an error", async () => {
-    stubFetch({ markdownStatus: 404 });
+    stubFetch({ chunksStatus: 404 });
     renderViewer("non_diarised");
     expect(
       await screen.findByText("La transcription n'est pas encore disponible."),
     ).toBeTruthy();
   });
 
-  test("empty markdown shows an empty state", async () => {
-    stubFetch({ markdown: "   " });
+  test("empty chunks show an empty state", async () => {
+    stubFetch({ chunks: [] });
     renderViewer("non_diarised");
     expect(await screen.findByText("Transcription vide.")).toBeTruthy();
   });
 
-  test("uses only the mode-agnostic Markdown endpoint", async () => {
+  test("uses only the chunks endpoint", async () => {
     const fetchMock = stubFetch({
-      markdown: "Texte",
+      chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }],
     });
     renderViewer("non_diarised");
     await screen.findByText("Texte");
     const urls = calledUrls(fetchMock);
-    expect(urls.some((u) => u.endsWith("/transcription.md"))).toBe(true);
-    expect(urls.some((u) => u.endsWith("/chunks"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("/chunks"))).toBe(true);
+    expect(urls.some((u) => u.endsWith("/transcription.md"))).toBe(false);
     expect(urls.some((u) => u.endsWith("/transcription"))).toBe(false);
   });
 });
@@ -240,11 +249,11 @@ describe("TranscriptionViewer — download (.md)", () => {
   const downloadButton = () =>
     screen.queryByRole("button", { name: /Télécharger/ });
 
-  test("shows the download button once content is rendered (non_diarised)", async () => {
-    stubFetch({ markdown: "Texte" });
+  test("hides the download button once chunks are rendered (non_diarised)", async () => {
+    stubFetch({ chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }] });
     renderViewer("non_diarised");
     await screen.findByText("Texte");
-    expect(downloadButton()).toBeTruthy();
+    expect(downloadButton()).toBeNull();
   });
 
   test("shows the download button once content is rendered (diarised)", async () => {
@@ -264,14 +273,14 @@ describe("TranscriptionViewer — download (.md)", () => {
   });
 
   test("hides the button on a not-ready (404) transcription", async () => {
-    stubFetch({ markdownStatus: 404 });
+    stubFetch({ chunksStatus: 404 });
     renderViewer("non_diarised");
     await screen.findByText("La transcription n'est pas encore disponible.");
     expect(downloadButton()).toBeNull();
   });
 
   test("hides the button on an empty transcription", async () => {
-    stubFetch({ markdown: "   " });
+    stubFetch({ chunks: [] });
     renderViewer("non_diarised");
     await screen.findByText("Transcription vide.");
     expect(downloadButton()).toBeNull();
@@ -281,7 +290,7 @@ describe("TranscriptionViewer — download (.md)", () => {
     stubFetch({
       markdown: "# Ma Séance\n\nTexte",
     });
-    renderViewer("non_diarised", "Ma Séance");
+    renderViewer("diarised", "Ma Séance");
     const button = await screen.findByRole("button", { name: /Télécharger/ });
     fireEvent.click(button);
     await waitFor(() =>
@@ -312,7 +321,7 @@ describe("TranscriptionViewer — download (.md)", () => {
         return json({});
       }),
     );
-    renderViewer("non_diarised");
+    renderViewer("diarised");
     const button = await screen.findByRole("button", { name: /Télécharger/ });
     fireEvent.click(button);
     await waitFor(() =>
@@ -328,7 +337,7 @@ describe("TranscriptionViewer — download (.md)", () => {
       throw new Error("createObjectURL unavailable");
     });
     stubFetch({ markdown: "# Ma Séance\n\nTexte" });
-    renderViewer("non_diarised", "Ma Séance");
+    renderViewer("diarised", "Ma Séance");
     const button = await screen.findByRole("button", { name: /Télécharger/ });
 
     fireEvent.click(button);
@@ -346,14 +355,21 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("hides the edit action by default", async () => {
     stubFetch({ markdown: "# Transcription\n\nTexte" });
-    renderViewer("non_diarised");
+    renderViewer("diarised");
+    await screen.findByText(/Texte/);
+    expect(editButton()).toBeNull();
+  });
+
+  test("hides the edit action for non_diarised even when canEdit is true", async () => {
+    stubFetch({ chunks: [{ chunk_id: "c1", ordre: 1, text: "Texte" }] });
+    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Texte/);
     expect(editButton()).toBeNull();
   });
 
   test("shows a GM-only edit action and pre-fills the Markdown textarea", async () => {
     stubFetch({ markdown: "# Transcription\n\nTexte" });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Texte/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     expect(
@@ -363,7 +379,7 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("hides the edit action while editing so the draft cannot be reset", async () => {
     stubFetch({ markdown: "# Original\n\nTexte" });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Texte/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     fireEvent.change(
@@ -382,7 +398,7 @@ describe("TranscriptionViewer — inline edit", () => {
       markdown: "   ",
       updatedMarkdown: "# Corrigée\n\nTexte ajouté",
     });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText("Transcription vide.");
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     expect(
@@ -405,7 +421,7 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("cancel discards local edits without sending PUT", async () => {
     const fetchMock = stubFetch({ markdown: "# Original\n\nTexte" });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Texte/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     fireEvent.change(
@@ -428,7 +444,7 @@ describe("TranscriptionViewer — inline edit", () => {
       markdown: "# Original",
       updatedMarkdown: "# Corrige\n\nTexte relu",
     });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Original/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     fireEvent.change(
@@ -449,7 +465,7 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("does not save blank content", async () => {
     const fetchMock = stubFetch({ markdown: "# Original" });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Original/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     fireEvent.change(
@@ -470,7 +486,7 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("disables editing while a transcription job is active", async () => {
     const fetchMock = stubFetch({ markdown: "# Original" });
-    renderViewer("non_diarised", "Ma Séance", {
+    renderViewer("diarised", "Ma Séance", {
       canEdit: true,
       editingBlocked: true,
     });
@@ -493,7 +509,7 @@ describe("TranscriptionViewer — inline edit", () => {
 
   test("keeps the editor open and maps a 409 backend error", async () => {
     stubFetch({ markdown: "# Original", editStatus: 409 });
-    renderViewer("non_diarised", "Ma Séance", { canEdit: true });
+    renderViewer("diarised", "Ma Séance", { canEdit: true });
     await screen.findByText(/Original/);
     fireEvent.click(screen.getByRole("button", { name: "Modifier" }));
     fireEvent.change(

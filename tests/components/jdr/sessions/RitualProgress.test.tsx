@@ -34,6 +34,25 @@ describe("<RitualProgress>", () => {
     expect(screen.getByText("Les scribes transcrivent")).toBeInTheDocument();
   });
 
+  test("transcribing + queued → waiting act without percentage", () => {
+    render(
+      <RitualProgress
+        uiState="transcribing"
+        sessionTitle="Séance 12"
+        queued
+        progress={58}
+        onReplace={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Le grimoire attend son tour")).toBeInTheDocument();
+    expect(screen.getByText("En attente dans la file...")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remplacer l'enregistrement" }),
+    ).toBeEnabled();
+  });
+
   test("transcribing + phase 'reducing' → preparation habillage (BD-10)", () => {
     render(
       <RitualProgress
@@ -113,7 +132,7 @@ describe("<RitualProgress>", () => {
         onOpenStory={onOpenStory}
       />,
     );
-    expect(screen.getByText("Le récit est consigné")).toBeInTheDocument();
+    expect(screen.getByText("Ton récit est consigné.")).toBeInTheDocument();
     expect(
       screen.getByText("Ta session est gravée dans le grimoire."),
     ).toBeInTheDocument();

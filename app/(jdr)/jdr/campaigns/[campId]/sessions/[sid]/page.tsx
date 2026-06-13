@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Pencil, Volume2 } from "lucide-react";
+import { Download, Pencil, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/common/IconButton";
@@ -14,7 +15,7 @@ import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
 import { PjPresenceDropdown } from "@/components/jdr/sessions/PjPresenceDropdown";
-import { TranscriptionViewer } from "@/components/jdr/sessions/TranscriptionViewer";
+import { TranscriptionDialog } from "@/components/jdr/sessions/TranscriptionDialog";
 import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
 import { NarrativeArtifactPanel } from "@/components/jdr/sessions/NarrativeArtifactPanel";
 import { ElementsArtifactPanel } from "@/components/jdr/sessions/ElementsArtifactPanel";
@@ -43,7 +44,11 @@ import {
   useSessionPipelineState,
   type PipelineUIState,
 } from "@/lib/jdr/sessions/pipelineState";
-import { useGetSession, type SessionOut } from "@/lib/jdr/sessions/queries";
+import {
+  sessionQueryKey,
+  useGetSession,
+  type SessionOut,
+} from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
 const AUDIO_DISABLED_HINT = "Disponible avec Epic 3";
@@ -59,10 +64,6 @@ const TRANSCRIPTION_SEEN_STORAGE_PREFIX =
 // Les coupler ferait taire le toast prématurément.
 const TRANSCRIPTION_TOAST_SEEN_STORAGE_PREFIX =
   "kaeyris:jdr:session-transcription-toast-seen:";
-const TOP_TAB_TRIGGER_CLASS =
-  "after:bg-accent-gold data-active:text-accent-gold aria-selected:text-accent-gold";
-
-type SessionTopTab = "transcription" | "artefacts";
 type ArtifactSubTab = "summary" | "narrative" | "elements" | "povs";
 
 const ARTIFACT_SUB_TABS: Array<{ value: ArtifactSubTab; label: string }> = [
@@ -81,10 +82,6 @@ const VALID_RITUAL_OVERRIDES: PipelineUIState[] = [
 
 function hasAudio(state: SessionOut["state"]): boolean {
   return state !== "created";
-}
-
-function isSessionTopTab(value: string | null): value is SessionTopTab {
-  return value === "transcription" || value === "artefacts";
 }
 
 function isArtifactSubTab(value: string | null): value is ArtifactSubTab {
@@ -126,32 +123,27 @@ function markTranscriptionDoneNotified(sessionId: string): void {
   window.localStorage.setItem(transcriptionToastSeenKey(sessionId), "1");
 }
 
-function buildSessionTabsSearchParams(
+// Story 4.21 : plus d'onglet top-level. Seul `?sub` (sous-onglet artefacts)
+// subsiste. Tout `?tab` legacy est purgé au passage.
+function buildSessionSubSearchParams(
   current: URLSearchParams,
-  tab: SessionTopTab,
   sub: ArtifactSubTab,
 ): URLSearchParams {
   const next = new URLSearchParams(current.toString());
-  next.set("tab", tab);
-  if (tab === "artefacts") {
-    next.set("sub", sub);
-  } else {
-    next.delete("sub");
-  }
+  next.delete("tab");
+  next.set("sub", sub);
   return next;
 }
 
-function writeSessionTabsUrl(
+function writeSessionSubUrl(
   pathname: string,
   searchParams: URLSearchParams,
-  tab: SessionTopTab,
   sub: ArtifactSubTab,
   mode: "push" | "replace",
 ): void {
   if (typeof window === "undefined") return;
-  const next = buildSessionTabsSearchParams(searchParams, tab, sub);
-  const query = next.toString();
-  const href = query ? `${pathname}?${query}` : pathname;
+  const next = buildSessionSubSearchParams(searchParams, sub);
+  const href = `${pathname}?${next.toString()}`;
   if (mode === "replace") {
     window.history.replaceState(null, "", href);
   } else {
@@ -159,34 +151,16 @@ function writeSessionTabsUrl(
   }
 }
 
-function resolveSessionTabs(opts: {
-  searchParams: URLSearchParams;
-  session: SessionOut;
-  canEdit: boolean;
-}): {
-  tab: SessionTopTab;
+function resolveArtifactSub(searchParams: URLSearchParams): {
   sub: ArtifactSubTab;
-  shouldMarkTranscriptionSeen: boolean;
   shouldNormalizeUrl: boolean;
 } {
-  const rawTab = opts.searchParams.get("tab");
-  const rawSub = opts.searchParams.get("sub");
-  const requestedTab = isSessionTopTab(rawTab) ? rawTab : null;
-  const requestedSub = isArtifactSubTab(rawSub) ? rawSub : "summary";
-  const isCompleted = opts.session.state === "transcribed";
-  const hasSeen = hasSeenCompletedTranscription(opts.session.id);
-  const defaultTab: SessionTopTab =
-    isCompleted && (!opts.canEdit || hasSeen) ? "artefacts" : "transcription";
-  const tab = requestedTab ?? defaultTab;
-  const sub = tab === "artefacts" ? requestedSub : "summary";
-  const normalized = buildSessionTabsSearchParams(opts.searchParams, tab, sub);
-
+  const rawSub = searchParams.get("sub");
+  const sub = isArtifactSubTab(rawSub) ? rawSub : "summary";
+  const normalized = buildSessionSubSearchParams(searchParams, sub);
   return {
-    tab,
     sub,
-    shouldMarkTranscriptionSeen:
-      opts.canEdit && isCompleted && tab === "transcription" && !hasSeen,
-    shouldNormalizeUrl: normalized.toString() !== opts.searchParams.toString(),
+    shouldNormalizeUrl: normalized.toString() !== searchParams.toString(),
   };
 }
 
@@ -222,10 +196,13 @@ export default function SessionDetailPage() {
   const searchParams = useSearchParams();
   const campId = typeof params.campId === "string" ? params.campId : "";
   const sid = typeof params.sid === "string" ? params.sid : "";
+  const queryClient = useQueryClient();
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
   const [editing, setEditing] = useState(false);
   const [urlRevision, setUrlRevision] = useState(0);
+  // Story 4.21 : pop-up transcription RAW (ouverte via l'icône Download header).
+  const [transcriptionOpen, setTranscriptionOpen] = useState(false);
   // Story 3.5 : mode remplacement (dropzone re-montée) déclenché par le MJ.
   const [replacing, setReplacing] = useState(false);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(() =>
@@ -260,20 +237,12 @@ export default function SessionDetailPage() {
   const canEditResolved = campaignQuery.data
     ? canEditCampaignSession(campaignQuery.data)
     : false;
-  const tabsReady = Boolean(sessionQuery.data) && !campaignQuery.isPending;
-  const tabState =
-    sessionQuery.data && tabsReady
-      ? resolveSessionTabs({
-          searchParams,
-          session: sessionQuery.data,
-          canEdit: canEditResolved,
-        })
-      : {
-          tab: "transcription" as const,
-          sub: "summary" as const,
-          shouldMarkTranscriptionSeen: false,
-          shouldNormalizeUrl: false,
-        };
+  // Story 4.21 : sous-onglet artefacts piloté par `?sub` (plus de `?tab`).
+  const { sub, shouldNormalizeUrl } = resolveArtifactSub(searchParams);
+  // Story 4.21 : flag « récit ouvert » (one-shot, persistant). Lu en render (et
+  // donc toujours à jour) ; le clic « Ouvrir le récit » pose le flag puis bump
+  // `urlRevision`, ce qui re-render et relit la valeur sans flash.
+  const storyOpened = hasSeenCompletedTranscription(sid);
   const pipeline = useSessionPipelineState({
     sessionState: sessionQuery.data?.state ?? "created",
     cardPhase: "idle",
@@ -295,6 +264,7 @@ export default function SessionDetailPage() {
     if (!job) return;
     if (job.status === "succeeded" && notifiedJobRef.current !== job.id) {
       notifiedJobRef.current = job.id;
+      queryClient.invalidateQueries({ queryKey: sessionQueryKey(sid) });
       if (!hasNotifiedTranscriptionDone(sid)) {
         toast.success("Transcription terminée — ton récit est consigné.");
         markTranscriptionDoneNotified(sid);
@@ -303,19 +273,22 @@ export default function SessionDetailPage() {
       notifiedJobRef.current = job.id;
       toast.error(job.failure_reason ?? "La transcription a échoué.");
     }
-  }, [job, sid]);
+  }, [job, queryClient, sid]);
 
+  // Story 4.21 : normalise l'URL (purge `?tab` legacy, fixe `?sub`) UNIQUEMENT
+  // quand la vue artefacts est la surface active — c.-à-d. séance transcrite et
+  // soit lecteur, soit récit déjà ouvert. Le flag « récit ouvert » n'est plus
+  // posé ici : il l'est seulement au clic explicite « Ouvrir le récit ».
   useEffect(() => {
-    if (!sessionQuery.data || !tabsReady) return;
-    if (tabState.shouldMarkTranscriptionSeen) {
-      markCompletedTranscriptionSeen(sessionQuery.data.id);
-    }
-    if (tabState.shouldNormalizeUrl) {
-      writeSessionTabsUrl(
+    const data = sessionQuery.data;
+    if (!data || campaignQuery.isPending) return;
+    const artifactsActive =
+      data.state === "transcribed" && (!canEditResolved || storyOpened);
+    if (artifactsActive && shouldNormalizeUrl) {
+      writeSessionSubUrl(
         pathname,
         new URLSearchParams(window.location.search),
-        tabState.tab,
-        tabState.sub,
+        sub,
         "replace",
       );
     }
@@ -323,15 +296,15 @@ export default function SessionDetailPage() {
     pathname,
     searchParamsKey,
     sessionQuery.data,
-    tabState.shouldMarkTranscriptionSeen,
-    tabState.shouldNormalizeUrl,
-    tabState.sub,
-    tabState.tab,
-    tabsReady,
+    campaignQuery.isPending,
+    canEditResolved,
+    storyOpened,
+    shouldNormalizeUrl,
+    sub,
   ]);
 
-  // On attend aussi la campagne (rôle → onglet par défaut) pour éviter un flash
-  // Transcription → Artefacts ; mais une erreur de session prime sur l'attente.
+  // On attend aussi la campagne (rôle → surface) pour éviter un flash ; mais une
+  // erreur de session prime sur l'attente.
   if (
     sessionQuery.isPending ||
     (campaignQuery.isPending && !sessionQuery.isError)
@@ -377,11 +350,21 @@ export default function SessionDetailPage() {
   const canReplace = canEdit && canReplaceAudio(session.state);
   const showReplaceCard = replacing && canReplace;
   const ritualState = readRitualOverride() ?? pipeline.uiState;
-  // Le tracker page-level couvre les états ≥ audio_uploaded. L'acte `uploading`
-  // (reduce + envoi) est porté par la card tant que la session est `created`.
-  // Masqué pendant le remplacement (la dropzone prend le relais).
+  // Story 4.21 : le tracker ne couvre plus que les actes en cours / échec.
+  // L'acte `uploading` est porté par la card (séance `created`) ; l'acte
+  // terminal `transcribed` est remplacé par le gate AC3 ci-dessous. Masqué
+  // pendant le remplacement (la dropzone prend le relais).
   const showRitual =
-    !showReplaceCard && ritualState !== "idle" && ritualState !== "uploading";
+    !showReplaceCard &&
+    (ritualState === "transcribing" || ritualState === "failed");
+  // Story 4.21 — gate « Ouvrir le récit » : MJ, acte transcribed atteint, récit
+  // jamais ouvert. Réutilise l'acte transcribed du RitualProgress (sceau + CTA).
+  const showStoryGate =
+    canEdit && session.state === "transcribed" && !storyOpened;
+  // Story 4.21 — vue artefacts (sous-onglets) : séance transcrite ET (lecteur OU
+  // récit déjà ouvert). Les panneaux conservent leur garde interne sur l'état.
+  const showArtifacts =
+    session.state === "transcribed" && (!canEdit || storyOpened);
   // Story 4.15 (T2) : un job actif (acte « transcribing » + current_job_id)
   // verrouille le remplacement → pas de seconde transcription concurrente.
   // L'acte terminal `failed` n'est jamais bloqué (current_job_id nul → la
@@ -429,27 +412,24 @@ export default function SessionDetailPage() {
     setProgressFloor(nextFloor);
   }
 
-  function handleTopTabChange(value: string) {
-    if (!isSessionTopTab(value)) return;
-    // Le marquage « transcription vue » est porté par l'effet : après le
-    // changement d'URL, `shouldMarkTranscriptionSeen` devient vrai et l'effet
-    // écrit le flag (évite la double logique ici).
-    writeSessionTabsUrl(
+  // Story 4.21 — gate one-shot : pose le flag « récit ouvert » (persistant) et
+  // atterrit par défaut sur Résumé. Le bloc d'accueil ne réapparaît plus jamais.
+  function handleOpenStory() {
+    markCompletedTranscriptionSeen(session.id);
+    writeSessionSubUrl(
       pathname,
       new URLSearchParams(window.location.search),
-      value,
-      tabState.sub,
-      "push",
+      "summary",
+      "replace",
     );
     setUrlRevision((revision) => revision + 1);
   }
 
   function handleArtifactSubTabChange(value: string) {
     if (!isArtifactSubTab(value)) return;
-    writeSessionTabsUrl(
+    writeSessionSubUrl(
       pathname,
       new URLSearchParams(window.location.search),
-      "artefacts",
       value,
       "push",
     );
@@ -473,6 +453,15 @@ export default function SessionDetailPage() {
                 state={session.state}
                 currentJobId={currentJobId}
               />
+              {/* Story 4.21 — la transcription RAW n'est plus une surface de
+                  premier plan : accès à la demande via cette icône (pop-up). */}
+              {session.state === "transcribed" && (
+                <IconButton
+                  label="Afficher la transcription"
+                  icon={<Download aria-hidden="true" />}
+                  onClick={() => setTranscriptionOpen(true)}
+                />
+              )}
             </div>
             <time
               dateTime={session.recorded_at}
@@ -507,122 +496,104 @@ export default function SessionDetailPage() {
         </div>
       </header>
 
-      <Tabs
-        value={tabState.tab}
-        onValueChange={handleTopTabChange}
-        className="mb-7"
-      >
-        <TabsList variant="line" className="mb-6">
-          <TabsTrigger value="transcription" className={TOP_TAB_TRIGGER_CLASS}>
-            Transcription
-          </TabsTrigger>
-          <TabsTrigger value="artefacts" className={TOP_TAB_TRIGGER_CLASS}>
-            Artefacts
-          </TabsTrigger>
-        </TabsList>
+      {/* Story 4.21 — flux narratif linéaire (plus d'onglets de premier niveau).
+          La surface affichée est pilotée par l'état + le flag « récit ouvert ». */}
+      <div className="mb-7 space-y-7">
+        {canUploadAudio && (
+          <SessionAudioUploadCard
+            session={session}
+            onUploadSuccess={(duration) => {
+              setDurationSeconds(duration);
+              writeAudioDuration(sid, duration);
+            }}
+          />
+        )}
 
-        <TabsContent value="transcription">
-          {canUploadAudio && (
-            <div className="mb-7">
-              <SessionAudioUploadCard
-                session={session}
-                onUploadSuccess={(duration) => {
-                  setDurationSeconds(duration);
-                  writeAudioDuration(sid, duration);
-                }}
-              />
-            </div>
-          )}
+        {/* Story 3.5 : la dropzone de remplacement remplace le tracker le temps
+            de re-déposer un fichier (DELETE → POST avec confirmation). */}
+        {showReplaceCard && (
+          <SessionAudioUploadCard
+            session={session}
+            variant="replace"
+            onCancel={() => setReplacing(false)}
+            onUploadSuccess={(duration) => {
+              setDurationSeconds(duration);
+              writeAudioDuration(sid, duration);
+              setReplacing(false);
+            }}
+          />
+        )}
 
-          {/* Story 3.5 : la dropzone de remplacement remplace le tracker le temps
-          de re-déposer un fichier (DELETE → POST avec confirmation). */}
-          {showReplaceCard && (
-            <div className="mb-7">
-              <SessionAudioUploadCard
-                session={session}
-                variant="replace"
-                onCancel={() => setReplacing(false)}
-                onUploadSuccess={(duration) => {
-                  setDurationSeconds(duration);
-                  writeAudioDuration(sid, duration);
-                  setReplacing(false);
-                }}
-              />
-            </div>
-          )}
+        {showRitual && (
+          <RitualProgress
+            uiState={ritualState}
+            sessionTitle={session.title}
+            progress={displayProgress}
+            phase={job?.phase}
+            queued={job?.status === "queued"}
+            // Story 3.5 : l'affordance de remplacement est portée par l'acte
+            // affiché (`transcribing` pour `audio_uploaded`, `failed` pour un
+            // échec). Gaté sur `ritualState` → masqué dès que le job est terminal,
+            // jamais dupliqué ni affiché sur un récit.
+            onReplace={
+              replaceEligible && !replaceBlocked
+                ? () => setReplacing(true)
+                : undefined
+            }
+            replaceDisabledHint={
+              replaceBlocked ? TRANSCRIPTION_ACTIVE_REPLACE_HINT : undefined
+            }
+          />
+        )}
 
-          {showRitual && (
-            <div className="mb-7">
-              <RitualProgress
-                uiState={ritualState}
-                sessionTitle={session.title}
-                progress={displayProgress}
-                phase={job?.phase}
-                // Story 3.5 : l'affordance de remplacement est portée par l'acte
-                // affiché (`transcribing` pour `audio_uploaded`, `failed` pour un
-                // échec). Gaté sur `ritualState` → masqué dès que le job est terminal
-                // (transcribed/failed-handled), jamais dupliqué ni affiché sur un récit.
-                onReplace={
-                  replaceEligible && !replaceBlocked
-                    ? () => setReplacing(true)
-                    : undefined
-                }
-                replaceDisabledHint={
-                  replaceBlocked ? TRANSCRIPTION_ACTIVE_REPLACE_HINT : undefined
-                }
-              />
-            </div>
-          )}
+        {/* Story 4.21 (AC3/AC4) — gate « Ton récit est consigné. » : réutilise
+            l'acte transcribed du RitualProgress en câblant son CTA. Le clic pose
+            le flag persistant et bascule vers les sous-onglets (Résumé par
+            défaut) ; ce bloc ne réapparaît plus jamais. */}
+        {showStoryGate && (
+          <RitualProgress
+            uiState="transcribed"
+            sessionTitle={session.title}
+            onOpenStory={handleOpenStory}
+          />
+        )}
 
-          {/* Story 4.13 : la transcription terminée est lisible ici. Le viewer
-          branche sur `transcription_mode` (chunks stitchés vs segments diarisés)
-          et n'est monté qu'à l'état `transcribed`. */}
-          {session.state === "transcribed" && (
-            <div className="mb-7">
-              <TranscriptionViewer
-                sessionId={session.id}
-                transcriptionMode={session.transcription_mode}
-                sessionTitle={session.title}
-                canEdit={canEdit}
-                editingBlocked={transcriptionEditBlocked}
-              />
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="artefacts" className="space-y-6">
-          <Tabs value={tabState.sub} onValueChange={handleArtifactSubTabChange}>
+        {showArtifacts && (
+          <Tabs
+            value={sub}
+            onValueChange={handleArtifactSubTabChange}
+            className="space-y-6"
+          >
             {/* Story 4.7 (S6) : la déclaration des présents est un dropdown
-                compact sur la même ligne que les sous-onglets. Bug 5 : collé à
-                gauche, juste après les sous-onglets (et non plus à droite). */}
+                compact sur la même ligne que les sous-onglets. */}
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <TabsList
                 variant="line"
                 className="bg-surface-raised border-border-chrome flex-wrap rounded-md border px-3"
               >
                 {ARTIFACT_SUB_TABS.map((artifactTab) => {
-                // Story 4.3 : Résumé toujours ouvert ; les 3 autres se déverrouillent
-                // une fois le résumé généré (`summaryExists`).
-                const disabled =
-                  artifactTab.value !== "summary" && !summaryExists;
-                return (
-                  <TabsTrigger
-                    key={artifactTab.value}
-                    value={artifactTab.value}
-                    disabled={disabled}
-                    title={disabled ? ARTIFACT_DISABLED_HINT : undefined}
-                    // Base UI rend `aria-disabled` (pas `disabled`) : on réactive
-                    // les pointer-events pour que le tooltip natif `title` (UX-DR14)
-                    // s'affiche au survol, et on porte le curseur sur `aria-disabled`.
-                    className="after:bg-accent-gold data-active:text-accent-gold aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed"
-                  >
-                    {artifactTab.label}
-                  </TabsTrigger>
-                );
+                  // Story 4.3 : Résumé toujours ouvert ; les 3 autres se
+                  // déverrouillent une fois le résumé généré (`summaryExists`).
+                  const disabled =
+                    artifactTab.value !== "summary" && !summaryExists;
+                  return (
+                    <TabsTrigger
+                      key={artifactTab.value}
+                      value={artifactTab.value}
+                      disabled={disabled}
+                      title={disabled ? ARTIFACT_DISABLED_HINT : undefined}
+                      // Base UI rend `aria-disabled` (pas `disabled`) : on réactive
+                      // les pointer-events pour que le tooltip natif `title` (UX-DR14)
+                      // s'affiche au survol, et on porte le curseur sur `aria-disabled`.
+                      className="after:bg-accent-gold data-active:text-accent-gold aria-disabled:pointer-events-auto aria-disabled:cursor-not-allowed"
+                    >
+                      {artifactTab.label}
+                    </TabsTrigger>
+                  );
                 })}
               </TabsList>
 
-              {canEdit && session.state === "transcribed" && (
+              {canEdit && (
                 <PjPresenceDropdown
                   sessionId={session.id}
                   campaignId={campId}
@@ -631,26 +602,14 @@ export default function SessionDetailPage() {
             </div>
 
             <TabsContent value="summary" className="space-y-6">
-              {/* Story 4.3 : génération + affichage du Résumé (GM, séance transcrite). */}
-              {canEdit && session.state === "transcribed" && (
+              {/* Story 4.3 : génération + affichage du Résumé (MJ). `showArtifacts`
+                  garantit déjà `session.state === "transcribed"`. */}
+              {canEdit ? (
                 <SummaryArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
                 />
-              )}
-
-              {session.state !== "transcribed" && (
-                <section className="bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)">
-                  <h2 className="font-display text-xl font-semibold">
-                    Artefacts
-                  </h2>
-                  <p className="text-text-chrome-muted mt-2 text-sm">
-                    Les artefacts seront disponibles une fois la transcription
-                    terminée.
-                  </p>
-                </section>
-              )}
-              {session.state === "transcribed" && !canEdit && (
+              ) : (
                 <section className="bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)">
                   <h2 className="font-display text-xl font-semibold">Résumé</h2>
                   <p className="text-text-chrome-muted mt-2 text-sm">
@@ -661,14 +620,11 @@ export default function SessionDetailPage() {
             </TabsContent>
 
             {/* Story 4.4 : déclencheurs indépendants Récit / Éléments / POVs
-                (gate « résumé existant » porté par les sous-tabs ci-dessus →
-                409 no-summary impossible). MJ + séance transcrite ; sinon
-                cartouche lecture seule. */}
-            {/* `summaryExists` est ajouté à la garde (en plus du sous-tab désactivé)
-                pour qu'un deep-link `?sub=…` sans résumé ne puisse pas monter le
-                déclencheur → POST `409 no-summary` rendu impossible (AC3). */}
+                (gate « résumé existant » porté par les sous-tabs → 409 no-summary
+                impossible). `summaryExists` ajouté à la garde pour qu'un deep-link
+                `?sub=…` sans résumé ne monte pas le déclencheur (AC3). */}
             <TabsContent value="narrative">
-              {canEdit && session.state === "transcribed" && summaryExists ? (
+              {canEdit && summaryExists ? (
                 <NarrativeArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
@@ -678,7 +634,7 @@ export default function SessionDetailPage() {
               )}
             </TabsContent>
             <TabsContent value="elements">
-              {canEdit && session.state === "transcribed" && summaryExists ? (
+              {canEdit && summaryExists ? (
                 <ElementsArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
@@ -688,15 +644,15 @@ export default function SessionDetailPage() {
               )}
             </TabsContent>
             <TabsContent value="povs">
-              {canEdit && session.state === "transcribed" && summaryExists ? (
+              {canEdit && summaryExists ? (
                 <PovArtifactPanel sessionId={session.id} campaignId={campId} />
               ) : (
                 <ReadOnlyArtifactPlaceholder title="POVs" />
               )}
             </TabsContent>
           </Tabs>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
 
       <SessionEditDialog
         open={editing}
@@ -704,6 +660,20 @@ export default function SessionDetailPage() {
         session={session}
         campaignId={campId}
       />
+
+      {/* Story 4.21 — pop-up transcription RAW (lecture + édition + export
+          JSON/.md), ouverte par l'icône Download du header. */}
+      {session.state === "transcribed" && (
+        <TranscriptionDialog
+          open={transcriptionOpen}
+          onOpenChange={setTranscriptionOpen}
+          sessionId={session.id}
+          transcriptionMode={session.transcription_mode}
+          sessionTitle={session.title}
+          canEdit={canEdit}
+          editingBlocked={transcriptionEditBlocked}
+        />
+      )}
     </section>
   );
 }

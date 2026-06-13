@@ -15,11 +15,18 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
  * Story 4.6 — dialogs (Base UI primitive) must only close via the X or an
  * explicit cancel button, never via outside-click or Escape.
  */
-function Harness({ onChange }: { onChange: (open: boolean) => void }) {
+function Harness({
+  onChange,
+  dismissOnOutsidePress = false,
+}: {
+  onChange: (open: boolean) => void;
+  dismissOnOutsidePress?: boolean;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <Dialog
       open={open}
+      dismissOnOutsidePress={dismissOnOutsidePress}
       onOpenChange={(next) => {
         onChange(next);
         setOpen(next);
@@ -59,6 +66,17 @@ describe("<Dialog> dismissal (Story 4.6)", () => {
 
     expect(onChange).not.toHaveBeenCalledWith(false);
     expect(screen.getByText("Contenu du dialog")).toBeInTheDocument();
+  });
+
+  test("outside click closes the dialog when explicitly opted in", async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} dismissOnOutsidePress />);
+    expect(await screen.findByText("Contenu du dialog")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(document.body);
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(false));
   });
 
   test("the X close button still closes the dialog", async () => {
