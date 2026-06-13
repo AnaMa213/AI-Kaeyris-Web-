@@ -193,6 +193,103 @@
   100% { transform: translateX(360%); }
 }
 
+/* Story 5.1 — rendu long-form des artefacts (budget typographique parchemin,
+ * UX-DR3). TOUT est scopé sous `.narrative-body` pour ne jamais fuir sur les
+ * surfaces chrome. react-markdown rend les blocs comme frères directs de
+ * l'<article> ; on restaure ici le rythme de lecture (pas de plugin typography).
+ */
+.narrative-body > * + * {
+  margin-top: 1.15em;
+}
+.narrative-body :is(h2, h3) {
+  font-family: var(--font-serif-display);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 1.6em;
+}
+.narrative-body h2 {
+  font-size: 1.5rem;
+}
+.narrative-body h3 {
+  font-size: 1.25rem;
+}
+.narrative-body :is(ul, ol) {
+  padding-left: 1.5rem;
+}
+.narrative-body ul {
+  list-style: disc;
+}
+.narrative-body ol {
+  list-style: decimal;
+}
+.narrative-body li + li {
+  margin-top: 0.35em;
+}
+.narrative-body strong {
+  font-weight: 600;
+}
+.narrative-body em {
+  font-style: italic;
+}
+.narrative-body a {
+  color: var(--accent-action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Liens d'auto-ancrage des titres (autolink behavior "wrap") : lisibles comme un
+ * titre normal, mais focusables au clavier avec un ring visible (AC8, UX-DR20). */
+.narrative-body :is(h2, h3) a {
+  color: inherit;
+  text-decoration: none;
+}
+.narrative-body :is(h2, h3) a:hover {
+  text-decoration: underline;
+}
+.narrative-body a:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* AC3 — lettrine (drop-cap) sur le premier paragraphe, kinds prose uniquement.
+ * Pur ::first-letter : aucune découpe JS du texte. */
+.narrative-body--dropcap > p:first-of-type::first-letter {
+  float: left;
+  margin-right: 0.08em;
+  padding-top: 0.04em;
+  font-family: var(--font-serif-display);
+  font-weight: 600;
+  font-size: 3.4em;
+  line-height: 0.78;
+  color: var(--accent-action);
+}
+
+/* AC4 — pull-quote : blockquote avec barre d'accent rouge, typo distincte. */
+.narrative-pullquote {
+  margin-left: 0;
+  border-left: 3px solid var(--accent-action);
+  padding-left: 1.1rem;
+  color: var(--text-narrative-muted);
+  font-size: 1.15em;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* AC5 — ornement : un `---` (thematic break) rendu en filet orné, pas plat. */
+.narrative-ornament {
+  border: 0;
+  height: auto;
+  margin: 2rem 0;
+  text-align: center;
+  overflow: visible;
+}
+.narrative-ornament::before {
+  content: "❖";
+  color: var(--accent-gold);
+  font-size: 1.25rem;
+  letter-spacing: 0.4em;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

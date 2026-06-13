@@ -15,6 +15,7 @@ import {
   useNarrativeArtifact,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
+import { NarrativeArtifact } from "@/components/narrative/NarrativeArtifact";
 
 interface NarrativeArtifactPanelProps {
   sessionId: string;
@@ -94,9 +95,9 @@ export function NarrativeArtifactPanel({
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="Récit de la séance">
         <h2 className="font-display mb-3 text-xl font-semibold">Récit</h2>
-        <p className="text-text-chrome leading-relaxed whitespace-pre-wrap">
-          {narrative.text}
-        </p>
+        {/* Story 5.1 — rendu long-form Markdown sur parchemin (drop-cap, ornement,
+            pull-quote). Le composant ne fetch rien : il reçoit le markdown brut. */}
+        <NarrativeArtifact markdown={narrative.text} kind="narrative" />
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {narrative.model_used}
         </p>
