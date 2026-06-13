@@ -5,6 +5,7 @@ import {
   NarrativeArtifact,
   type NarrativeArtifactKind,
 } from "@/components/narrative/NarrativeArtifact";
+import { ArtifactReadingAids } from "@/components/narrative/ArtifactReadingAids";
 import { TocSidebar } from "@/components/narrative/TocSidebar";
 
 /**
@@ -35,6 +36,7 @@ export function NarrativeReader({ markdown, kind }: NarrativeReaderProps) {
         className="mb-4 xl:col-start-2 xl:row-start-1 xl:mb-0"
       />
       <div ref={contentRef} className="min-w-0 xl:col-start-1 xl:row-start-1">
+        <ArtifactReadingAids markdown={markdown} />
         <NarrativeArtifact markdown={markdown} kind={kind} />
       </div>
     </div>
