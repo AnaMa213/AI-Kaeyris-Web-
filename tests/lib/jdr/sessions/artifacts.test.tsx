@@ -24,11 +24,16 @@ const {
   useGenerateElements,
   elementsArtifactQueryKey,
   useGeneratePovs,
+  usePovArtifact,
+  povArtifactQueryKey,
+  povArtifactSessionKey,
+  isArtifactAbsentError,
 } = await import("@/lib/jdr/sessions/artifacts");
 const { jobQueryKey } = await import("@/lib/jdr/jobs/queries");
 const { ApiError } = await import("@/lib/core/api/errors");
 
 const SESSION_ID = "00000000-0000-0000-0000-000000000abc";
+const PJ_ID = "22222222-2222-2222-2222-222222222222";
 
 const summaryOut = {
   session_id: SESSION_ID,
@@ -50,6 +55,14 @@ const elementsOut = {
   locations: [{ name: "La crypte", description: "Humide et oubliée." }],
   items: [],
   clues: [],
+  model_used: "claude-x",
+  generated_at: "2026-06-01T10:00:00Z",
+};
+
+const povOut = {
+  session_id: SESSION_ID,
+  pj_id: PJ_ID,
+  text: "Mira sentit la crypte lui murmurer son nom.",
   model_used: "claude-x",
   generated_at: "2026-06-01T10:00:00Z",
 };
@@ -86,7 +99,7 @@ function jobFor(id: string, kind: string) {
   };
 }
 
-function stubFetch(opts: { getStatus?: number } = {}) {
+function stubFetch(opts: { getStatus?: number; povStatus?: number; povBody?: unknown } = {}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: Request | string) => {
@@ -130,9 +143,29 @@ function stubFetch(opts: { getStatus?: number } = {}) {
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.includes("/artifacts/povs") && isPost) {
-        return new Response(JSON.stringify(jobFor("job-povs-1", "povs")), {
-          status: 202,
+      if (url.includes("/artifacts/povs")) {
+        if (isPost) {
+          return new Response(JSON.stringify(jobFor("job-povs-1", "povs")), {
+            status: 202,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (opts.povStatus && opts.povStatus >= 400) {
+          return new Response(
+            JSON.stringify({
+              type: "about:blank",
+              title: "pov absent",
+              status: opts.povStatus,
+            }),
+            {
+              status: opts.povStatus,
+              headers: { "content-type": "application/problem+json" },
+            },
+          );
+        }
+        const povBody = Object.hasOwn(opts, "povBody") ? opts.povBody : povOut;
+        return new Response(JSON.stringify(povBody), {
+          status: 200,
           headers: { "content-type": "application/json" },
         });
       }
@@ -283,6 +316,71 @@ describe("useElementsArtifact (Story 4.4)", () => {
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe("usePovArtifact (Story 5.7)", () => {
+  test("GET one PJ POV -> unwraps the artifact under the scoped key", async () => {
+    const queryClient = makeClient();
+    const { result } = renderHook(() => usePovArtifact(SESSION_ID, PJ_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.text).toBe(povOut.text);
+    expect(povArtifactQueryKey(SESSION_ID, PJ_ID)).toEqual([
+      "jdr",
+      "artifact",
+      "pov",
+      SESSION_ID,
+      PJ_ID,
+    ]);
+    expect(povArtifactSessionKey(SESSION_ID)).toEqual([
+      "jdr",
+      "artifact",
+      "pov",
+      SESSION_ID,
+    ]);
+  });
+
+  test.each([404, 422])(
+    "a missing POV (%s) surfaces as an absent artifact error",
+    async (status) => {
+      stubFetch({ povStatus: status });
+      const queryClient = makeClient();
+      const { result } = renderHook(() => usePovArtifact(SESSION_ID, PJ_ID), {
+        wrapper: wrapper(queryClient),
+      });
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(result.current.data).toBeUndefined();
+      expect(result.current.error).toBeInstanceOf(ApiError);
+      expect(isArtifactAbsentError(result.current.error)).toBe(true);
+    },
+  );
+
+  test("200 null remains absent because presence is Boolean(data?.text)", async () => {
+    stubFetch({ povBody: null });
+    const queryClient = makeClient();
+    const { result } = renderHook(() => usePovArtifact(SESSION_ID, PJ_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(Boolean(result.current.data?.text)).toBe(false);
+  });
+
+  test("does NOT fire until both sessionId and pjId are present", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify(povOut), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const queryClient = makeClient();
+    renderHook(() => usePovArtifact(SESSION_ID, ""), {
+      wrapper: wrapper(queryClient),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
