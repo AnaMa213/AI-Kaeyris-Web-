@@ -616,6 +616,7 @@ export default function SessionDetailPage() {
                 <SummaryArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
+                  sessionTitle={session.title}
                 />
               ) : (
                 <section className="bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)">
@@ -636,6 +637,7 @@ export default function SessionDetailPage() {
                 <NarrativeArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
+                  sessionTitle={session.title}
                 />
               ) : (
                 <ReadOnlyArtifactPlaceholder title="Récit" />
@@ -646,6 +648,7 @@ export default function SessionDetailPage() {
                 <ElementsArtifactPanel
                   sessionId={session.id}
                   campaignId={campId}
+                  sessionTitle={session.title}
                 />
               ) : (
                 <ReadOnlyArtifactPlaceholder title="Éléments" />

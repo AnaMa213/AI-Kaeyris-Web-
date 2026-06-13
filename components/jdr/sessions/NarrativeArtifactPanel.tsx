@@ -15,11 +15,13 @@ import {
   useNarrativeArtifact,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
+import { ArtifactExportButton } from "@/components/jdr/sessions/ArtifactExportButton";
 import { NarrativeReader } from "@/components/narrative/NarrativeReader";
 
 interface NarrativeArtifactPanelProps {
   sessionId: string;
   campaignId: string;
+  sessionTitle: string;
 }
 
 const SECTION_CARD_CLASSES =
@@ -47,6 +49,7 @@ function NarrativeShell({
  */
 export function NarrativeArtifactPanel({
   sessionId,
+  sessionTitle,
 }: NarrativeArtifactPanelProps) {
   const narrativeQuery = useNarrativeArtifact(sessionId);
   const generate = useGenerateNarrative(sessionId);
@@ -102,6 +105,13 @@ export function NarrativeArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {narrative.model_used}
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ArtifactExportButton
+            sessionId={sessionId}
+            sessionTitle={sessionTitle}
+            kind="narrative"
+          />
+        </div>
         <ArtifactRegenerateControls
           artifactLabel="le Récit"
           jobId={flow.jobId}

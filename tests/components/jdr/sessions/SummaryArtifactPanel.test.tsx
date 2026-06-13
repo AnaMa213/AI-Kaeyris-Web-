@@ -79,7 +79,11 @@ const renderPanel = () => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <SummaryArtifactPanel sessionId={SESSION_ID} campaignId={CAMPAIGN_ID} />
+      <SummaryArtifactPanel
+        sessionId={SESSION_ID}
+        campaignId={CAMPAIGN_ID}
+        sessionTitle="Ma Séance"
+      />
     </QueryClientProvider>,
   );
 };
@@ -116,6 +120,10 @@ describe("<SummaryArtifactPanel>", () => {
     // Story 4.5 — regenerate CTA is available on the existing artifact.
     expect(
       screen.getByRole("button", { name: "Régénérer le Résumé" }),
+    ).toBeInTheDocument();
+    // Story 5.5 — Markdown export CTA is available on the existing artifact.
+    expect(
+      screen.getByRole("button", { name: /Exporter \.md/i }),
     ).toBeInTheDocument();
   });
 

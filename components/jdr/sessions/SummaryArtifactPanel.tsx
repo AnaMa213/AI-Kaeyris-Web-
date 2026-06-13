@@ -15,11 +15,13 @@ import {
   useSummaryArtifact,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
+import { ArtifactExportButton } from "@/components/jdr/sessions/ArtifactExportButton";
 import { NarrativeReader } from "@/components/narrative/NarrativeReader";
 
 interface SummaryArtifactPanelProps {
   sessionId: string;
   campaignId: string;
+  sessionTitle: string;
 }
 
 const SECTION_CARD_CLASSES =
@@ -30,7 +32,10 @@ const SECTION_CARD_CLASSES =
  * partagé `useArtifactJobFlow` (qui pilote aussi la régénération) et expose un
  * CTA « Régénérer le Résumé » une fois le résumé présent.
  */
-export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
+export function SummaryArtifactPanel({
+  sessionId,
+  sessionTitle,
+}: SummaryArtifactPanelProps) {
   const summaryQuery = useSummaryArtifact(sessionId);
   const playersQuery = useSessionPlayers(sessionId);
   const generate = useGenerateSummary(sessionId);
@@ -66,6 +71,13 @@ export function SummaryArtifactPanel({ sessionId }: SummaryArtifactPanelProps) {
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {summary.model_used}
         </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ArtifactExportButton
+            sessionId={sessionId}
+            sessionTitle={sessionTitle}
+            kind="summary"
+          />
+        </div>
         <ArtifactRegenerateControls
           artifactLabel="le Résumé"
           jobId={flow.jobId}
