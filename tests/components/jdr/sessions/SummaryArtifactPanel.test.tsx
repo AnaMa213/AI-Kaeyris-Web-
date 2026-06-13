@@ -105,6 +105,9 @@ describe("<SummaryArtifactPanel>", () => {
     expect(
       await screen.findByText("Les héros entrent dans la crypte."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("~6 mots · ≈ 1 min de lecture"),
+    ).toBeInTheDocument();
     // First-generation trigger is gone (exact name, so it does not match the
     // regenerate CTA which contains "générer le Résumé" as a substring).
     expect(

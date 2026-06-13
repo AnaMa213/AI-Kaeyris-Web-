@@ -137,6 +137,9 @@ describe("<NarrativeArtifactPanel> (Story 4.4)", () => {
     renderPanel();
     expect(await screen.findByText(TEXT)).toBeInTheDocument();
     expect(
+      screen.getByText("~10 mots · ≈ 1 min de lecture"),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: "Générer le Récit" }),
     ).not.toBeInTheDocument();
     expect(
