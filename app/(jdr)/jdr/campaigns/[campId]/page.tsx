@@ -3,16 +3,15 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { Pencil, Trash2 } from "lucide-react";
+import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import { IconButton } from "@/components/common/IconButton";
-import { EmptyState } from "@/components/common/EmptyState";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { CampaignDeleteConfirm } from "@/components/jdr/campaigns/CampaignDeleteConfirm";
 import { CampaignEditDialog } from "@/components/jdr/campaigns/CampaignEditDialog";
 import { CampaignPjsCard } from "@/components/jdr/campaigns/CampaignPjsCard";
+import { SessionLibrary } from "@/components/jdr/sessions/SessionLibrary";
 import { ApiError } from "@/lib/core/api/errors";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
 import {
@@ -24,29 +23,10 @@ import {
   useDeleteCampaign,
   useGetCampaign,
 } from "@/lib/jdr/campaigns/queries";
-import {
-  useListSessions,
-  type SessionOut,
-} from "@/lib/jdr/sessions/queries";
-
-const STATE_LABEL: Record<SessionOut["state"], string> = {
-  created: "Créée",
-  audio_uploaded: "Audio uploadé",
-  transcribing: "Transcription en cours",
-  transcription_failed: "Échec transcription",
-  transcribed: "Transcrite",
-};
+import { useListSessions } from "@/lib/jdr/sessions/queries";
 
 const SECTION_CARD_CLASSES =
   "bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)";
-
-function sortByRecordedAtDesc(items: SessionOut[]): SessionOut[] {
-  return [...items].sort(
-    (a, b) =>
-      parseBackendDate(b.recorded_at).getTime() -
-      parseBackendDate(a.recorded_at).getTime(),
-  );
-}
 
 export default function CampaignDetailPage() {
   const params = useParams<{ campId: string }>();
@@ -88,7 +68,6 @@ export default function CampaignDetailPage() {
   const canEdit = canEditCampaign(campaign);
   const canDelete = canDeleteCampaign(campaign);
   const sessions = sessionsQuery.data?.items ?? [];
-  const sortedSessions = sortByRecordedAtDesc(sessions);
 
   const handleConfirmDelete = () => {
     deleteMutation.mutate(undefined, {
@@ -155,27 +134,7 @@ export default function CampaignDetailPage() {
           aria-label="Sessions"
           className={`${SECTION_CARD_CLASSES} lg:col-span-2`}
         >
-          {/* Story 4.8 (C5) : le CTA « Nouvelle session » vit sur la ligne du
-              header « Sessions », à droite (et non plus dans le header campagne). */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-xl">Sessions</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-text-chrome-muted text-xs tracking-wide uppercase">
-                {sortedSessions.length} · zone de recherche future
-              </span>
-              {/* Bug 1 : sur liste vide, l'empty state porte déjà le CTA —
-                  on masque ici le doublon du header. */}
-              {canCreateSession && sortedSessions.length > 0 && (
-                <IconButton
-                  label="Nouvelle session"
-                  icon={<Plus aria-hidden="true" />}
-                  onClick={() =>
-                    router.push(`/jdr/campaigns/${campId}/sessions/new`)
-                  }
-                />
-              )}
-            </div>
-          </div>
+          <h2 className="font-display mb-4 text-xl">Sessions</h2>
           {sessionsQuery.isPending ? (
             <p className="text-text-chrome-muted text-sm">
               Chargement des sessions...
@@ -194,60 +153,12 @@ export default function CampaignDetailPage() {
                 </p>
               )}
             </div>
-          ) : sortedSessions.length === 0 ? (
-            <EmptyState
-              title="Aucune session dans cette campagne."
-              description={
-                canCreateSession
-                  ? "Crée ta première session pour commencer un récit."
-                  : "Les sessions créées par le MJ apparaîtront ici."
-              }
-              action={
-                canCreateSession
-                  ? {
-                      label: "Nouvelle session",
-                      onClick: () =>
-                        router.push(`/jdr/campaigns/${campId}/sessions/new`),
-                    }
-                  : undefined
-              }
-            />
           ) : (
-            <ul className="flex flex-col gap-1">
-              {sortedSessions.map((session) => {
-                const recordedAt = parseBackendDate(session.recorded_at);
-                const relative = formatDistanceToNow(recordedAt, {
-                  addSuffix: true,
-                  locale: fr,
-                });
-                const absolute = format(recordedAt, "dd/MM/yyyy 'à' HH:mm", {
-                  locale: fr,
-                });
-                return (
-                  <li key={session.id}>
-                    <Link
-                      href={`/jdr/campaigns/${campId}/sessions/${session.id}`}
-                      className="group hover:bg-accent-gold/5 hover:border-accent-gold/20 -mx-3 flex flex-col gap-1 rounded-lg border border-transparent px-3 py-3 transition-all duration-120"
-                    >
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-display group-hover:text-accent-gold text-lg transition-colors">
-                          {session.title}
-                        </h3>
-                        <Badge variant="outline">
-                          {STATE_LABEL[session.state]}
-                        </Badge>
-                      </div>
-                      <time
-                        dateTime={session.recorded_at}
-                        className="text-text-chrome-muted text-sm"
-                      >
-                        {relative} · {absolute}
-                      </time>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <SessionLibrary
+              sessions={sessions}
+              campId={campId}
+              canCreateSession={canCreateSession}
+            />
           )}
         </section>
 
