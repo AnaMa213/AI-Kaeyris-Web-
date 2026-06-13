@@ -150,9 +150,12 @@ test("GM navigates from campaign detail into a session detail via row click", as
   await page.goto(`/jdr/campaigns/${campId}`);
   await page.getByRole("link", { name: /Session 12/ }).click();
 
+  // Story 4.21: top-level tabs removed, the row link routes to the bare session
+  // path (no more `?tab=transcription`). `?sub` may be appended only inside the
+  // artefact sub-tabs, so allow an optional trailing query.
   await expect(page).toHaveURL(
     new RegExp(
-      `/jdr/campaigns/${campId}/sessions/${session12.id}\\?tab=transcription$`,
+      `/jdr/campaigns/${campId}/sessions/${session12.id}(\\?.*)?$`,
     ),
   );
   await expect(

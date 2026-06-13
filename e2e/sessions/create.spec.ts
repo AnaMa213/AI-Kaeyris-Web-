@@ -112,9 +112,11 @@ test("GM creates a session inside a campaign and lands on the new session detail
 
   await page.getByRole("button", { name: "Créer la session" }).click();
 
+  // Story 4.21: top-level tabs removed — creation redirects to the bare session
+  // path (no more `?tab=transcription`). Allow an optional trailing query.
   await expect(page).toHaveURL(
     new RegExp(
-      `/jdr/campaigns/${campId}/sessions/${createdSession.id}\\?tab=transcription$`,
+      `/jdr/campaigns/${campId}/sessions/${createdSession.id}(\\?.*)?$`,
     ),
   );
   await expect(
