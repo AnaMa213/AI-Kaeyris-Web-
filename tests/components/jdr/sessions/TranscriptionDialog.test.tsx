@@ -125,6 +125,19 @@ describe("<TranscriptionDialog> (Story 4.21)", () => {
     ).toBeInTheDocument();
   });
 
+  test("renders the session audio player above the transcription surface", async () => {
+    stubFetch();
+    renderDialog({ open: true });
+
+    const audio = screen.getByLabelText("Lecteur audio de la séance");
+    expect(audio.tagName).toBe("AUDIO");
+    expect(audio).toHaveAttribute(
+      "src",
+      `http://localhost:8000/services/jdr/sessions/${SESSION_ID}/audio`,
+    );
+    expect(await screen.findByText(/Premier morceau/)).toBeInTheDocument();
+  });
+
   test("outside click closes the dialog", async () => {
     stubFetch();
     const onOpenChange = vi.fn();
