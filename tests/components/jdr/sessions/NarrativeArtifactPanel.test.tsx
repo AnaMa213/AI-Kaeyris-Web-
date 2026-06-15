@@ -150,7 +150,7 @@ describe("<NarrativeArtifactPanel> (Story 4.4)", () => {
       screen.getByRole("button", { name: "Régénérer le Récit" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Exporter \.md/i }),
+      screen.getByRole("button", { name: "Exporter le récit en Markdown" }),
     ).toBeInTheDocument();
   });
 
@@ -257,5 +257,76 @@ describe("<NarrativeArtifactPanel> (Story 4.4)", () => {
 
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
     await waitFor(() => expect(postCount).toBe(2));
+  });
+
+  // Bug — changer de sous-onglet démonte le panneau ; au retour la génération en
+  // vol doit rester visible (et non re-proposer « Générer »). L'id du job est
+  // réhydraté depuis le cache, partagé par le même QueryClient.
+  test("keeps the in-flight generation visible across an unmount/remount", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (
+          url.includes("/artifacts/narrative") &&
+          method.toUpperCase() === "POST"
+        ) {
+          return new Response(
+            JSON.stringify({ id: "job-nar", kind: "narrative", session_id: SESSION_ID, status: "queued", queued_at: "2026-06-01T10:00:00Z" }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/narrative")) {
+          // Génération encore en cours → l'artefact reste absent.
+          return new Response(
+            JSON.stringify({ type: "about:blank", title: "absent", status: 404 }),
+            { status: 404, headers: { "content-type": "application/problem+json" } },
+          );
+        }
+        if (url.includes("/jobs/job-nar")) {
+          return new Response(
+            JSON.stringify({ id: "job-nar", kind: "narrative", session_id: SESSION_ID, status: "running", failure_reason: null, queued_at: "2026-06-01T10:00:00Z", started_at: "2026-06-01T10:00:01Z", ended_at: null }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const ui = (
+      <QueryClientProvider client={queryClient}>
+        <NarrativeArtifactPanel
+          sessionId={SESSION_ID}
+          campaignId={CAMPAIGN_ID}
+          sessionTitle="Ma Séance"
+        />
+      </QueryClientProvider>
+    );
+    const user = userEvent.setup();
+    const view = render(ui);
+    await user.click(
+      await screen.findByRole("button", { name: "Générer le Récit" }),
+    );
+    expect(
+      await screen.findByText(/Le récit est en cours de génération/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Générer le Récit" }),
+    ).not.toBeInTheDocument();
+
+    // Quitte le sous-onglet (démontage) puis revient (remontage, même client).
+    view.unmount();
+    render(ui);
+    expect(
+      await screen.findByText(/Le récit est en cours de génération/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Générer le Récit" }),
+    ).not.toBeInTheDocument();
   });
 });

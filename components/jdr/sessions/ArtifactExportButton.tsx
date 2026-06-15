@@ -3,6 +3,7 @@
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/common/IconButton";
 import { downloadTextFile } from "@/lib/core/browser/downloadTextFile";
 import {
   artifactMarkdownFileName,
@@ -20,6 +21,11 @@ interface ArtifactExportButtonProps {
   sessionId: string;
   sessionTitle: string;
   kind: ArtifactExportKind;
+  /**
+   * Story 4.23 (AC6) — `"icon"` rend un bouton-icône (Download) avec tooltip
+   * pour l'en-tête du bloc ; `"text"` (défaut) garde le bouton texte historique.
+   */
+  variant?: "text" | "icon";
 }
 
 /**
@@ -31,6 +37,7 @@ export function ArtifactExportButton({
   sessionId,
   sessionTitle,
   kind,
+  variant = "text",
 }: ArtifactExportButtonProps) {
   const download = useDownloadArtifactMarkdown(sessionId, kind);
 
@@ -49,6 +56,17 @@ export function ArtifactExportButton({
       },
     });
   };
+
+  if (variant === "icon") {
+    return (
+      <IconButton
+        label={`Exporter ${KIND_LABELS[kind]} en Markdown`}
+        icon={<Download aria-hidden="true" />}
+        onClick={handleExport}
+        disabled={download.isPending}
+      />
+    );
+  }
 
   return (
     <Button

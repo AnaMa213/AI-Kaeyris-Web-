@@ -188,31 +188,46 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
       ? parseBackendDate(selectedPov.generated_at)
       : null;
     return (
-      <section className={SECTION_CARD_CLASSES} aria-label="POVs de la sÃ©ance">
-        <h2 className="font-display mb-3 text-xl font-semibold">POVs</h2>
+      <section className={SECTION_CARD_CLASSES} aria-label="POVs de la séance">
+        {/* Story 4.23 (AC6) — régénérer dans l'en-tête (POV n'a pas d'export, cf. Story 5.7). */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">POVs</h2>
+          <ArtifactRegenerateControls
+            part="trigger"
+            artifactLabel="les POVs"
+            jobId={flow.jobId}
+            jobInFlight={flow.jobInFlight}
+            artifactSettling={flow.artifactSettling}
+            jobFailed={flow.jobFailed}
+            failureReason={flow.failureReason}
+            pending={generate.isPending}
+            onConfirm={handleGenerate}
+          />
+        </div>
         {pjTabs}
 
         {povQuery.isPending ? (
           <p className="text-text-chrome-muted text-sm">Chargement du POV...</p>
         ) : povLoadFailed ? (
           <p className="text-state-error text-sm">
-            Impossible de charger le POV sÃ©lectionnÃ©. RÃ©essaie plus tard.
+            Impossible de charger le POV sélectionné. Réessaie plus tard.
           </p>
         ) : povPresent && selectedPov && generatedAt ? (
           <>
             <NarrativeReader markdown={selectedPov.text} kind="pov" />
             <p className="text-text-chrome-muted mt-4 text-xs">
-              GÃ©nÃ©rÃ© le {generatedAt.toLocaleString("fr-FR")} Â·{" "}
+              Généré le {generatedAt.toLocaleString("fr-FR")} ·{" "}
               {selectedPov.model_used}
             </p>
           </>
         ) : (
           <p className="text-text-chrome-muted text-sm italic">
-            Aucun POV gÃ©nÃ©rÃ© pour le PJ sÃ©lectionnÃ©.
+            Aucun POV généré pour le PJ sélectionné.
           </p>
         )}
 
         <ArtifactRegenerateControls
+          part="status"
           artifactLabel="les POVs"
           jobId={flow.jobId}
           jobInFlight={flow.jobInFlight}
@@ -248,7 +263,21 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
     const generatedAt = parseBackendDate(selectedPov.generated_at);
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="POVs de la séance">
-        <h2 className="font-display mb-3 text-xl font-semibold">POVs</h2>
+        {/* Story 4.23 (AC6) — régénérer dans l'en-tête (POV n'a pas d'export, cf. Story 5.7). */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">POVs</h2>
+          <ArtifactRegenerateControls
+            part="trigger"
+            artifactLabel="les POVs"
+            jobId={flow.jobId}
+            jobInFlight={flow.jobInFlight}
+            artifactSettling={flow.artifactSettling}
+            jobFailed={flow.jobFailed}
+            failureReason={flow.failureReason}
+            pending={generate.isPending}
+            onConfirm={handleGenerate}
+          />
+        </div>
         <Tabs
           value={activePjId}
           onValueChange={handleSelectPj}
@@ -277,6 +306,7 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
         </p>
 
         <ArtifactRegenerateControls
+          part="status"
           artifactLabel="les POVs"
           jobId={flow.jobId}
           jobInFlight={flow.jobInFlight}

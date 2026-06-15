@@ -121,9 +121,9 @@ describe("<SummaryArtifactPanel>", () => {
     expect(
       screen.getByRole("button", { name: "Régénérer le Résumé" }),
     ).toBeInTheDocument();
-    // Story 5.5 — Markdown export CTA is available on the existing artifact.
+    // Story 5.5 / 4.23 AC6 — Markdown export is now a header icon button.
     expect(
-      screen.getByRole("button", { name: /Exporter \.md/i }),
+      screen.getByRole("button", { name: "Exporter le résumé en Markdown" }),
     ).toBeInTheDocument();
   });
 

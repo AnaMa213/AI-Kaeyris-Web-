@@ -2,6 +2,7 @@
 
 import { useRef, type KeyboardEvent } from "react";
 
+import { cn } from "@/lib/utils";
 import { env } from "@/lib/core/env";
 
 const DEFAULT_ARIA_LABEL = "Lecteur audio de la séance";
@@ -11,12 +12,21 @@ interface AudioPlayerProps {
   src: string;
   "aria-label"?: string;
   label?: string;
+  /**
+   * Variante « nue » : aucun cadre (bordure / fond / padding) autour du lecteur,
+   * pour le poser inline sur la même ligne que le titre de la séance.
+   */
+  bare?: boolean;
+  /** Classes du conteneur (ex. largeur bornée pour l'affichage inline). */
+  className?: string;
 }
 
 export function AudioPlayer({
   src,
   "aria-label": ariaLabel,
   label,
+  bare = false,
+  className,
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -35,7 +45,14 @@ export function AudioPlayer({
   }
 
   return (
-    <div className="border-border-chrome bg-surface-raised rounded-md border p-3">
+    <div
+      className={cn(
+        bare
+          ? "flex flex-col"
+          : "border-border-chrome bg-surface-raised rounded-md border p-3",
+        className,
+      )}
+    >
       <audio
         ref={audioRef}
         controls

@@ -35,7 +35,7 @@ export default function NewSessionPage() {
   return (
     <section className="bg-background text-foreground min-h-full p-8">
       <div className="mb-4">
-        <CampaignBreadcrumb campaignId={campId} />
+        <CampaignBreadcrumb campaignId={campId} current="Nouvelle session" />
       </div>
 
       <header className="mx-auto mb-8 max-w-2xl">

@@ -13,11 +13,13 @@ import { fr } from "date-fns/locale";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { IconButton } from "@/components/common/IconButton";
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
 import { RitualProgress } from "@/components/jdr/sessions/RitualProgress";
 import { SessionAudioUploadCard } from "@/components/jdr/sessions/SessionAudioUploadCard";
+import { StuckTranscriptionCard } from "@/components/jdr/sessions/StuckTranscriptionCard";
 import { PjPresenceDropdown } from "@/components/jdr/sessions/PjPresenceDropdown";
 import { TranscriptionDialog } from "@/components/jdr/sessions/TranscriptionDialog";
 import { SummaryArtifactPanel } from "@/components/jdr/sessions/SummaryArtifactPanel";
@@ -37,6 +39,7 @@ import {
   resolveDisplayProgress,
   type DisplayProgressState,
 } from "@/lib/jdr/jobs/progress";
+import { resolveSessionAudioSrc } from "@/lib/jdr/sessions/audio";
 import {
   readAudioDuration,
   writeAudioDuration,
@@ -53,6 +56,7 @@ import {
   sessionQueryKey,
   useDeleteSession,
   useGetSession,
+  useRecoverTranscription,
 } from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
@@ -201,6 +205,7 @@ export default function SessionDetailPage() {
   const sessionQuery = useGetSession(sid);
   const campaignQuery = useGetCampaign(campId);
   const deleteMutation = useDeleteSession(sid, campId);
+  const recoverMutation = useRecoverTranscription(sid, campId);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [urlRevision, setUrlRevision] = useState(0);
@@ -352,12 +357,21 @@ export default function SessionDetailPage() {
   const canReplace = canEdit && canReplaceAudio(session.state);
   const showReplaceCard = replacing && canReplace;
   const ritualState = readRitualOverride() ?? pipeline.uiState;
+  const jobNotFound = isJobNotFound(jobQuery.error);
   // Story 4.21 : le tracker ne couvre plus que les actes en cours / échec.
   // L'acte `uploading` est porté par la card (séance `created`) ; l'acte
   // terminal `transcribed` est remplacé par le gate AC3 ci-dessous. Masqué
   // pendant le remplacement (la dropzone prend le relais).
+  // Story 4.23 (AC10) — séance coincée sur `transcribing` dont le job a disparu
+  // (worker crashé). On se base sur l'état BRUT `session.state` (et non l'uiState
+  // dérivé) : un `audio_uploaded` avec un current_job_id périmé (Story 4.15) doit
+  // garder l'acte transcribing + le remplacement, pas la carte d'interruption.
+  // Quand bloqué, on masque l'acte « transcribing » (barre infinie) au profit
+  // d'une carte « Transcription interrompue » (Réessayer + Débloquer).
+  const stuckTranscription = session.state === "transcribing" && jobNotFound;
   const showRitual =
     !showReplaceCard &&
+    !stuckTranscription &&
     (ritualState === "transcribing" || ritualState === "failed");
   // Story 4.21 — gate « Ouvrir le récit » : MJ, acte transcribed atteint, récit
   // jamais ouvert. Réutilise l'acte transcribed du RitualProgress (sceau + CTA).
@@ -375,7 +389,6 @@ export default function SessionDetailPage() {
   const replaceEligible =
     canReplace &&
     (ritualState === "failed" || ritualState === "transcribing");
-  const jobNotFound = isJobNotFound(jobQuery.error);
   const jobLookupErrored = jobQuery.isError && !jobNotFound;
   const jobNonTerminal =
     job?.status === "queued" || job?.status === "running";
@@ -448,16 +461,28 @@ export default function SessionDetailPage() {
     });
   }
 
+  // Story 4.23 (AC10) — débloque une séance coincée : le backend vérifie que le
+  // job est bien mort puis bascule la séance en `transcription_failed`. Le cache
+  // session est invalidé → la page repasse sur l'état échec (remplacer / supprimer).
+  function handleRecover() {
+    recoverMutation.mutate(undefined, {
+      onSuccess: () =>
+        toast.success("Séance débloquée. Tu peux relancer la transcription."),
+      onError: () =>
+        toast.error("Impossible de débloquer la séance pour l'instant."),
+    });
+  }
+
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
       <div className="mb-4">
-        <CampaignBreadcrumb campaignId={campId} />
+        <CampaignBreadcrumb campaignId={campId} current={session.title} />
       </div>
 
       <header className="bg-surface-card border-border-card mb-7 rounded-[10px] border p-6 shadow-(--shadow-card-inset) lg:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-center gap-3">
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2">
               <h1 className="font-display text-3xl leading-tight font-semibold">
                 {session.title}
               </h1>
@@ -472,6 +497,18 @@ export default function SessionDetailPage() {
                   label="Afficher la transcription"
                   icon={<Eye aria-hidden="true" />}
                   onClick={() => setTranscriptionOpen(true)}
+                />
+              )}
+              {/* Story 4.23 (AC1) — lecteur audio sur la même ligne que le titre,
+                  sans cadre (variante `bare`). Largeur bornée pour ne pas pousser
+                  les icônes Modifier/Supprimer ; passe à la ligne si l'espace
+                  manque. Libellé distinct du lecteur de la pop-up de transcription. */}
+              {session.state === "transcribed" && (
+                <AudioPlayer
+                  bare
+                  src={resolveSessionAudioSrc(session.id)}
+                  label="Écouter l'enregistrement de la séance"
+                  className="w-full sm:w-80 lg:w-96"
                 />
               )}
             </div>
@@ -529,6 +566,16 @@ export default function SessionDetailPage() {
               writeAudioDuration(sid, duration);
               setReplacing(false);
             }}
+          />
+        )}
+
+        {/* Story 4.23 (AC10) — séance coincée sur `transcribing` (job 404) :
+            message honnête + Réessayer (refetch) + Débloquer (recover). */}
+        {stuckTranscription && (
+          <StuckTranscriptionCard
+            onRetry={() => void jobQuery.refetch()}
+            onRecover={handleRecover}
+            recovering={recoverMutation.isPending}
           />
         )}
 

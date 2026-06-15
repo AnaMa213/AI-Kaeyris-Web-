@@ -209,6 +209,39 @@ describe("<TranscriptionDialog> (Story 4.21)", () => {
     );
   });
 
+  test("Story 4.23 AC2 — downloads the non_diarised transcription as plain .txt", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderDialog({ open: true, mode: "non_diarised" });
+    await user.click(
+      await screen.findByRole("button", { name: /Télécharger en \.txt/ }),
+    );
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        "transcription-ma-seance.txt",
+        "Premier morceau.",
+        "text/plain",
+      ),
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test("Story 4.23 AC2 — downloads the diarised transcription as plain .txt", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderDialog({ open: true, mode: "diarised" });
+    await user.click(
+      await screen.findByRole("button", { name: /Télécharger en \.txt/ }),
+    );
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        "transcription-ma-seance.txt",
+        "speaker_1: Salutations, aventuriers.",
+        "text/plain",
+      ),
+    );
+  });
+
   test("a failed JSON fetch raises a toast and writes no file", async () => {
     vi.stubGlobal(
       "fetch",

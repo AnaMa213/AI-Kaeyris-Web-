@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useJob, type JobOut } from "@/lib/jdr/jobs/queries";
@@ -61,7 +61,24 @@ export function useArtifactJobFlow({
   artifactNoun,
 }: UseArtifactJobFlowOptions) {
   const queryClient = useQueryClient();
-  const [jobId, setJobId] = useState<string | null>(null);
+  // Story (bugfix) — clé de persistance de l'« id du job d'artefact en vol »,
+  // dérivée du `keyFactory` du panneau (donc unique par artefact + séance). On
+  // stocke l'id dans le cache React Query : il survit au démontage du panneau
+  // quand on change de sous-onglet, et est purgé à la complétion. Sans ça, le
+  // jobId (state local) est perdu au retour et la génération paraît « au repos »
+  // (bouton ré-cliquable, aucun « en cours »).
+  const activeJobKey = useMemo(
+    () =>
+      keyFactory
+        ? (["jdr", "artifact-active-job", ...keyFactory(sessionId)] as const)
+        : null,
+    [keyFactory, sessionId],
+  );
+  const [jobId, setJobId] = useState<string | null>(() =>
+    activeJobKey
+      ? (queryClient.getQueryData<string | null>(activeJobKey) ?? null)
+      : null,
+  );
   const toastedJobIdRef = useRef<string | null>(null);
   const [settleRefetchAttempt, setSettleRefetchAttempt] = useState(0);
   const [artifactUnavailable, setArtifactUnavailable] = useState(false);
@@ -103,14 +120,27 @@ export function useArtifactJobFlow({
   const onJobQueued = useCallback(
     (nextJobId: string) => {
       setJobId(nextJobId);
+      // Persiste l'id en vol pour le retrouver après un changement de sous-onglet.
+      if (activeJobKey) queryClient.setQueryData(activeJobKey, nextJobId);
       setSettleRefetchAttempt(0);
       setArtifactUnavailable(false);
       setQueuedArtifactVersion(isPresent ? (artifactVersion ?? null) : null);
       // Story 4.10 — nouvelle tentative : ré-arme le toast d'échec.
       toastedJobIdRef.current = null;
     },
-    [artifactVersion, isPresent],
+    [activeJobKey, queryClient, artifactVersion, isPresent],
   );
+
+  // À la complétion (échec, ou succès une fois le contenu remplacé), on purge le
+  // marqueur persistant : un remontage ultérieur ne doit pas ré-afficher « en
+  // cours » pour un job déjà terminé. On garde le marqueur pendant le settle pour
+  // qu'un retour sur l'onglet poursuive le rafraîchissement du contenu.
+  useEffect(() => {
+    if (!activeJobKey) return;
+    if (jobFailed || (jobSucceeded && !artifactSettling)) {
+      queryClient.setQueryData(activeJobKey, null);
+    }
+  }, [activeJobKey, jobFailed, jobSucceeded, artifactSettling, queryClient]);
 
   // Story 4.10 — notifie l'échec d'un job d'artefact UNE fois (toast), dédupliqué
   // par `jobId` car le cache conserve le job `failed` et l'effet pourrait sinon

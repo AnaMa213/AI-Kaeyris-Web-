@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -8,6 +7,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { IconButton } from "@/components/common/IconButton";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
+import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { CampaignDeleteConfirm } from "@/components/jdr/campaigns/CampaignDeleteConfirm";
 import { CampaignEditDialog } from "@/components/jdr/campaigns/CampaignEditDialog";
 import { CampaignPjsCard } from "@/components/jdr/campaigns/CampaignPjsCard";
@@ -80,13 +80,10 @@ export default function CampaignDetailPage() {
 
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
-      <Link
-        href="/jdr/campaigns"
-        className="text-text-chrome-muted hover:bg-accent-gold/10 hover:text-accent-gold -mx-2 mb-4 inline-flex items-center gap-1 rounded px-2 py-1 text-sm transition-all duration-120"
-      >
-        <span aria-hidden="true">←</span>
-        <span>Toutes les campagnes</span>
-      </Link>
+      {/* Story 4.23 (AC8) — fil d'Ariane cohérent (remplace l'ancien back-link). */}
+      <div className="mb-4">
+        <CampaignBreadcrumb campaignId={campId} />
+      </div>
 
       <header
         className={`${SECTION_CARD_CLASSES} mb-7 lg:p-8`}
@@ -134,7 +131,6 @@ export default function CampaignDetailPage() {
           aria-label="Sessions"
           className={`${SECTION_CARD_CLASSES} lg:col-span-2`}
         >
-          <h2 className="font-display mb-4 text-xl">Sessions</h2>
           {sessionsQuery.isPending ? (
             <p className="text-text-chrome-muted text-sm">
               Chargement des sessions...

@@ -11,7 +11,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
+// The presence badge fires TanStack queries; stub it out so the Library tests
+// stay focused on list/search/sort/pagination (it has its own test file).
+vi.mock("@/components/jdr/sessions/SessionPlayerPresenceBadge", () => ({
+  SessionPlayerPresenceBadge: () => null,
+}));
+
 const campId = "11111111-1111-1111-1111-111111111111";
+
+async function openSort(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Trier les sessions" }));
+}
 
 function makeSession(overrides: Partial<SessionOut>): SessionOut {
   return {
@@ -137,9 +147,9 @@ describe("<SessionLibrary>", () => {
         canCreateSession
       />,
     );
-    await user.click(screen.getByLabelText("Trier les sessions"));
+    await openSort(user);
     await user.click(
-      await screen.findByRole("option", { name: "Titre (A → Z)" }),
+      await screen.findByRole("menuitemradio", { name: "Titre (A → Z)" }),
     );
     await waitFor(() => {
       const titles = screen.getAllByRole("heading", { level: 3 });
@@ -201,5 +211,58 @@ describe("<SessionLibrary>", () => {
     expect(pushMock).toHaveBeenCalledWith(
       `/jdr/campaigns/${campId}/sessions/new`,
     );
+  });
+
+  test("the search box is always visible and the sort icon opens the criteria list directly", async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionLibrary sessions={sessions} campId={campId} canCreateSession />,
+    );
+    // Title row + search are present immediately (no toggle needed).
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Sessions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Rechercher une session" }),
+    ).toBeInTheDocument();
+    // The sort icon IS the dropdown: clicking it reveals the sort criteria.
+    await openSort(user);
+    expect(
+      await screen.findByRole("menuitemradio", {
+        name: "Date (récent → ancien)",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("Story 4.23 AC4 — paginates at 5 sessions per page", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 7 }, (_, index) =>
+      makeSession({
+        id: `00000000-0000-0000-0000-0000000000${String(index).padStart(2, "0")}`,
+        title: `Session ${String(index).padStart(2, "0")}`,
+        recorded_at: `2026-05-${String(index + 1).padStart(2, "0")}T20:00:00`,
+      }),
+    );
+    render(
+      <SessionLibrary sessions={many} campId={campId} canCreateSession />,
+    );
+    // 7 sessions → page 1 shows 5 rows.
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(5);
+    expect(screen.getByText("Page 1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Précédent" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Suivant" }));
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
+    expect(screen.getByText("Page 2 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Suivant" })).toBeDisabled();
+  });
+
+  test("Story 4.23 AC4 — no pagination controls at or below 5 sessions", () => {
+    render(
+      <SessionLibrary sessions={sessions} campId={campId} canCreateSession />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Suivant" }),
+    ).not.toBeInTheDocument();
   });
 });

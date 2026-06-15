@@ -19,7 +19,9 @@ const {
   useSessionTranscriptionMarkdown,
   useDownloadTranscriptionMarkdown,
   useDownloadTranscriptionJson,
+  useDownloadTranscriptionRaw,
   useUpdateTranscriptionMarkdown,
+  buildTranscriptionPlainText,
   transcriptionFileName,
   transcriptionMarkdownQueryKey,
 } = await import("@/lib/jdr/sessions/transcription");
@@ -277,6 +279,109 @@ describe("useDownloadTranscriptionJson (Story 4.21)", () => {
   });
 });
 
+describe("buildTranscriptionPlainText (Story 4.23 AC2)", () => {
+  test("diarised: one `speaker: text` line per segment, joined by \\n", () => {
+    const payload = {
+      session_id: SESSION_ID,
+      language: "fr",
+      model_used: "whisper-x",
+      provider: "mock",
+      completed_at: "2026-06-01T10:00:00Z",
+      segments: [
+        { speaker_label: "MJ", text: "Bonjour.", start_seconds: 0, end_seconds: 1 },
+        { speaker_label: "Joueur 1", text: "Salut.", start_seconds: 1, end_seconds: 2 },
+      ],
+    };
+    expect(buildTranscriptionPlainText(payload, "diarised")).toBe(
+      "MJ: Bonjour.\nJoueur 1: Salut.",
+    );
+  });
+
+  test("non_diarised: chunks sorted by ordre, joined by a blank line", () => {
+    const payload = {
+      session_id: SESSION_ID,
+      items: [
+        { chunk_id: "c2", ordre: 2, text: "Deuxième." },
+        { chunk_id: "c1", ordre: 1, text: "Premier." },
+      ],
+    };
+    expect(buildTranscriptionPlainText(payload, "non_diarised")).toBe(
+      "Premier.\n\nDeuxième.",
+    );
+  });
+
+  test("empty payloads produce an empty string", () => {
+    expect(
+      buildTranscriptionPlainText(
+        { session_id: SESSION_ID, items: [] },
+        "non_diarised",
+      ),
+    ).toBe("");
+  });
+});
+
+describe("useDownloadTranscriptionRaw (Story 4.23 AC2)", () => {
+  test("diarised mode hits /transcription and returns rendered plain text", async () => {
+    const fetchMock = stubFetch(async () =>
+      json({
+        session_id: SESSION_ID,
+        language: "fr",
+        model_used: "whisper-x",
+        provider: "mock",
+        completed_at: "2026-06-01T10:00:00Z",
+        segments: [
+          { speaker_label: "MJ", text: "Bonjour.", start_seconds: 0, end_seconds: 1 },
+        ],
+      }),
+    );
+    const { result } = renderHook(
+      () => useDownloadTranscriptionRaw(SESSION_ID, "diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).resolves.toBe("MJ: Bonjour.");
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/transcription")).toBe(true);
+  });
+
+  test("non_diarised mode hits /chunks and returns rendered plain text", async () => {
+    const fetchMock = stubFetch(async () =>
+      json({
+        session_id: SESSION_ID,
+        items: [
+          { chunk_id: "c1", ordre: 1, text: "Premier." },
+          { chunk_id: "c2", ordre: 2, text: "Deuxième." },
+        ],
+      }),
+    );
+    const { result } = renderHook(
+      () => useDownloadTranscriptionRaw(SESSION_ID, "non_diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).resolves.toBe(
+      "Premier.\n\nDeuxième.",
+    );
+    const url =
+      typeof fetchMock.mock.calls[0]?.[0] === "string"
+        ? (fetchMock.mock.calls[0]?.[0] as string)
+        : (fetchMock.mock.calls[0]?.[0] as Request).url;
+    expect(url.endsWith("/chunks")).toBe(true);
+  });
+
+  test("surfaces an ApiError on >=400", async () => {
+    stubFetch(async () =>
+      json({ type: "about:blank", title: "boom", status: 500 }, 500),
+    );
+    const { result } = renderHook(
+      () => useDownloadTranscriptionRaw(SESSION_ID, "diarised"),
+      { wrapper: wrapper(makeClient()) },
+    );
+    await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
 describe("transcriptionFileName (Story 4.21)", () => {
   test("slugifies the session title with the requested extension", () => {
     expect(transcriptionFileName("Ma Séance", "md")).toBe(
@@ -284,6 +389,9 @@ describe("transcriptionFileName (Story 4.21)", () => {
     );
     expect(transcriptionFileName("Ma Séance", "json")).toBe(
       "transcription-ma-seance.json",
+    );
+    expect(transcriptionFileName("Ma Séance", "txt")).toBe(
+      "transcription-ma-seance.txt",
     );
   });
 
