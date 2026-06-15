@@ -25,10 +25,34 @@ type RawTranscriptionPayload = TranscriptionOut | ChunkListOut;
  */
 export function transcriptionFileName(
   sessionTitle: string,
-  extension: "md" | "json",
+  extension: "md" | "json" | "txt",
 ): string {
   const slug = slugifySessionTitle(sessionTitle);
   return slug ? `transcription-${slug}.${extension}` : `transcription.${extension}`;
+}
+
+/**
+ * Story 4.23 (AC2) — render a raw transcription payload as plain text for the
+ * `.txt` export. Pure + testable; no backend `.txt` endpoint exists so the text
+ * is built client-side from the same payloads the JSON export reads.
+ * - `diarised` (`TranscriptionOut`): one line per segment, `speaker_label: text`.
+ * - `non_diarised` (`ChunkListOut`): chunks sorted by `ordre`, joined by a blank
+ *   line.
+ */
+export function buildTranscriptionPlainText(
+  payload: RawTranscriptionPayload,
+  transcriptionMode: TranscriptionMode,
+): string {
+  if (transcriptionMode === "diarised") {
+    const segments = (payload as TranscriptionOut).segments ?? [];
+    return segments
+      .map((segment) => `${segment.speaker_label}: ${segment.text}`)
+      .join("\n");
+  }
+  const items = [...((payload as ChunkListOut).items ?? [])].sort(
+    (a, b) => a.ordre - b.ordre,
+  );
+  return items.map((chunk) => chunk.text).join("\n\n");
 }
 
 /**
@@ -240,6 +264,42 @@ export function useDownloadTranscriptionJson(
         { params: { path: { session_id: sessionId } } },
       );
       return unwrap<ChunkListOut>(result);
+    },
+  });
+}
+
+/**
+ * Story 4.23 (AC2) — imperative download of the transcription as plain text
+ * (`.txt`). Same mode-branching as `useDownloadTranscriptionJson` (`diarised` →
+ * `GET /transcription`, `non_diarised` → `GET /chunks`) but resolves to a plain
+ * string rendered client-side via `buildTranscriptionPlainText` — there is no
+ * backend `.txt` endpoint. Imperative → a mutation; the caller saves the file.
+ */
+export function useDownloadTranscriptionRaw(
+  sessionId: string,
+  transcriptionMode: TranscriptionMode,
+) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      if (transcriptionMode === "diarised") {
+        const result = await apiClient.GET(
+          "/services/jdr/sessions/{session_id}/transcription",
+          { params: { path: { session_id: sessionId } } },
+        );
+        return buildTranscriptionPlainText(
+          unwrap<TranscriptionOut>(result),
+          "diarised",
+        );
+      }
+      const result = await apiClient.GET(
+        "/services/jdr/sessions/{session_id}/chunks",
+        { params: { path: { session_id: sessionId } } },
+      );
+      return buildTranscriptionPlainText(
+        unwrap<ChunkListOut>(result),
+        "non_diarised",
+      );
     },
   });
 }

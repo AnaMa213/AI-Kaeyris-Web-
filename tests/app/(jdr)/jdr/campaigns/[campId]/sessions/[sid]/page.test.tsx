@@ -255,6 +255,26 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(await screen.findByText(/Audio et transcription/)).toBeInTheDocument();
   });
 
+  test("Story 4.23 AC1 — renders an audio player in the header once transcribed", async () => {
+    stubFetch({ session: { ...baseSession, state: "transcribed" } });
+    renderPage();
+    expect(
+      await screen.findByLabelText("Écouter l'enregistrement de la séance"),
+    ).toBeInTheDocument();
+  });
+
+  test("Story 4.23 AC1 — no header audio player before the session is transcribed", async () => {
+    stubFetch({ session: { ...baseSession, state: "transcribing" } });
+    renderPage();
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Session 7 — La crypte oubliée",
+    });
+    expect(
+      screen.queryByLabelText("Écouter l'enregistrement de la séance"),
+    ).not.toBeInTheDocument();
+  });
+
   test("renders the CampaignBreadcrumb link to the parent campaign", async () => {
     stubFetch({});
     renderPage();
@@ -605,6 +625,107 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     expect(
       screen.queryByRole("button", { name: /Glisse ton M4A/ }),
     ).not.toBeInTheDocument();
+  });
+
+  describe("Story 4.23 AC10 — stuck/crashed transcription", () => {
+    const stuckJobId = "job-uuid-stuck";
+
+    function stubStuckSession(opts: { onRecover?: () => Response } = {}) {
+      const session = {
+        ...baseSession,
+        state: "transcribing" as const,
+        current_job_id: stuckJobId,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            typeof input === "string"
+              ? (init?.method ?? "GET")
+              : (input.method ?? "GET");
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return new Response(JSON.stringify(baseCampaign), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          // The worker died: its RQ job is gone → 404 job-not-found.
+          if (url.includes(`/services/jdr/jobs/${stuckJobId}`)) {
+            return new Response(
+              JSON.stringify({
+                type: "about:blank",
+                title: "job-not-found",
+                status: 404,
+              }),
+              {
+                status: 404,
+                headers: { "content-type": "application/problem+json" },
+              },
+            );
+          }
+          if (
+            url.includes(
+              `/services/jdr/sessions/${sessionIdFixture}/transcription/recover`,
+            ) &&
+            method.toUpperCase() === "POST"
+          ) {
+            return (
+              opts.onRecover?.() ??
+              new Response(
+                JSON.stringify({ ...session, state: "transcription_failed" }),
+                { status: 200, headers: { "content-type": "application/json" } },
+              )
+            );
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return new Response(JSON.stringify(session), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("shows the 'Transcription interrompue' card instead of an endless progress act", async () => {
+      stubStuckSession();
+      renderPage();
+      expect(
+        await screen.findByRole("heading", { name: "Transcription interrompue" }),
+      ).toBeInTheDocument();
+      // The infinite "scribes transcribing" act is suppressed.
+      expect(
+        screen.queryByText("Les scribes transcrivent"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Débloquer la séance" }),
+      ).toBeInTheDocument();
+    });
+
+    test("'Débloquer la séance' POSTs to the recover endpoint", async () => {
+      const recoverCalls: string[] = [];
+      stubStuckSession({
+        onRecover: () => {
+          recoverCalls.push("called");
+          return new Response(
+            JSON.stringify({
+              ...baseSession,
+              state: "transcription_failed",
+              current_job_id: stuckJobId,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        },
+      });
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(
+        await screen.findByRole("button", { name: "Débloquer la séance" }),
+      );
+      await waitFor(() => expect(recoverCalls).toHaveLength(1));
+    });
   });
 
   test("clicking Modifier opens the SessionEditDialog (Story 2.8)", async () => {

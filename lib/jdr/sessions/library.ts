@@ -60,3 +60,20 @@ export function filterSessionsByTitle(
     normalizeForSearch(session.title).includes(needle),
   );
 }
+
+/** Story 4.23 (AC4) — sessions shown per page in the Library list. */
+export const SESSION_PAGE_SIZE = 5;
+
+/**
+ * Pure pagination — returns the slice for `page` (1-based). A NEW array view via
+ * `slice`; never mutates. Out-of-range pages yield an empty slice (high) or the
+ * first page (low) — callers clamp `page` to `[1, totalPages]`.
+ */
+export function paginateSessions(
+  sessions: SessionOut[],
+  page: number,
+  pageSize = SESSION_PAGE_SIZE,
+): SessionOut[] {
+  const start = (page - 1) * pageSize;
+  return sessions.slice(start, start + pageSize);
+}

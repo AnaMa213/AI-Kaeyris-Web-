@@ -16,6 +16,7 @@ import { TranscriptionViewer } from "@/components/jdr/sessions/TranscriptionView
 import {
   transcriptionFileName,
   useDownloadTranscriptionJson,
+  useDownloadTranscriptionRaw,
   type TranscriptionMode,
 } from "@/lib/jdr/sessions/transcription";
 import { resolveSessionAudioSrc } from "@/lib/jdr/sessions/audio";
@@ -47,6 +48,7 @@ export function TranscriptionDialog({
   editingBlocked = false,
 }: TranscriptionDialogProps) {
   const jsonDownload = useDownloadTranscriptionJson(sessionId, transcriptionMode);
+  const txtDownload = useDownloadTranscriptionRaw(sessionId, transcriptionMode);
 
   function handleDownloadJson() {
     if (jsonDownload.isPending) return;
@@ -57,6 +59,28 @@ export function TranscriptionDialog({
             transcriptionFileName(sessionTitle, "json"),
             JSON.stringify(payload, null, 2),
             "application/json",
+          );
+        } catch {
+          toast.error("Impossible de télécharger la transcription.");
+        }
+      },
+      onError: () => {
+        toast.error("Impossible de télécharger la transcription.");
+      },
+    });
+  }
+
+  // Story 4.23 (AC2) — export texte brut, rendu client-side (pas d'endpoint
+  // backend .txt). Même mécanique pending/error/toast que le JSON.
+  function handleDownloadTxt() {
+    if (txtDownload.isPending) return;
+    txtDownload.mutate(undefined, {
+      onSuccess: (text) => {
+        try {
+          downloadTextFile(
+            transcriptionFileName(sessionTitle, "txt"),
+            text,
+            "text/plain",
           );
         } catch {
           toast.error("Impossible de télécharger la transcription.");
@@ -85,7 +109,17 @@ export function TranscriptionDialog({
         <DialogDescription className="sr-only">
           Transcription brute de la séance : lecture, édition et export JSON.
         </DialogDescription>
-        <div className="flex justify-end pr-8">
+        <div className="flex flex-wrap justify-end gap-2 pr-8">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadTxt}
+            disabled={txtDownload.isPending}
+          >
+            <Download />
+            {txtDownload.isPending ? "Téléchargement…" : "Télécharger en .txt"}
+          </Button>
           <Button
             type="button"
             variant="outline"

@@ -63,7 +63,29 @@ export function SummaryArtifactPanel({
     const generatedAt = parseBackendDate(summary.generated_at);
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="Résumé de la séance">
-        <h2 className="font-display mb-3 text-xl font-semibold">Résumé</h2>
+        {/* Story 4.23 (AC6) — export (icône) + régénérer dans l'en-tête. */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">Résumé</h2>
+          <div className="flex items-center gap-1">
+            <ArtifactExportButton
+              sessionId={sessionId}
+              sessionTitle={sessionTitle}
+              kind="summary"
+              variant="icon"
+            />
+            <ArtifactRegenerateControls
+              part="trigger"
+              artifactLabel="le Résumé"
+              jobId={flow.jobId}
+              jobInFlight={flow.jobInFlight}
+              artifactSettling={flow.artifactSettling}
+              jobFailed={flow.jobFailed}
+              failureReason={flow.failureReason}
+              pending={generate.isPending}
+              onConfirm={handleGenerate}
+            />
+          </div>
+        </div>
         {/* Story 5.1 — rendu long-form Markdown sur parchemin (drop-cap, ornement,
             pull-quote). Story 5.2 — NarrativeReader ajoute le sommaire/scrollspy.
             Le composant ne fetch rien : il reçoit le markdown brut. */}
@@ -71,14 +93,8 @@ export function SummaryArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {summary.model_used}
         </p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <ArtifactExportButton
-            sessionId={sessionId}
-            sessionTitle={sessionTitle}
-            kind="summary"
-          />
-        </div>
         <ArtifactRegenerateControls
+          part="status"
           artifactLabel="le Résumé"
           jobId={flow.jobId}
           jobInFlight={flow.jobInFlight}

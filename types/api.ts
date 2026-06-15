@@ -832,6 +832,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/services/jdr/sessions/{session_id}/transcription/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recover a session wedged in 'transcribing' after a lost worker.
+         * @description Force the failed transition a crashed transcription worker never reached.
+         *
+         *     When a worker dies mid-run the session can stay ``transcribing`` forever
+         *     while its RQ job is gone from Redis. This GM-only action verifies the job
+         *     is truly no longer active and moves the session to ``transcription_failed``
+         *     so the audio can be replaced (or the session deleted). Refused with 409
+         *     when the session is not in ``transcribing`` (``transcription-not-stuck``)
+         *     or the job is still running (``transcription-still-active``).
+         */
+        post: operations["recover_stuck_transcription_services_jdr_sessions__session_id__transcription_recover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/services/jdr/users": {
         parameters: {
             query?: never;
@@ -3377,6 +3404,51 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recover_stuck_transcription_services_jdr_sessions__session_id__transcription_recover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Session not found or not visible to the current GM. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session is not stuck in 'transcribing', or its transcription job is still running. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

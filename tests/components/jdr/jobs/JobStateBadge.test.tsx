@@ -117,4 +117,15 @@ describe("<JobStateBadge>", () => {
     const badge = screen.getByLabelText("État de la génération : Génération en cours");
     expect(badge.textContent).toBe("Génération en cours");
   });
+
+  test("without explicit labels, an artifact job derives its wording from kind", () => {
+    // Bug — le chip de séance ne passe pas de labels : un job d'artefact doit
+    // afficher « Génération du résumé », pas « Transcription en cours ».
+    renderWithCache({ ...baseJob, kind: "summary", status: "running" });
+    const badge = screen.getByLabelText(
+      "État de la génération : Génération du résumé",
+    );
+    expect(badge.textContent).toBe("Génération du résumé");
+    expect(badge.className).toMatch(/animate-pulse/);
+  });
 });

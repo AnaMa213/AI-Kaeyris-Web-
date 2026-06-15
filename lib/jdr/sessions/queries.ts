@@ -148,6 +148,39 @@ export function useDeleteSession(sessionId: string, campaignId?: string) {
   });
 }
 
+/**
+ * Story 4.23 (AC10) — recover a session wedged in `transcribing` after its
+ * worker died (the job lookup 404s). `POST /transcription/recover` performs the
+ * failed transition the dead worker never reached → `transcription_failed`, so
+ * audio replace / session delete unblock. Seeds + invalidates the session cache
+ * so the page re-renders into the recoverable failed state.
+ */
+export function useRecoverTranscription(
+  sessionId: string,
+  campaignId?: string,
+) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.POST(
+        "/services/jdr/sessions/{session_id}/transcription/recover",
+        { params: { path: { session_id: sessionId } } },
+      );
+      return unwrap<SessionOut>(result);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(sessionQueryKey(sessionId), updated);
+      queryClient.invalidateQueries({ queryKey: sessionQueryKey(sessionId) });
+      if (campaignId) {
+        queryClient.invalidateQueries({
+          queryKey: sessionsListQueryKey(campaignId),
+        });
+      }
+    },
+  });
+}
+
 // openapi-fetch types the multipart body as { audio: string }, which does not
 // match a FormData payload — the audio POST/DELETE use plain fetch and re-parse
 // problem+json themselves (same shape as the openapi-fetch error middleware).

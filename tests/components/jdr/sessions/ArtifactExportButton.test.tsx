@@ -43,7 +43,10 @@ function markdown(body: string, status = 200) {
   });
 }
 
-function renderButton(kind: "summary" | "narrative" | "elements" = "summary") {
+function renderButton(
+  kind: "summary" | "narrative" | "elements" = "summary",
+  variant?: "text" | "icon",
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -53,6 +56,7 @@ function renderButton(kind: "summary" | "narrative" | "elements" = "summary") {
         sessionId={SESSION_ID}
         sessionTitle="Ma Séance"
         kind={kind}
+        variant={variant}
       />
     </QueryClientProvider>,
   );
@@ -102,5 +106,23 @@ describe("<ArtifactExportButton> (Story 5.5)", () => {
     await user.click(screen.getByRole("button", { name: /Exporter \.md/i }));
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
     expect(downloadTextFile).not.toHaveBeenCalled();
+  });
+
+  test("Story 4.23 AC6 — the icon variant renders a download icon button with a descriptive label", async () => {
+    stubFetch(async () => markdown("# Résumé\n\nContenu."));
+    renderButton("summary", "icon");
+    const user = userEvent.setup();
+    const button = screen.getByRole("button", {
+      name: "Exporter le résumé en Markdown",
+    });
+    // The icon variant drops the visible ".md" text label.
+    expect(button).not.toHaveTextContent("Exporter .md");
+    await user.click(button);
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        "session-ma-seance-summary.md",
+        "# Résumé\n\nContenu.",
+      ),
+    );
   });
 });

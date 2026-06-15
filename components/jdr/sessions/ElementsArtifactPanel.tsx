@@ -138,7 +138,29 @@ export function ElementsArtifactPanel({
         className={SECTION_CARD_CLASSES}
         aria-label="Éléments de la séance"
       >
-        <h2 className="font-display mb-3 text-xl font-semibold">Éléments</h2>
+        {/* Story 4.23 (AC6) — export (icône) + régénérer dans l'en-tête. */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-xl font-semibold">Éléments</h2>
+          <div className="flex items-center gap-1">
+            <ArtifactExportButton
+              sessionId={sessionId}
+              sessionTitle={sessionTitle}
+              kind="elements"
+              variant="icon"
+            />
+            <ArtifactRegenerateControls
+              part="trigger"
+              artifactLabel="les Éléments"
+              jobId={flow.jobId}
+              jobInFlight={flow.jobInFlight}
+              artifactSettling={flow.artifactSettling}
+              jobFailed={flow.jobFailed}
+              failureReason={flow.failureReason}
+              pending={generate.isPending}
+              onConfirm={handleGenerate}
+            />
+          </div>
+        </div>
         <div className="space-y-4">
           {ELEMENT_GROUPS.map((group) => (
             <ElementGroup
@@ -151,14 +173,8 @@ export function ElementsArtifactPanel({
         <p className="text-text-chrome-muted mt-4 text-xs">
           Généré le {generatedAt.toLocaleString("fr-FR")} · {elements.model_used}
         </p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <ArtifactExportButton
-            sessionId={sessionId}
-            sessionTitle={sessionTitle}
-            kind="elements"
-          />
-        </div>
         <ArtifactRegenerateControls
+          part="status"
           artifactLabel="les Éléments"
           jobId={flow.jobId}
           jobInFlight={flow.jobInFlight}

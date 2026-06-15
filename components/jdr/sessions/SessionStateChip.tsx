@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
+import { useJob } from "@/lib/jdr/jobs/queries";
 import type { SessionOut } from "@/lib/jdr/sessions/queries";
 
 /**
@@ -35,8 +36,36 @@ interface SessionStateChipProps {
 }
 
 export function SessionStateChip({ state, currentJobId }: SessionStateChipProps) {
+  // Lecture seule du cache (le polling live est porté par la page). Sert à
+  // distinguer un job de transcription d'un job d'artefact, et à savoir s'il
+  // tourne encore.
+  const { data: job } = useJob(currentJobId);
+
   if (currentJobId) {
-    return <JobStateBadge jobId={currentJobId} />;
+    const isArtifactJob = job != null && job.kind !== "transcription";
+
+    // Transcription : délégué au JobStateBadge (statut live, « En file » /
+    // « Transcription en cours » / « Transcrite ») — comportement historique.
+    if (!isArtifactJob) {
+      return <JobStateBadge jobId={currentJobId} />;
+    }
+
+    // Artefact en cours (file/exécution) → libellé générique « Génération en
+    // cours ». Une fois terminé, on retombe sur l'état au repos de la séance
+    // (« Transcrite ») plutôt que d'afficher « … généré ».
+    const generating = job.status === "queued" || job.status === "running";
+    if (generating) {
+      const generatingLabel = "Génération en cours";
+      return (
+        <Badge
+          variant="outline"
+          aria-label={`État de la séance : ${generatingLabel}`}
+          className="animate-pulse"
+        >
+          {generatingLabel}
+        </Badge>
+      );
+    }
   }
 
   const label = STATE_LABEL[state];

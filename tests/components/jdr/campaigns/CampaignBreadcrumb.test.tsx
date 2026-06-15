@@ -35,12 +35,42 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function renderBreadcrumbWithCurrent(current: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CampaignBreadcrumb campaignId={campaignId} current={current} />
+    </QueryClientProvider>,
+  );
+}
+
 describe("<CampaignBreadcrumb>", () => {
-  test("renders the link to /jdr/campaigns/{id} regardless of fetch state", () => {
+  test("the campaign crumb links to /jdr/campaigns/{id} regardless of fetch state", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     renderBreadcrumb();
-    const link = screen.getByRole("link");
+    // While pending the campaign crumb shows "..." and points to its page.
+    const link = screen.getByRole("link", { name: "..." });
     expect(link).toHaveAttribute("href", `/jdr/campaigns/${campaignId}`);
+  });
+
+  test("Story 4.23 AC8 — renders the 'Toutes les Campagnes' root crumb", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    renderBreadcrumb();
+    const root = screen.getByRole("link", { name: "Toutes les Campagnes" });
+    expect(root).toHaveAttribute("href", "/jdr/campaigns");
+    expect(
+      screen.getByRole("navigation", { name: "Fil d'Ariane" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Story 4.23 AC8 — renders the optional leaf crumb as plain text (not a link)", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    renderBreadcrumbWithCurrent("Session 7 — La crypte");
+    const leaf = screen.getByText("Session 7 — La crypte");
+    expect(leaf.closest("a")).toBeNull();
+    expect(leaf).toHaveAttribute("aria-current", "page");
   });
 
   test("renders a skeleton placeholder while the campaign name is pending", () => {
