@@ -859,6 +859,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/services/jdr/settings/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the current admin's JDR AI model provider settings. */
+        get: operations["get_model_settings_services_jdr_settings_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the current admin's JDR AI model provider settings. */
+        patch: operations["patch_model_settings_services_jdr_settings_models_patch"];
+        trace?: never;
+    };
     "/services/jdr/users": {
         parameters: {
             query?: never;
@@ -1253,6 +1271,69 @@ export interface components {
             /** Name */
             name: string;
             pj: components["schemas"]["PjMini"];
+        };
+        /**
+         * ModelProvider
+         * @description Per-account AI provider selector exposed by settings endpoints.
+         * @enum {string}
+         */
+        ModelProvider: "cloud" | "local" | "ollama";
+        /** ModelSettingsOut */
+        ModelSettingsOut: {
+            /**
+             * Deepinfra Api Key Set
+             * @description True iff a DeepInfra API key is stored for this user. The key itself is never returned.
+             * @default false
+             */
+            deepinfra_api_key_set: boolean;
+            /**
+             * Summary Cloud Model
+             * @description DeepInfra cloud model id used when summary_provider is cloud.
+             */
+            summary_cloud_model?: string | null;
+            /**
+             * Summary Local Path
+             * @description Custom local model path used when summary_provider is local.
+             */
+            summary_local_path?: string | null;
+            /**
+             * @description Provider for LLM summary: cloud, local, or ollama.
+             * @default cloud
+             */
+            summary_provider: components["schemas"]["ModelProvider"];
+            /**
+             * Transcription Cloud Model
+             * @description DeepInfra cloud model id used when transcription_provider is cloud.
+             */
+            transcription_cloud_model?: string | null;
+            /**
+             * Transcription Local Path
+             * @description Custom local model path used when transcription_provider is local.
+             */
+            transcription_local_path?: string | null;
+            /**
+             * @description Provider for transcription: cloud, local, or ollama.
+             * @default cloud
+             */
+            transcription_provider: components["schemas"]["ModelProvider"];
+        };
+        /** ModelSettingsPatch */
+        ModelSettingsPatch: {
+            /**
+             * Deepinfra Api Key
+             * @description Write-only. When provided non-empty, stores/replaces the user's DeepInfra API key. Never serialized back in any response.
+             */
+            deepinfra_api_key?: string | null;
+            /** Summary Cloud Model */
+            summary_cloud_model?: string | null;
+            /** Summary Local Path */
+            summary_local_path?: string | null;
+            summary_provider?: components["schemas"]["ModelProvider"] | null;
+            /** Transcription Cloud Model */
+            transcription_cloud_model?: string | null;
+            /** Transcription Local Path */
+            transcription_local_path?: string | null;
+            transcription_provider?: components["schemas"]["ModelProvider"] | null;
         };
         /**
          * NarrativeArtifactOut
@@ -3453,6 +3534,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_settings_services_jdr_settings_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettingsOut"];
+                };
+            };
+        };
+    };
+    patch_model_settings_services_jdr_settings_models_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettingsOut"];
+                };
             };
             /** @description Validation Error */
             422: {
