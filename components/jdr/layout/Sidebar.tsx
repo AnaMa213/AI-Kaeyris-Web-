@@ -77,23 +77,23 @@ export function Sidebar() {
       <Separator className="bg-border-chrome" />
 
       <div className="flex flex-col gap-1 px-2 py-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled
-          aria-disabled="true"
-          title="Disponible plus tard"
-          aria-label={collapsed ? "Settings" : undefined}
-          className={cn(
-            "text-text-chrome-muted/60",
-            footerButtonBase,
-            collapsed && "justify-center",
-          )}
-        >
-          <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-          {!collapsed && <span>Settings</span>}
-        </Button>
+        {isAdmin && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/jdr/settings")}
+            aria-label={collapsed ? "Settings" : undefined}
+            className={cn(
+              "text-text-chrome",
+              footerButtonBase,
+              collapsed && "justify-center",
+            )}
+          >
+            <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {!collapsed && <span>Settings</span>}
+          </Button>
+        )}
 
         {isAdmin && (
           <Button

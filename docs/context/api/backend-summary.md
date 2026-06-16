@@ -52,6 +52,8 @@ Web auth and user management:
 - `GET /services/jdr/users`
 - `PATCH /services/jdr/users/{user_id}`
 - `DELETE /services/jdr/users/{user_id}`
+- `GET /services/jdr/settings/models`
+- `PATCH /services/jdr/settings/models`
 
 JDR GM workflow:
 

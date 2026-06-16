@@ -172,11 +172,28 @@ describe("<Sidebar>", () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);
   });
 
-  test("Settings in footer is disabled with tooltip hint", () => {
+  test("admin sees the Settings button enabled in the footer", () => {
+    asAdmin();
     renderSidebar();
     const settingsButton = screen.getByRole("button", { name: /Settings/i });
-    expect(settingsButton).toBeDisabled();
-    expect(settingsButton.getAttribute("title")).toMatch(/plus tard/i);
+    expect(settingsButton).toBeInTheDocument();
+    expect(settingsButton).not.toBeDisabled();
+  });
+
+  test("non-admin user does NOT see the Settings button", () => {
+    asNonAdmin();
+    renderSidebar();
+    expect(
+      screen.queryByRole("button", { name: /Settings/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking Settings (admin only) navigates to /jdr/settings", async () => {
+    asAdmin();
+    const user = userEvent.setup();
+    renderSidebar();
+    await user.click(screen.getByRole("button", { name: /Settings/i }));
+    expect(routerPushMock).toHaveBeenCalledWith("/jdr/settings");
   });
 
   test("logout button calls useLogout().mutate()", async () => {
