@@ -4,7 +4,7 @@
 - **Repo cible** : `AnaMa213/AI-Kaeyris` (backend, FastAPI + SQLAlchemy + RQ)
 - **Émetteur** : Kenan
 - **Date** : 2026-06-16
-- **Statut** : ⏳ à implémenter (Story 6.5, BD-19)
+- **Statut** : ✅ implémentée (Story 6.5, BD-19 — 2026-06-16)
 - **Priorité** : HAUTE — les Stories 6.2–6.4 ont livré la persistance, mais sélectionner un modèle n'a aucun effet sur la génération.
 
 ---

@@ -7,7 +7,10 @@ import { ApiError } from "@/lib/core/api/errors";
 import {
   DEFAULT_SUMMARY_CLOUD_MODEL,
   DEFAULT_TRANSCRIPTION_CLOUD_MODEL,
+  localModelValidationResultSchema,
   modelSettingsSchema,
+  type LocalModelCategory,
+  type LocalModelValidationResult,
   type ModelSettings,
   type ModelSettingsPatchInput,
 } from "@/lib/jdr/schemas/modelSettings";
@@ -15,6 +18,8 @@ import type { components } from "@/types/api";
 
 type ModelSettingsOut = components["schemas"]["ModelSettingsOut"];
 type ModelSettingsPatch = components["schemas"]["ModelSettingsPatch"];
+type LocalModelValidationOut =
+  components["schemas"]["LocalModelValidationOut"];
 
 export const modelSettingsQueryKey = ["jdr", "settings", "models"] as const;
 
@@ -31,13 +36,20 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 
 function fromApi(data: ModelSettingsOut): ModelSettings {
   return modelSettingsSchema.parse({
-    transcriptionProvider: data.transcription_provider,
+    // "ollama" is never a valid transcription provider in the UI (Story 6.5
+    // AC6). If a row somehow carries it (e.g. set via API before this change),
+    // fall back to "cloud" so the restricted selector has a valid value.
+    transcriptionProvider:
+      data.transcription_provider === "ollama"
+        ? "cloud"
+        : data.transcription_provider,
     summaryProvider: data.summary_provider,
     transcriptionLocalPath: data.transcription_local_path ?? "",
     summaryLocalPath: data.summary_local_path ?? "",
     transcriptionCloudModel:
       data.transcription_cloud_model ?? DEFAULT_TRANSCRIPTION_CLOUD_MODEL,
     summaryCloudModel: data.summary_cloud_model ?? DEFAULT_SUMMARY_CLOUD_MODEL,
+    ollamaModel: data.ollama_model ?? "",
     // The server never returns the key; the input always starts empty.
     deepinfraApiKey: "",
     deepinfraApiKeySet: data.deepinfra_api_key_set ?? false,
@@ -64,11 +76,44 @@ function toApiPatch(values: ModelSettingsPatchInput): ModelSettingsPatch {
     ...(values.summaryCloudModel !== undefined
       ? { summary_cloud_model: values.summaryCloudModel }
       : {}),
+    // Relevance to the "ollama" LLM provider is decided by the caller
+    // (handleModelSettingsSubmit only sets ollamaModel when summaryProvider is
+    // "ollama"); here we just forward it when present, like the other fields.
+    ...(values.ollamaModel !== undefined
+      ? { ollama_model: values.ollamaModel }
+      : {}),
     // Empty string means "no change": only send a non-empty new key.
     ...(values.deepinfraApiKey !== undefined && values.deepinfraApiKey !== ""
       ? { deepinfra_api_key: values.deepinfraApiKey }
       : {}),
+    // Story 6.6 / BD-20: forward the backend validation proof only when the
+    // caller set it (i.e. a changed Local path is being saved). The backend
+    // rejects the changed path without a matching, still-valid proof.
+    ...(values.transcriptionLocalValidationId !== undefined
+      ? {
+          transcription_local_validation_id:
+            values.transcriptionLocalValidationId,
+        }
+      : {}),
+    ...(values.summaryLocalValidationId !== undefined
+      ? { summary_local_validation_id: values.summaryLocalValidationId }
+      : {}),
   };
+}
+
+function fromValidationApi(
+  data: LocalModelValidationOut,
+): LocalModelValidationResult {
+  return localModelValidationResultSchema.parse({
+    validationId: data.validation_id,
+    category: data.category,
+    modelPath: data.model_path,
+    status: data.status,
+    runtime: data.runtime,
+    modelFormat: data.model_format,
+    message: data.message,
+    expiresAt: data.expires_at,
+  });
 }
 
 function useInvalidateModelSettings() {
@@ -107,6 +152,27 @@ export function useUpdateModelSettings() {
     },
     onSuccess: () => {
       invalidateModelSettings();
+    },
+  });
+}
+
+export interface LocalModelValidationInput {
+  category: LocalModelCategory;
+  modelPath: string;
+}
+
+// Story 6.6 / BD-20: bounded backend probe that loads a Local model path and
+// returns a short-lived proof. Failures surface as `ApiError` carrying the
+// backend Problem Details (`title`/`detail`), which callers display inline.
+export function useValidateLocalModel() {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useMutation({
+    mutationFn: async ({ category, modelPath }: LocalModelValidationInput) => {
+      const result = await apiClient.POST(
+        "/services/jdr/settings/models/local/validation",
+        { body: { category, model_path: modelPath } },
+      );
+      return fromValidationApi(unwrap(result));
     },
   });
 }
