@@ -62,6 +62,7 @@ type ApiModelSettings = {
   summary_local_path: string | null;
   transcription_cloud_model: string | null;
   summary_cloud_model: string | null;
+  ollama_model: string | null;
   deepinfra_api_key_set: boolean;
 };
 
@@ -72,6 +73,7 @@ const defaultModelSettings: ApiModelSettings = {
   summary_local_path: null,
   transcription_cloud_model: null,
   summary_cloud_model: null,
+  ollama_model: null,
   deepinfra_api_key_set: false,
 };
 
@@ -97,12 +99,20 @@ function mockSettingsPageFetch({
   settingsPatchTitle = "Provider update failed",
   userPatchStatus = 200,
   userPatchTitle = "Forbidden",
+  validationStatus = 200,
+  validationType = "local-model-incompatible-task",
+  validationTitle = "Modele incompatible",
+  validationDetail = "Ce modele n'est pas un modele Whisper/ASR.",
 }: {
   settings?: Partial<ApiModelSettings>;
   settingsPatchStatus?: number;
   settingsPatchTitle?: string;
   userPatchStatus?: number;
   userPatchTitle?: string;
+  validationStatus?: number;
+  validationType?: string;
+  validationTitle?: string;
+  validationDetail?: string;
 } = {}) {
   const calls: CapturedRequest[] = [];
   // Stateful model settings so a saved DeepInfra key flips the
@@ -118,6 +128,7 @@ function mockSettingsPageFetch({
     summary_local_path: current.summary_local_path,
     transcription_cloud_model: current.transcription_cloud_model,
     summary_cloud_model: current.summary_cloud_model,
+    ollama_model: current.ollama_model,
     deepinfra_api_key_set: keySet,
   });
 
@@ -130,6 +141,34 @@ function mockSettingsPageFetch({
       request.url.includes("/services/jdr/settings/models")
     ) {
       return jsonResponse(modelSettingsOut());
+    }
+
+    if (
+      request.method === "POST" &&
+      request.url.includes("/services/jdr/settings/models/local/validation")
+    ) {
+      if (validationStatus >= 400) {
+        return jsonResponse(
+          {
+            type: validationType,
+            title: validationTitle,
+            status: validationStatus,
+            detail: validationDetail,
+          },
+          validationStatus,
+        );
+      }
+      const reqBody = body ? JSON.parse(body) : {};
+      return jsonResponse({
+        validation_id: "proof-xyz",
+        category: reqBody.category,
+        model_path: reqBody.model_path,
+        status: "succeeded",
+        runtime: "faster-whisper",
+        model_format: "ctranslate2-whisper",
+        message: "Modele charge et accepte.",
+        expires_at: "2026-06-16T12:00:00Z",
+      });
     }
 
     if (
@@ -154,6 +193,7 @@ function mockSettingsPageFetch({
         "summary_local_path",
         "transcription_cloud_model",
         "summary_cloud_model",
+        "ollama_model",
       ] as const) {
         if (patch[key] !== undefined) {
           (current as Record<string, unknown>)[key] = patch[key];
@@ -196,6 +236,14 @@ function findModelSettingsPatch(calls: CapturedRequest[]) {
     (call) =>
       call.method === "PATCH" &&
       call.url.includes("/services/jdr/settings/models"),
+  );
+}
+
+function findValidationCall(calls: CapturedRequest[]) {
+  return calls.find(
+    (call) =>
+      call.method === "POST" &&
+      call.url.includes("/services/jdr/settings/models/local/validation"),
   );
 }
 
@@ -352,7 +400,7 @@ describe("<SettingsPage>", () => {
     });
   });
 
-  test("settings modeles PATCH envoie le chemin local quand le provider devient Local", async () => {
+  test("settings modeles PATCH envoie le chemin local et la preuve apres validation", async () => {
     const { calls } = mockSettingsPageFetch();
     const user = userEvent.setup();
     renderPage();
@@ -366,6 +414,20 @@ describe("<SettingsPage>", () => {
       screen.getByLabelText(/chemin du modele local \(transcription\)/i),
       "/models/whisper-large-v3",
     );
+
+    // Story 6.6 (AC1/AC2): probe the path before saving.
+    await user.click(screen.getByRole("button", { name: "Tester le modele" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Modele charge et accepte."),
+      ).toBeInTheDocument(),
+    );
+    const validationCall = findValidationCall(calls);
+    expect(JSON.parse(validationCall?.body ?? "{}")).toEqual({
+      category: "transcription",
+      model_path: "/models/whisper-large-v3",
+    });
+
     await user.click(screen.getAllByRole("button", { name: "Enregistrer" })[1]);
 
     await waitFor(() =>
@@ -373,11 +435,65 @@ describe("<SettingsPage>", () => {
         "Configuration des modeles mise a jour.",
       ),
     );
+    // Story 6.6 (AC4): PATCH carries the backend-issued proof for that path.
     const settingsPatch = findModelSettingsPatch(calls);
     expect(JSON.parse(settingsPatch?.body ?? "{}")).toEqual({
       transcription_provider: "local",
       transcription_local_path: "/models/whisper-large-v3",
+      transcription_local_validation_id: "proof-xyz",
     });
+  });
+
+  test("settings modeles: Enregistrer reste bloque sans test (aucun PATCH)", async () => {
+    const { calls } = mockSettingsPageFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Transcription")).toHaveTextContent("Cloud"),
+    );
+    await user.click(screen.getByLabelText("Transcription"));
+    await user.click(await screen.findByRole("option", { name: "Local" }));
+    await user.type(
+      screen.getByLabelText(/chemin du modele local \(transcription\)/i),
+      "/models/whisper-large-v3",
+    );
+
+    // AC3: a changed Local path without a successful probe blocks the save.
+    const saveButton = screen.getAllByRole("button", {
+      name: "Enregistrer",
+    })[1];
+    expect(saveButton).toBeDisabled();
+    await user.click(saveButton);
+
+    expect(findModelSettingsPatch(calls)).toBeUndefined();
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  test("settings modeles: echec de validation affiche l'erreur backend inline", async () => {
+    const { calls } = mockSettingsPageFetch({ validationStatus: 422 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Transcription")).toHaveTextContent("Cloud"),
+    );
+    await user.click(screen.getByLabelText("Transcription"));
+    await user.click(await screen.findByRole("option", { name: "Local" }));
+    await user.type(
+      screen.getByLabelText(/chemin du modele local \(transcription\)/i),
+      "/models/not-a-whisper",
+    );
+    await user.click(screen.getByRole("button", { name: "Tester le modele" }));
+
+    expect(
+      await screen.findByText("Ce modele n'est pas un modele Whisper/ASR."),
+    ).toBeInTheDocument();
+    // Failure blocks the save and no PATCH is attempted.
+    expect(
+      screen.getAllByRole("button", { name: "Enregistrer" })[1],
+    ).toBeDisabled();
+    expect(findModelSettingsPatch(calls)).toBeUndefined();
   });
 
   test("remplacer un chemin local existant demande confirmation avant le PATCH", async () => {
@@ -397,6 +513,16 @@ describe("<SettingsPage>", () => {
 
     await user.clear(pathInput);
     await user.type(pathInput, "/models/whisper-small");
+
+    // Story 6.6: the changed Local path must be probed before the destructive
+    // replace confirmation can even be reached.
+    await user.click(screen.getByRole("button", { name: "Tester le modele" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Modele charge et accepte."),
+      ).toBeInTheDocument(),
+    );
+
     await user.click(screen.getAllByRole("button", { name: "Enregistrer" })[1]);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -414,6 +540,7 @@ describe("<SettingsPage>", () => {
     const settingsPatch = findModelSettingsPatch(calls);
     expect(JSON.parse(settingsPatch?.body ?? "{}")).toEqual({
       transcription_local_path: "/models/whisper-small",
+      transcription_local_validation_id: "proof-xyz",
     });
   });
 
@@ -536,5 +663,105 @@ describe("<SettingsPage>", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Cle API DeepInfra")).toHaveValue(""),
     );
+  });
+
+  test("settings modeles: PATCH inclut ollama_model quand LLM Resume passe en Ollama", async () => {
+    const { calls } = mockSettingsPageFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("LLM Resume")).toHaveTextContent("Cloud"),
+    );
+    await user.click(screen.getByLabelText("LLM Resume"));
+    await user.click(await screen.findByRole("option", { name: "Ollama" }));
+    await user.type(
+      screen.getByLabelText(/modele ollama \(llm resume\)/i),
+      "mistral:7b",
+    );
+    await user.click(screen.getAllByRole("button", { name: "Enregistrer" })[1]);
+
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith(
+        "Configuration des modeles mise a jour.",
+      ),
+    );
+    const settingsPatch = findModelSettingsPatch(calls);
+    expect(JSON.parse(settingsPatch?.body ?? "{}")).toEqual({
+      summary_provider: "ollama",
+      ollama_model: "mistral:7b",
+    });
+  });
+
+  test("settings modeles: ollama_model absent du PATCH quand le provider n'est pas Ollama", async () => {
+    const { calls } = mockSettingsPageFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("LLM Resume")).toHaveTextContent("Cloud"),
+    );
+    await user.click(screen.getByLabelText("LLM Resume"));
+    await user.click(await screen.findByRole("option", { name: "Local" }));
+    await user.click(screen.getAllByRole("button", { name: "Enregistrer" })[1]);
+
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith(
+        "Configuration des modeles mise a jour.",
+      ),
+    );
+    const body = JSON.parse(findModelSettingsPatch(calls)?.body ?? "{}");
+    expect(body).not.toHaveProperty("ollama_model");
+    expect(body).toEqual({ summary_provider: "local" });
+  });
+
+  test("settings modeles: config effective initialise le formulaire avec les valeurs serveur (AC7)", async () => {
+    mockSettingsPageFetch({
+      settings: {
+        transcription_provider: "cloud",
+        summary_provider: "ollama",
+        // The operator's real transcription model differs from the frontend
+        // catalog default (DEFAULT_TRANSCRIPTION_CLOUD_MODEL =
+        // "openai/whisper-large-v3"): the form must trust the server's
+        // effective config, not the hardcoded default.
+        transcription_cloud_model: "openai/whisper-large-v3-turbo",
+        ollama_model: "mixtral:8x7b",
+      },
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("LLM Resume")).toHaveTextContent("Ollama"),
+    );
+    expect(
+      screen.getByLabelText(/modele cloud \(transcription\)/i),
+    ).toHaveTextContent("Whisper Large v3 Turbo");
+    expect(
+      screen.getByLabelText(/modele ollama \(llm resume\)/i),
+    ).toHaveValue("mixtral:8x7b");
+  });
+
+  test("carte tarification montee quand un provider cloud est configure (6.7)", async () => {
+    mockSettingsPageFetch();
+    renderPage();
+
+    // Default settings keep both providers on Cloud -> the pricing card mounts.
+    expect(await screen.findByText("Tarification")).toBeInTheDocument();
+  });
+
+  test("carte tarification absente quand aucun provider n'est cloud (6.7)", async () => {
+    mockSettingsPageFetch({
+      settings: {
+        transcription_provider: "local",
+        summary_provider: "ollama",
+      },
+    });
+    renderPage();
+
+    // Wait for the GET to settle so currentModelSettings reflects local/ollama.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Transcription")).toHaveTextContent("Local"),
+    );
+    expect(screen.queryByText("Tarification")).not.toBeInTheDocument();
   });
 });

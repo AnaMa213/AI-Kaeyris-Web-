@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ApiError } from "@/lib/core/api/errors";
 import {
   modelSettingsSchema,
   SUMMARY_CLOUD_MODEL_LABELS,
@@ -28,6 +29,9 @@ import {
   TRANSCRIPTION_CLOUD_MODEL_LABELS,
   TRANSCRIPTION_CLOUD_MODEL_OPTIONS,
   type AiModelProvider,
+  type LocalModelCategory,
+  type LocalModelValidationProofs,
+  type LocalModelValidationResult,
   type ModelSettings,
 } from "@/lib/jdr/schemas/modelSettings";
 
@@ -37,18 +41,56 @@ const PROVIDER_LABELS: Record<AiModelProvider, string> = {
   ollama: "Ollama",
 };
 
+// Full provider set — used for the LLM Résumé selector.
 const PROVIDER_OPTIONS = [
   { value: "cloud", label: "Cloud" },
   { value: "local", label: "Local" },
   { value: "ollama", label: "Ollama" },
 ] satisfies Array<{ value: AiModelProvider; label: string }>;
 
+// Story 6.5 (AC6): Ollama is not a valid transcription provider, so the
+// transcription selector only offers Cloud and Local. PROVIDER_LABELS still
+// holds all three for value→label display lookups.
+const TRANSCRIPTION_PROVIDER_OPTIONS = [
+  { value: "cloud", label: "Cloud" },
+  { value: "local", label: "Local" },
+] satisfies Array<{ value: AiModelProvider; label: string }>;
+
+// Story 6.6 / BD-20: transient, per-category state for the "Tester le modele"
+// probe. Never persisted as form data — it only mirrors the backend proof and
+// the exact path it was issued for, so saves can be gated and invalidated when
+// the path or provider changes.
+type CategoryValidation =
+  | { status: "idle" }
+  | { status: "pending"; testedPath: string }
+  | {
+      status: "success";
+      testedPath: string;
+      validationId: string;
+      message: string;
+    }
+  | { status: "error"; testedPath: string; message: string };
+
+const IDLE_VALIDATION: {
+  transcription: CategoryValidation;
+  summary: CategoryValidation;
+} = {
+  transcription: { status: "idle" },
+  summary: { status: "idle" },
+};
+
 interface ModelSettingsCardProps {
   values: ModelSettings;
   loading: boolean;
   submitting: boolean;
   errorMessage: string | null;
-  onSubmit: (values: ModelSettings) => void;
+  onSubmit: (values: ModelSettings, proofs: LocalModelValidationProofs) => void;
+  // Runs the bounded backend probe for a Local category. Resolves with the
+  // proof on success; rejects with `ApiError` (Problem Details) on failure.
+  onValidate: (
+    category: LocalModelCategory,
+    modelPath: string,
+  ) => Promise<LocalModelValidationResult>;
 }
 
 export function ModelSettingsCard({
@@ -57,12 +99,19 @@ export function ModelSettingsCard({
   submitting,
   errorMessage,
   onSubmit,
+  onValidate,
 }: ModelSettingsCardProps) {
   const disabled = loading || submitting;
   const form = useForm<ModelSettings>({
     resolver: zodResolver(modelSettingsSchema),
     defaultValues: values,
   });
+
+  // Story 6.6: per-category probe results. Staleness is handled by derivation
+  // (`liveValidation` compares against the live path) and by provider-change
+  // resets, so no validation reset is needed in the form-sync effect — and a
+  // successful save remounts the card via its key, clearing this anyway.
+  const [validation, setValidation] = useState(IDLE_VALIDATION);
 
   useEffect(() => {
     form.reset(values);
@@ -76,6 +125,135 @@ export function ModelSettingsCard({
     control: form.control,
     name: "summaryProvider",
   });
+  const transcriptionLocalPath = useWatch({
+    control: form.control,
+    name: "transcriptionLocalPath",
+  });
+  const summaryLocalPath = useWatch({
+    control: form.control,
+    name: "summaryLocalPath",
+  });
+
+  // AC5: a probe result only counts for the exact path it was issued for. The
+  // derived view returns "idle" once the live path no longer matches, so a
+  // stale success/error/pending indicator is never shown after an edit. (No
+  // effect needed — this is pure derivation during render.)
+  const liveValidation = (
+    category: LocalModelCategory,
+    formPath: string,
+  ): CategoryValidation => {
+    const current = validation[category];
+    if (current.status !== "idle" && current.testedPath !== formPath) {
+      return { status: "idle" };
+    }
+    return current;
+  };
+
+  // Returns the still-valid proof id for a category/path pair, or undefined.
+  const proofFor = (
+    category: LocalModelCategory,
+    formPath: string,
+  ): string | undefined => {
+    const current = liveValidation(category, formPath);
+    return current.status === "success" ? current.validationId : undefined;
+  };
+
+  // AC5: switching a provider (in particular away from Local) drops any probe
+  // result for that category. Done in the change handler — the React-idiomatic
+  // place to adjust state in response to a user event, not an effect.
+  const resetValidation = (category: LocalModelCategory) => {
+    setValidation((state) =>
+      state[category].status === "idle"
+        ? state
+        : { ...state, [category]: { status: "idle" } },
+    );
+  };
+
+  // Mirrors the backend rule: a Local category needs a fresh successful probe
+  // unless it is an already-saved Local path left unchanged (which keeps its
+  // stored proof server-side and must not block unrelated saves).
+  const categoryNeedsTest = (
+    category: LocalModelCategory,
+    provider: AiModelProvider,
+    formPath: string,
+    savedProvider: AiModelProvider,
+    savedPath: string,
+  ): boolean => {
+    if (provider !== "local" || formPath === "") return false;
+    if (savedProvider === "local" && formPath === savedPath) return false;
+    return proofFor(category, formPath) === undefined;
+  };
+
+  const runTest = (category: LocalModelCategory, modelPath: string) => {
+    setValidation((state) => ({
+      ...state,
+      [category]: { status: "pending", testedPath: modelPath },
+    }));
+    onValidate(category, modelPath)
+      .then((result) => {
+        setValidation((state) => {
+          const current = state[category];
+          // Ignore a resolve that lost the race with a later path edit.
+          if (current.status !== "pending" || current.testedPath !== modelPath) {
+            return state;
+          }
+          return {
+            ...state,
+            [category]: {
+              status: "success",
+              testedPath: modelPath,
+              validationId: result.validationId,
+              message: result.message,
+            },
+          };
+        });
+      })
+      .catch((error: unknown) => {
+        const message =
+          error instanceof ApiError
+            ? (error.problem.detail ?? error.problem.title)
+            : "La validation du modele local a echoue.";
+        setValidation((state) => {
+          const current = state[category];
+          if (current.status !== "pending" || current.testedPath !== modelPath) {
+            return state;
+          }
+          return {
+            ...state,
+            [category]: { status: "error", testedPath: modelPath, message },
+          };
+        });
+      });
+  };
+
+  const transcriptionNeedsTest = categoryNeedsTest(
+    "transcription",
+    transcriptionProvider,
+    transcriptionLocalPath,
+    values.transcriptionProvider,
+    values.transcriptionLocalPath,
+  );
+  const summaryNeedsTest = categoryNeedsTest(
+    "summary",
+    summaryProvider,
+    summaryLocalPath,
+    values.summaryProvider,
+    values.summaryLocalPath,
+  );
+  const saveBlockedByValidation = transcriptionNeedsTest || summaryNeedsTest;
+
+  const buildProofs = (nextValues: ModelSettings): LocalModelValidationProofs => {
+    const proofs: LocalModelValidationProofs = {};
+    if (nextValues.transcriptionProvider === "local") {
+      const proof = proofFor("transcription", nextValues.transcriptionLocalPath);
+      if (proof) proofs.transcription = proof;
+    }
+    if (nextValues.summaryProvider === "local") {
+      const proof = proofFor("summary", nextValues.summaryLocalPath);
+      if (proof) proofs.summary = proof;
+    }
+    return proofs;
+  };
 
   // Story 6.4 (AC2): a single shared DeepInfra API key input is visible as soon
   // as either category uses the cloud provider.
@@ -120,12 +298,12 @@ export function ModelSettingsCard({
       setPendingValues(nextValues);
       return;
     }
-    onSubmit(nextValues);
+    onSubmit(nextValues, buildProofs(nextValues));
   };
 
   const confirmReplace = () => {
     if (pendingValues) {
-      onSubmit(pendingValues);
+      onSubmit(pendingValues, buildProofs(pendingValues));
     }
     setPendingValues(null);
   };
@@ -193,7 +371,10 @@ export function ModelSettingsCard({
                   <Select
                     items={PROVIDER_LABELS}
                     value={field.value}
-                    onValueChange={(value) => field.onChange(value)}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      resetValidation("transcription");
+                    }}
                     disabled={disabled}
                   >
                     <SelectTrigger
@@ -203,7 +384,7 @@ export function ModelSettingsCard({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PROVIDER_OPTIONS.map((option) => (
+                      {TRANSCRIPTION_PROVIDER_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
@@ -229,6 +410,19 @@ export function ModelSettingsCard({
                       />
                     )}
                   />
+                  {transcriptionLocalPath !== "" && (
+                    <LocalModelTestControls
+                      category="transcription"
+                      state={liveValidation(
+                        "transcription",
+                        transcriptionLocalPath,
+                      )}
+                      disabled={disabled}
+                      onTest={() =>
+                        runTest("transcription", transcriptionLocalPath)
+                      }
+                    />
+                  )}
                 </div>
               )}
               {transcriptionProvider === "cloud" && (
@@ -275,7 +469,10 @@ export function ModelSettingsCard({
                   <Select
                     items={PROVIDER_LABELS}
                     value={field.value}
-                    onValueChange={(value) => field.onChange(value)}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      resetValidation("summary");
+                    }}
                     disabled={disabled}
                   >
                     <SelectTrigger
@@ -311,6 +508,14 @@ export function ModelSettingsCard({
                       />
                     )}
                   />
+                  {summaryLocalPath !== "" && (
+                    <LocalModelTestControls
+                      category="summary"
+                      state={liveValidation("summary", summaryLocalPath)}
+                      disabled={disabled}
+                      onTest={() => runTest("summary", summaryLocalPath)}
+                    />
+                  )}
                 </div>
               )}
               {summaryProvider === "cloud" && (
@@ -342,6 +547,29 @@ export function ModelSettingsCard({
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                  />
+                </div>
+              )}
+              {summaryProvider === "ollama" && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-text-chrome-muted text-sm">
+                    Ollama doit etre actif pour que cette configuration
+                    fonctionne.
+                  </p>
+                  <Label htmlFor="model-ollama-model-summary">
+                    Modele Ollama (LLM Resume)
+                  </Label>
+                  <Controller
+                    control={form.control}
+                    name="ollamaModel"
+                    render={({ field }) => (
+                      <Input
+                        id="model-ollama-model-summary"
+                        placeholder="ex: llama3:8b"
+                        disabled={disabled}
+                        {...field}
+                      />
                     )}
                   />
                 </div>
@@ -387,11 +615,6 @@ export function ModelSettingsCard({
             </p>
           )}
 
-          <p className="text-text-chrome-muted text-sm">
-            L&apos;estimation des couts par modele arrive dans une prochaine
-            etape.
-          </p>
-
           {errorMessage && (
             <div
               role="alert"
@@ -401,9 +624,15 @@ export function ModelSettingsCard({
             </div>
           )}
 
+          {saveBlockedByValidation && (
+            <p className="text-text-chrome-muted text-sm">
+              Teste le modele local avant d&apos;enregistrer.
+            </p>
+          )}
+
           <Button
             type="submit"
-            disabled={disabled}
+            disabled={disabled || saveBlockedByValidation}
             className={submitting ? "animate-pulse self-start" : "self-start"}
           >
             {submitting ? "Enregistrement..." : "Enregistrer"}
@@ -423,6 +652,51 @@ export function ModelSettingsCard({
         destructive
       />
     </Card>
+  );
+}
+
+// Story 6.6 / BD-20: the per-category "Tester le modele" action plus its inline
+// status. `role="status"` for pending/success, `role="alert"` for failures.
+function LocalModelTestControls({
+  category,
+  state,
+  disabled,
+  onTest,
+}: {
+  category: LocalModelCategory;
+  state: CategoryValidation;
+  disabled: boolean;
+  onTest: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        id={`model-local-test-${category}`}
+        className="self-start"
+        disabled={disabled || state.status === "pending"}
+        onClick={onTest}
+      >
+        {state.status === "pending" ? "Test en cours..." : "Tester le modele"}
+      </Button>
+      {state.status === "pending" && (
+        <p role="status" className="text-text-chrome-muted text-sm">
+          Validation du modele local en cours...
+        </p>
+      )}
+      {state.status === "success" && (
+        <p role="status" className="text-state-success text-sm">
+          {state.message || "Modele local valide."}
+        </p>
+      )}
+      {state.status === "error" && (
+        <p role="alert" className="text-state-error text-sm">
+          {state.message}
+        </p>
+      )}
+    </div>
   );
 }
 

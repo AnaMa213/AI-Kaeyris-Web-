@@ -5,17 +5,21 @@ import { toast } from "sonner";
 import { BackLink } from "@/components/common/BackLink";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { AccountSettingsCard } from "@/components/jdr/settings/AccountSettingsCard";
+import { ModelPricingCard } from "@/components/jdr/settings/ModelPricingCard";
 import { ModelSettingsCard } from "@/components/jdr/settings/ModelSettingsCard";
 import { ApiError } from "@/lib/core/api/errors";
 import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 import {
   DEFAULT_MODEL_SETTINGS,
+  type LocalModelCategory,
+  type LocalModelValidationProofs,
   type ModelSettings,
   type ModelSettingsPatchInput,
 } from "@/lib/jdr/schemas/modelSettings";
 import {
   useModelSettings,
   useUpdateModelSettings,
+  useValidateLocalModel,
 } from "@/lib/jdr/settings/queries";
 import { useUpdateUser } from "@/lib/jdr/users/queries";
 
@@ -26,6 +30,7 @@ export default function SettingsPage() {
     enabled: user.status === "authenticated",
   });
   const updateModelSettingsMutation = useUpdateModelSettings();
+  const validateLocalModelMutation = useValidateLocalModel();
   // Bumping this key remounts AccountSettingsCard on success, clearing the
   // password fields (AC 6) without reaching into the form's internals.
   const [formKey, setFormKey] = useState(0);
@@ -81,7 +86,29 @@ export default function SettingsPage() {
   const currentModelSettings =
     modelSettingsQuery.data ?? DEFAULT_MODEL_SETTINGS;
 
-  const handleModelSettingsSubmit = (values: ModelSettings) => {
+  // Story 6.7 (FR-25): the pricing card reflects the SAVED cloud models, not the
+  // in-flight form state. A category contributes a model only when it is on the
+  // Cloud provider; otherwise it is null and that category is omitted/"—".
+  const pricingTranscriptionModel =
+    currentModelSettings.transcriptionProvider === "cloud"
+      ? currentModelSettings.transcriptionCloudModel
+      : null;
+  const pricingSummaryModel =
+    currentModelSettings.summaryProvider === "cloud"
+      ? currentModelSettings.summaryCloudModel
+      : null;
+  const showPricingCard =
+    pricingTranscriptionModel !== null || pricingSummaryModel !== null;
+
+  const handleValidateLocalModel = (
+    category: LocalModelCategory,
+    modelPath: string,
+  ) => validateLocalModelMutation.mutateAsync({ category, modelPath });
+
+  const handleModelSettingsSubmit = (
+    values: ModelSettings,
+    proofs: LocalModelValidationProofs,
+  ) => {
     const body: ModelSettingsPatchInput = {};
     if (
       values.transcriptionProvider !==
@@ -92,18 +119,32 @@ export default function SettingsPage() {
     if (values.summaryProvider !== currentModelSettings.summaryProvider) {
       body.summaryProvider = values.summaryProvider;
     }
-    if (
+    // Story 6.6 (AC4/AC5): send the Local path together with the backend proof
+    // whenever Local is newly selected or its path changed. An already-saved
+    // Local path left unchanged sends neither (the backend keeps its stored
+    // proof and must not be re-validated just to save unrelated fields).
+    const transcriptionLocalChanged =
       values.transcriptionProvider === "local" &&
-      values.transcriptionLocalPath !==
-        currentModelSettings.transcriptionLocalPath
-    ) {
+      values.transcriptionLocalPath !== "" &&
+      (currentModelSettings.transcriptionProvider !== "local" ||
+        values.transcriptionLocalPath !==
+          currentModelSettings.transcriptionLocalPath);
+    if (transcriptionLocalChanged) {
       body.transcriptionLocalPath = values.transcriptionLocalPath;
+      if (proofs.transcription) {
+        body.transcriptionLocalValidationId = proofs.transcription;
+      }
     }
-    if (
+    const summaryLocalChanged =
       values.summaryProvider === "local" &&
-      values.summaryLocalPath !== currentModelSettings.summaryLocalPath
-    ) {
+      values.summaryLocalPath !== "" &&
+      (currentModelSettings.summaryProvider !== "local" ||
+        values.summaryLocalPath !== currentModelSettings.summaryLocalPath);
+    if (summaryLocalChanged) {
       body.summaryLocalPath = values.summaryLocalPath;
+      if (proofs.summary) {
+        body.summaryLocalValidationId = proofs.summary;
+      }
     }
     if (
       values.transcriptionProvider === "cloud" &&
@@ -117,6 +158,14 @@ export default function SettingsPage() {
       values.summaryCloudModel !== currentModelSettings.summaryCloudModel
     ) {
       body.summaryCloudModel = values.summaryCloudModel;
+    }
+    // Ollama model name only matters when the LLM Résumé provider is "ollama"
+    // (Story 6.5 AC5). Send it only when it actually changed.
+    if (
+      values.summaryProvider === "ollama" &&
+      values.ollamaModel !== currentModelSettings.ollamaModel
+    ) {
+      body.ollamaModel = values.ollamaModel;
     }
     // Only send a new DeepInfra key when a cloud provider is in use and the
     // user actually typed one (empty means "keep the existing key").
@@ -162,7 +211,14 @@ export default function SettingsPage() {
           submitting={updateModelSettingsMutation.isPending}
           errorMessage={modelSettingsErrorMessage}
           onSubmit={handleModelSettingsSubmit}
+          onValidate={handleValidateLocalModel}
         />
+        {showPricingCard && (
+          <ModelPricingCard
+            transcriptionCloudModel={pricingTranscriptionModel}
+            summaryCloudModel={pricingSummaryModel}
+          />
+        )}
       </div>
     </section>
   );

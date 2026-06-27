@@ -4,21 +4,15 @@
  */
 
 export interface paths {
-    "/health": {
+    "/services/jdr/auth/setup/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Liveness alias (legacy Jalon 0).
-         * @description Legacy liveness endpoint kept for backward compatibility.
-         *
-         *     Equivalent to ``/healthz``. New monitoring setups should target
-         *     ``/healthz`` (liveness) and ``/readyz`` (readiness) instead.
-         */
-        get: operations["health_health_get"];
+        /** Get Setup Status */
+        get: operations["get_setup_status_services_jdr_auth_setup_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -27,47 +21,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/healthz": {
+    "/services/jdr/auth/setup": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Liveness probe (Jalon 6).
-         * @description Always 200 as long as the Python process is alive.
-         *
-         *     Does NOT check external dependencies. Use ``/readyz`` to decide
-         *     whether to send traffic. Intent: orchestrator should restart the
-         *     process iff this fails.
-         */
-        get: operations["healthz_healthz_get"];
+        get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/readyz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Readiness probe — DB + Redis (Jalon 6).
-         * @description 200 if every backing dependency is reachable, 503 otherwise.
-         *
-         *     Per-check status surfaced in the body so an operator can see
-         *     which dependency is down without parsing logs.
-         */
-        get: operations["readyz_readyz_get"];
-        put?: never;
-        post?: never;
+        /** Post Setup */
+        post: operations["post_setup_services_jdr_auth_setup_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -125,7 +89,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/auth/setup": {
+    "/services/jdr/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Users */
+        get: operations["get_users_services_jdr_users_get"];
+        put?: never;
+        /** Post User */
+        post: operations["post_user_services_jdr_users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/settings/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the current admin's JDR AI model provider settings. */
+        get: operations["get_model_settings_services_jdr_settings_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the current admin's JDR AI model provider settings. */
+        patch: operations["patch_model_settings_services_jdr_settings_models_patch"];
+        trace?: never;
+    };
+    "/services/jdr/settings/models/local/validation": {
         parameters: {
             query?: never;
             header?: never;
@@ -134,25 +134,80 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Setup */
-        post: operations["post_setup_services_jdr_auth_setup_post"];
+        /** Validate a local JDR AI model path and return a short-lived proof. */
+        post: operations["post_local_model_validation_services_jdr_settings_models_local_validation_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/auth/setup/status": {
+    "/services/jdr/users/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Setup Status */
-        get: operations["get_setup_status_services_jdr_auth_setup_status_get"];
+        get?: never;
         put?: never;
         post?: never;
+        /** Delete User Route */
+        delete: operations["delete_user_route_services_jdr_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch User */
+        patch: operations["patch_user_services_jdr_users__user_id__patch"];
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve the source audio for a session. */
+        get: operations["get_audio_services_jdr_sessions__session_id__audio_get"];
+        put?: never;
+        /** Upload the audio of a session and enqueue its transcription. */
+        post: operations["post_audio_services_jdr_sessions__session_id__audio_post"];
+        /**
+         * Purge a session's audio file and reset the session so a new upload can be sent.
+         * @description Drop the audio file on disk and reset the session to ``created``.
+         *
+         *     Use cases:
+         *
+         *     - The MJ uploaded the wrong file and wants to replace it.
+         *     - The MJ wants to restart from a clean audio/transcription state.
+         *
+         *     Refused (409) when ``state == transcribing``: see
+         *     ``logic.purge_audio_for_session`` for the rationale.
+         */
+        delete: operations["delete_audio_services_jdr_sessions__session_id__audio_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/live/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * (stub — Jalon 5) Open a live ingestion session.
+         * @description Always raises 501 ``live-not-implemented``.
+         *
+         *     The Pydantic body is validated first so a malformed payload still
+         *     returns 422, keeping the published contract honest even when the
+         *     implementation lands later.
+         */
+        post: operations["post_live_session_services_jdr_live_sessions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -196,7 +251,65 @@ export interface paths {
         patch: operations["patch_campaign_services_jdr_campaigns__campaign_id__patch"];
         trace?: never;
     };
-    "/services/jdr/jobs/{job_id}": {
+    "/services/jdr/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the MJ's sessions. */
+        get: operations["list_sessions_services_jdr_sessions_get"];
+        put?: never;
+        /**
+         * Create a new JDR session.
+         * @description Create a session owned by the authenticated MJ.
+         *
+         *     The body holds the human title and the date the session actually
+         *     took place (``recorded_at``). State starts at ``created``; the
+         *     audio is uploaded separately via ``POST /sessions/{id}/audio``.
+         *     The optional ``campaign_context`` is a steering block for the LLM
+         *     (PNJ récurrents, ton, fil narratif) — see PATCH for updating it.
+         */
+        post: operations["create_session_services_jdr_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one of the MJ's sessions. */
+        get: operations["get_session_services_jdr_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete one of the MJ's sessions. */
+        delete: operations["delete_session_services_jdr_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Partially update a session (title and/or campaign_context).
+         * @description Apply a partial update.
+         *
+         *     Only the fields present in the body are touched. To clear
+         *     ``campaign_context``, send ``{"campaign_context": null}`` explicitly —
+         *     omitting the key leaves the existing value alone. Updating
+         *     ``campaign_context`` does NOT re-run any previously generated
+         *     artefact; the new value affects only future generations.
+         *
+         *     ``transcription_mode`` is immutable after creation (FR-002 of
+         *     feature 002): any PATCH body referencing it is rejected with 422.
+         */
+        patch: operations["patch_session_services_jdr_sessions__session_id__patch"];
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/chunks": {
         parameters: {
             query?: never;
             header?: never;
@@ -204,14 +317,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Fetch the status of a JDR-service async job.
-         * @description Project an RQ job into the project's JobOut shape.
+         * Chunked transcription of a non_diarised session (ordered).
+         * @description Return the chunks (text, ordre) of a non_diarised session.
          *
-         *     RQ holds the live state for 24h on success / 7d on failure. Cross-
-         *     tenant access (a GM polling another GM's job) returns 404 so the
-         *     endpoint never confirms the existence of a foreign job.
+         *     Reserved for non_diarised sessions — diarised sessions use the
+         *     `GET /transcription` endpoint instead (409 wrong-mode otherwise).
+         *     Returns 404 transcription-not-ready if no chunks have been produced
+         *     yet for the session.
          */
-        get: operations["get_job_services_jdr_jobs__job_id__get"];
+        get: operations["get_session_chunks_services_jdr_sessions__session_id__chunks_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -220,7 +334,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/jobs/{job_id}/events": {
+    "/services/jdr/pjs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current MJ's PJs. */
+        get: operations["list_pjs_services_jdr_pjs_get"];
+        put?: never;
+        /**
+         * Create a PJ (player-character) owned by the current MJ.
+         * @description A PJ is stable across sessions — it's the narrative anchor that
+         *     later gets mapped to a diarisation ``speaker_label`` per session
+         *     (sub-lot 5b) and to a player API key (US4).
+         *
+         *     Duplicate name within the same MJ -> 409 ``duplicate-pj``.
+         */
+        post: operations["create_pj_services_jdr_pjs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/pjs/{pj_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Partially update a PJ owned by the current MJ. */
+        patch: operations["update_pj_services_jdr_pjs__pj_id__patch"];
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/mapping": {
         parameters: {
             query?: never;
             header?: never;
@@ -228,14 +384,27 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Stream live status events for a JDR-service async job.
-         * @description Stream the same public job status projection used by GET /jobs/{job_id}.
+         * Read the current speaker→PJ mapping for a session.
+         * @description Returns 200 with an empty dict when the session has no mapping
+         *     yet (resource exists but is not configured).
          *
-         *     We validate visibility before opening the stream so unknown or foreign jobs
-         *     keep the existing HTTP 404 behavior instead of becoming in-stream failures.
+         *     409 wrong-mode if the session is non_diarised (use GET /players).
          */
-        get: operations["get_job_events_services_jdr_jobs__job_id__events_get"];
-        put?: never;
+        get: operations["get_session_mapping_services_jdr_sessions__session_id__mapping_get"];
+        /**
+         * Replace the speaker→PJ mapping for a session.
+         * @description Replace the mapping in one atomic write.
+         *
+         *     - 404 if the session does not belong to the current MJ.
+         *     - 409 wrong-mode if the session is non_diarised (use /players instead).
+         *     - 409 if the session is not yet in ``state=transcribed``.
+         *     - 422 if any ``pj_id`` is unknown or owned by another MJ.
+         *
+         *     Side-effect: any existing ``pov:*`` artefact for this session is
+         *     deleted (data-model.md §6 invariant). A subsequent
+         *     ``POST /artifacts/povs`` is required to regenerate them.
+         */
+        put: operations["put_session_mapping_services_jdr_sessions__session_id__mapping_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -243,7 +412,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/live/sessions": {
+    "/services/jdr/sessions/{session_id}/players": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current PJ list of a non_diarised session. */
+        get: operations["get_session_players_services_jdr_sessions__session_id__players_get"];
+        put?: never;
+        /**
+         * Replace the list of PJ present at a non_diarised session.
+         * @description Declare the PJ present at a non_diarised session (FR-012).
+         *
+         *     PUT-like semantics — the provided list replaces the previous one
+         *     integrally. Each ``pj_id`` must belong to the current MJ (422
+         *     ``invalid-player-list`` otherwise). Reserved for non_diarised
+         *     sessions (409 ``wrong-mode`` on diarised).
+         */
+        post: operations["post_session_players_services_jdr_sessions__session_id__players_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/transcription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the diarised transcription of a session. */
+        get: operations["get_transcription_services_jdr_sessions__session_id__transcription_get"];
+        /** Persist the edited Markdown transcription for a session. */
+        put: operations["put_transcription_edit_services_jdr_sessions__session_id__transcription_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/transcription/recover": {
         parameters: {
             query?: never;
             header?: never;
@@ -253,15 +466,246 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * (stub — Jalon 5) Open a live ingestion session.
-         * @description Always raises 501 ``live-not-implemented``.
+         * Recover a session wedged in 'transcribing' after a lost worker.
+         * @description Force the failed transition a crashed transcription worker never reached.
          *
-         *     The Pydantic body is validated first so a malformed payload still
-         *     returns 422, keeping the published contract honest even when the
-         *     implementation lands later.
+         *     When a worker dies mid-run the session can stay ``transcribing`` forever
+         *     while its RQ job is gone from Redis. This GM-only action verifies the job
+         *     is truly no longer active and moves the session to ``transcription_failed``
+         *     so the audio can be replaced (or the session deleted). Refused with 409
+         *     when the session is not in ``transcribing`` (``transcription-not-stuck``)
+         *     or the job is still running (``transcription-still-active``).
          */
-        post: operations["post_live_session_services_jdr_live_sessions_post"];
+        post: operations["recover_stuck_transcription_services_jdr_sessions__session_id__transcription_recover_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/transcription.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the transcription as Markdown (text/markdown). */
+        get: operations["get_transcription_md_services_jdr_sessions__session_id__transcription_md_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/narrative": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the narrative summary of a session. */
+        get: operations["get_narrative_services_jdr_sessions__session_id__artifacts_narrative_get"];
+        put?: never;
+        /** Trigger the narrative summary generation for a session. */
+        post: operations["post_narrative_services_jdr_sessions__session_id__artifacts_narrative_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/narrative.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the narrative summary as Markdown (text/markdown). */
+        get: operations["get_narrative_md_services_jdr_sessions__session_id__artifacts_narrative_md_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/elements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the structured-elements card of a session. */
+        get: operations["get_elements_services_jdr_sessions__session_id__artifacts_elements_get"];
+        put?: never;
+        /** Trigger the structured-elements card generation for a session. */
+        post: operations["post_elements_services_jdr_sessions__session_id__artifacts_elements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/elements.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the structured-elements card as Markdown (text/markdown). */
+        get: operations["get_elements_md_services_jdr_sessions__session_id__artifacts_elements_md_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch the global session summary (JSON). */
+        get: operations["get_summary_services_jdr_sessions__session_id__artifacts_summary_get"];
+        put?: never;
+        /**
+         * Trigger the global session summary (map-reduce LLM).
+         * @description Enqueue the map-reduce summary job for a non_diarised session.
+         *
+         *     Pre-conditions:
+         *     - session must belong to the MJ (404 otherwise)
+         *     - session must be in non_diarised mode (409 wrong-mode)
+         *     - session must be in state=transcribed (409 session-not-transcribed)
+         *     - session must have at least 1 chunk, unless it has an edited Markdown
+         *       transcription override (409 no-chunks)
+         *
+         *     Side effect documented under FR-011: each new summary job resets
+         *     chunks.summary_text and cascade-deletes existing narrative /
+         *     elements / pov:* artefacts for the session. The atomicity is
+         *     enforced by ``_generate_summary`` (see research.md §2).
+         */
+        post: operations["post_summary_services_jdr_sessions__session_id__artifacts_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/summary.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the global session summary as Markdown (text/markdown). */
+        get: operations["get_summary_md_services_jdr_sessions__session_id__artifacts_summary_md_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/povs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger POV generation — one artefact per mapped PJ.
+         * @description Enqueue a single job that generates one ``pov:<pj_id>`` artefact
+         *     per row in the session's mapping. Pre-conditions match the other
+         *     generators (404 if foreign, 409 if not transcribed) plus FR-011:
+         *     a 409 ``no-mapping`` is raised when the session has no configured
+         *     speaker-PJ mapping yet — the operator must call
+         *     ``PUT /mapping`` first.
+         */
+        post: operations["post_povs_services_jdr_sessions__session_id__artifacts_povs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/sessions/{session_id}/artifacts/povs/{pj_id_str}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch one PJ's POV — JSON, or Markdown via the .md suffix.
+         * @description One route handles both representations because the ``.md`` suffix
+         *     pattern would otherwise collide with the UUID path param at the
+         *     Starlette routing layer (``{pj_id}`` matches ``[^/]+`` which greedily
+         *     swallows the ``.md``).
+         *
+         *     - ``GET .../povs/<uuid>``     → JSON (:class:`PovArtifactOut`)
+         *     - ``GET .../povs/<uuid>.md``  → Markdown (``text/markdown``)
+         */
+        get: operations["get_pov_services_jdr_sessions__session_id__artifacts_povs__pj_id_str__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/players": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enroll a player and return the plaintext Bearer token (once).
+         * @description Create a player key bound to one of the GM's PJs.
+         *
+         *     The plaintext token is returned exactly once — store it now, the
+         *     server only keeps the Argon2 hash.
+         */
+        post: operations["post_player_services_jdr_players_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/services/jdr/players/{player_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a player key (immediate effect on the next request). */
+        delete: operations["delete_player_services_jdr_players__player_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -369,173 +813,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/pjs": {
+    "/services/jdr/jobs/{job_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List the current MJ's PJs. */
-        get: operations["list_pjs_services_jdr_pjs_get"];
-        put?: never;
         /**
-         * Create a PJ (player-character) owned by the current MJ.
-         * @description A PJ is stable across sessions — it's the narrative anchor that
-         *     later gets mapped to a diarisation ``speaker_label`` per session
-         *     (sub-lot 5b) and to a player API key (US4).
+         * Fetch the status of a JDR-service async job.
+         * @description Project an RQ job into the project's JobOut shape.
          *
-         *     Duplicate name within the same MJ -> 409 ``duplicate-pj``.
+         *     RQ holds the live state for 24h on success / 7d on failure. Cross-
+         *     tenant access (a GM polling another GM's job) returns 404 so the
+         *     endpoint never confirms the existence of a foreign job.
          */
-        post: operations["create_pj_services_jdr_pjs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/pjs/{pj_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Partially update a PJ owned by the current MJ. */
-        patch: operations["update_pj_services_jdr_pjs__pj_id__patch"];
-        trace?: never;
-    };
-    "/services/jdr/players": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enroll a player and return the plaintext Bearer token (once).
-         * @description Create a player key bound to one of the GM's PJs.
-         *
-         *     The plaintext token is returned exactly once — store it now, the
-         *     server only keeps the Argon2 hash.
-         */
-        post: operations["post_player_services_jdr_players_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/players/{player_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Revoke a player key (immediate effect on the next request). */
-        delete: operations["delete_player_services_jdr_players__player_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List the MJ's sessions. */
-        get: operations["list_sessions_services_jdr_sessions_get"];
-        put?: never;
-        /**
-         * Create a new JDR session.
-         * @description Create a session owned by the authenticated MJ.
-         *
-         *     The body holds the human title and the date the session actually
-         *     took place (``recorded_at``). State starts at ``created``; the
-         *     audio is uploaded separately via ``POST /sessions/{id}/audio``.
-         *     The optional ``campaign_context`` is a steering block for the LLM
-         *     (PNJ récurrents, ton, fil narratif) — see PATCH for updating it.
-         */
-        post: operations["create_session_services_jdr_sessions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch one of the MJ's sessions. */
-        get: operations["get_session_services_jdr_sessions__session_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete one of the MJ's sessions. */
-        delete: operations["delete_session_services_jdr_sessions__session_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Partially update a session (title and/or campaign_context).
-         * @description Apply a partial update.
-         *
-         *     Only the fields present in the body are touched. To clear
-         *     ``campaign_context``, send ``{"campaign_context": null}`` explicitly —
-         *     omitting the key leaves the existing value alone. Updating
-         *     ``campaign_context`` does NOT re-run any previously generated
-         *     artefact; the new value affects only future generations.
-         *
-         *     ``transcription_mode`` is immutable after creation (FR-002 of
-         *     feature 002): any PATCH body referencing it is rejected with 422.
-         */
-        patch: operations["patch_session_services_jdr_sessions__session_id__patch"];
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/artifacts/elements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch the structured-elements card of a session. */
-        get: operations["get_elements_services_jdr_sessions__session_id__artifacts_elements_get"];
-        put?: never;
-        /** Trigger the structured-elements card generation for a session. */
-        post: operations["post_elements_services_jdr_sessions__session_id__artifacts_elements_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/artifacts/elements.md": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export the structured-elements card as Markdown (text/markdown). */
-        get: operations["get_elements_md_services_jdr_sessions__session_id__artifacts_elements_md_get"];
+        get: operations["get_job_services_jdr_jobs__job_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -544,33 +837,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/sessions/{session_id}/artifacts/narrative": {
+    "/services/jdr/jobs/{job_id}/events": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Fetch the narrative summary of a session. */
-        get: operations["get_narrative_services_jdr_sessions__session_id__artifacts_narrative_get"];
-        put?: never;
-        /** Trigger the narrative summary generation for a session. */
-        post: operations["post_narrative_services_jdr_sessions__session_id__artifacts_narrative_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/artifacts/narrative.md": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export the narrative summary as Markdown (text/markdown). */
-        get: operations["get_narrative_md_services_jdr_sessions__session_id__artifacts_narrative_md_get"];
+        /**
+         * Stream live status events for a JDR-service async job.
+         * @description Stream the same public job status projection used by GET /jobs/{job_id}.
+         *
+         *     We validate visibility before opening the stream so unknown or foreign jobs
+         *     keep the existing HTTP 404 behavior instead of becoming in-stream failures.
+         */
+        get: operations["get_job_events_services_jdr_jobs__job_id__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -579,32 +860,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/sessions/{session_id}/artifacts/povs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger POV generation — one artefact per mapped PJ.
-         * @description Enqueue a single job that generates one ``pov:<pj_id>`` artefact
-         *     per row in the session's mapping. Pre-conditions match the other
-         *     generators (404 if foreign, 409 if not transcribed) plus FR-011:
-         *     a 409 ``no-mapping`` is raised when the session has no configured
-         *     speaker-PJ mapping yet — the operator must call
-         *     ``PUT /mapping`` first.
-         */
-        post: operations["post_povs_services_jdr_sessions__session_id__artifacts_povs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/artifacts/povs/{pj_id_str}": {
+    "/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -612,16 +868,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Fetch one PJ's POV — JSON, or Markdown via the .md suffix.
-         * @description One route handles both representations because the ``.md`` suffix
-         *     pattern would otherwise collide with the UUID path param at the
-         *     Starlette routing layer (``{pj_id}`` matches ``[^/]+`` which greedily
-         *     swallows the ``.md``).
+         * Liveness alias (legacy Jalon 0).
+         * @description Legacy liveness endpoint kept for backward compatibility.
          *
-         *     - ``GET .../povs/<uuid>``     → JSON (:class:`PovArtifactOut`)
-         *     - ``GET .../povs/<uuid>.md``  → Markdown (``text/markdown``)
+         *     Equivalent to ``/healthz``. New monitoring setups should target
+         *     ``/healthz`` (liveness) and ``/readyz`` (readiness) instead.
          */
-        get: operations["get_pov_services_jdr_sessions__session_id__artifacts_povs__pj_id_str__get"];
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -630,48 +883,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/sessions/{session_id}/artifacts/summary": {
+    "/healthz": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Fetch the global session summary (JSON). */
-        get: operations["get_summary_services_jdr_sessions__session_id__artifacts_summary_get"];
-        put?: never;
         /**
-         * Trigger the global session summary (map-reduce LLM).
-         * @description Enqueue the map-reduce summary job for a non_diarised session.
+         * Liveness probe (Jalon 6).
+         * @description Always 200 as long as the Python process is alive.
          *
-         *     Pre-conditions:
-         *     - session must belong to the MJ (404 otherwise)
-         *     - session must be in non_diarised mode (409 wrong-mode)
-         *     - session must be in state=transcribed (409 session-not-transcribed)
-         *     - session must have at least 1 chunk, unless it has an edited Markdown
-         *       transcription override (409 no-chunks)
-         *
-         *     Side effect documented under FR-011: each new summary job resets
-         *     chunks.summary_text and cascade-deletes existing narrative /
-         *     elements / pov:* artefacts for the session. The atomicity is
-         *     enforced by ``_generate_summary`` (see research.md §2).
+         *     Does NOT check external dependencies. Use ``/readyz`` to decide
+         *     whether to send traffic. Intent: orchestrator should restart the
+         *     process iff this fails.
          */
-        post: operations["post_summary_services_jdr_sessions__session_id__artifacts_summary_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/artifacts/summary.md": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export the global session summary as Markdown (text/markdown). */
-        get: operations["get_summary_md_services_jdr_sessions__session_id__artifacts_summary_md_get"];
+        get: operations["healthz_healthz_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -680,37 +907,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/services/jdr/sessions/{session_id}/audio": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Retrieve the source audio for a session. */
-        get: operations["get_audio_services_jdr_sessions__session_id__audio_get"];
-        put?: never;
-        /** Upload the audio of a session and enqueue its transcription. */
-        post: operations["post_audio_services_jdr_sessions__session_id__audio_post"];
-        /**
-         * Purge a session's audio file and reset the session so a new upload can be sent.
-         * @description Drop the audio file on disk and reset the session to ``created``.
-         *
-         *     Use cases:
-         *
-         *     - The MJ uploaded the wrong file and wants to replace it.
-         *     - The MJ wants to restart from a clean audio/transcription state.
-         *
-         *     Refused (409) when ``state == transcribing``: see
-         *     ``logic.purge_audio_for_session`` for the rationale.
-         */
-        delete: operations["delete_audio_services_jdr_sessions__session_id__audio_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/chunks": {
+    "/readyz": {
         parameters: {
             query?: never;
             header?: never;
@@ -718,199 +915,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Chunked transcription of a non_diarised session (ordered).
-         * @description Return the chunks (text, ordre) of a non_diarised session.
+         * Readiness probe — DB + Redis (Jalon 6).
+         * @description 200 if every backing dependency is reachable, 503 otherwise.
          *
-         *     Reserved for non_diarised sessions — diarised sessions use the
-         *     `GET /transcription` endpoint instead (409 wrong-mode otherwise).
-         *     Returns 404 transcription-not-ready if no chunks have been produced
-         *     yet for the session.
+         *     Per-check status surfaced in the body so an operator can see
+         *     which dependency is down without parsing logs.
          */
-        get: operations["get_session_chunks_services_jdr_sessions__session_id__chunks_get"];
+        get: operations["readyz_readyz_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/mapping": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read the current speaker→PJ mapping for a session.
-         * @description Returns 200 with an empty dict when the session has no mapping
-         *     yet (resource exists but is not configured).
-         *
-         *     409 wrong-mode if the session is non_diarised (use GET /players).
-         */
-        get: operations["get_session_mapping_services_jdr_sessions__session_id__mapping_get"];
-        /**
-         * Replace the speaker→PJ mapping for a session.
-         * @description Replace the mapping in one atomic write.
-         *
-         *     - 404 if the session does not belong to the current MJ.
-         *     - 409 wrong-mode if the session is non_diarised (use /players instead).
-         *     - 409 if the session is not yet in ``state=transcribed``.
-         *     - 422 if any ``pj_id`` is unknown or owned by another MJ.
-         *
-         *     Side-effect: any existing ``pov:*`` artefact for this session is
-         *     deleted (data-model.md §6 invariant). A subsequent
-         *     ``POST /artifacts/povs`` is required to regenerate them.
-         */
-        put: operations["put_session_mapping_services_jdr_sessions__session_id__mapping_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/players": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read the current PJ list of a non_diarised session. */
-        get: operations["get_session_players_services_jdr_sessions__session_id__players_get"];
-        put?: never;
-        /**
-         * Replace the list of PJ present at a non_diarised session.
-         * @description Declare the PJ present at a non_diarised session (FR-012).
-         *
-         *     PUT-like semantics — the provided list replaces the previous one
-         *     integrally. Each ``pj_id`` must belong to the current MJ (422
-         *     ``invalid-player-list`` otherwise). Reserved for non_diarised
-         *     sessions (409 ``wrong-mode`` on diarised).
-         */
-        post: operations["post_session_players_services_jdr_sessions__session_id__players_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/transcription": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fetch the diarised transcription of a session. */
-        get: operations["get_transcription_services_jdr_sessions__session_id__transcription_get"];
-        /** Persist the edited Markdown transcription for a session. */
-        put: operations["put_transcription_edit_services_jdr_sessions__session_id__transcription_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/transcription.md": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export the transcription as Markdown (text/markdown). */
-        get: operations["get_transcription_md_services_jdr_sessions__session_id__transcription_md_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/sessions/{session_id}/transcription/recover": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Recover a session wedged in 'transcribing' after a lost worker.
-         * @description Force the failed transition a crashed transcription worker never reached.
-         *
-         *     When a worker dies mid-run the session can stay ``transcribing`` forever
-         *     while its RQ job is gone from Redis. This GM-only action verifies the job
-         *     is truly no longer active and moves the session to ``transcription_failed``
-         *     so the audio can be replaced (or the session deleted). Refused with 409
-         *     when the session is not in ``transcribing`` (``transcription-not-stuck``)
-         *     or the job is still running (``transcription-still-active``).
-         */
-        post: operations["recover_stuck_transcription_services_jdr_sessions__session_id__transcription_recover_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/settings/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Return the current admin's JDR AI model provider settings. */
-        get: operations["get_model_settings_services_jdr_settings_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update the current admin's JDR AI model provider settings. */
-        patch: operations["patch_model_settings_services_jdr_settings_models_patch"];
-        trace?: never;
-    };
-    "/services/jdr/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Users */
-        get: operations["get_users_services_jdr_users_get"];
-        put?: never;
-        /** Post User */
-        post: operations["post_user_services_jdr_users_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/services/jdr/users/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete User Route */
-        delete: operations["delete_user_route_services_jdr_users__user_id__delete"];
-        options?: never;
-        head?: never;
-        /** Patch User */
-        patch: operations["patch_user_services_jdr_users__user_id__patch"];
         trace?: never;
     };
 }
@@ -923,39 +940,37 @@ export interface components {
          */
         AudioUploadOut: {
             /**
-             * Duration Seconds
-             * @description Audio duration in seconds. ``null`` when ``ffprobe`` is unavailable on the host — non-fatal.
+             * Session Id
+             * Format: uuid
              */
-            duration_seconds?: number | null;
-            /**
-             * Job Id
-             * @description RQ job identifier for the queued transcription.
-             */
-            job_id: string;
+            session_id: string;
             /**
              * Path
              * @description Path on disk relative to KAEYRIS_DATA_DIR.
              */
             path: string;
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
             /** Sha256 */
             sha256: string;
             /** Size Bytes */
             size_bytes: number;
             /**
+             * Duration Seconds
+             * @description Audio duration in seconds. ``null`` when ``ffprobe`` is unavailable on the host — non-fatal.
+             */
+            duration_seconds?: number | null;
+            /**
              * Uploaded At
              * Format: date-time
              */
             uploaded_at: string;
+            /**
+             * Job Id
+             * @description RQ job identifier for the queued transcription.
+             */
+            job_id: string;
         };
         /** AuthMeCampaignOut */
         AuthMeCampaignOut: {
-            /** Character Id */
-            character_id?: string | null;
             /**
              * Id
              * Format: uuid
@@ -965,11 +980,13 @@ export interface components {
             name: string;
             /** Role */
             role: string;
+            /** Character Id */
+            character_id?: string | null;
         };
         /** AuthMeOut */
         AuthMeOut: {
-            active_campaign?: components["schemas"]["AuthMeCampaignOut"] | null;
             user: components["schemas"]["AuthMeUserOut"];
+            active_campaign?: components["schemas"]["AuthMeCampaignOut"] | null;
         };
         /** AuthMeUserOut */
         AuthMeUserOut: {
@@ -978,9 +995,9 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            system_role: components["schemas"]["SystemRole"];
             /** Username */
             username: string;
+            system_role: components["schemas"]["SystemRole"];
         };
         /** Body_post_audio_services_jdr_sessions__session_id__audio_post */
         Body_post_audio_services_jdr_sessions__session_id__audio_post: {
@@ -992,29 +1009,22 @@ export interface components {
         };
         /** CampaignCreate */
         CampaignCreate: {
-            /** Description */
-            description?: string | null;
             /** Name */
             name: string;
+            /** Description */
+            description?: string | null;
         };
         /** CampaignOut */
         CampaignOut: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Description */
-            description?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Last Session At */
-            last_session_at?: string | null;
             /** Name */
             name: string;
+            /** Description */
+            description?: string | null;
             /**
              * Role
              * @enum {string}
@@ -1022,26 +1032,33 @@ export interface components {
             role: "gm" | "pj";
             /** Session Count */
             session_count: number;
+            /** Last Session At */
+            last_session_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** CampaignPatch */
         CampaignPatch: {
-            /** Description */
-            description?: string | null;
             /** Name */
             name?: string | null;
+            /** Description */
+            description?: string | null;
         };
         /**
          * ChunkListOut
          * @description Response of `GET /services/jdr/sessions/{session_id}/chunks`.
          */
         ChunkListOut: {
-            /** Items */
-            items: components["schemas"]["ChunkOut"][];
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
+            /** Items */
+            items: components["schemas"]["ChunkOut"][];
         };
         /**
          * ChunkOut
@@ -1070,16 +1087,16 @@ export interface components {
          */
         Element: {
             /**
+             * Name
+             * @description Short label (proper name or descriptor).
+             */
+            name: string;
+            /**
              * Description
              * @description One-sentence description (≤ ~25 words).
              * @default
              */
             description: string;
-            /**
-             * Name
-             * @description Short label (proper name or descriptor).
-             */
-            name: string;
         };
         /**
          * ElementsArtifactOut
@@ -1089,26 +1106,26 @@ export interface components {
          *     acceptance scenario US 2.3 in ``spec.md``.
          */
         ElementsArtifactOut: {
-            /** Clues */
-            clues?: components["schemas"]["Element"][];
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /** Items */
-            items?: components["schemas"]["Element"][];
-            /** Locations */
-            locations?: components["schemas"]["Element"][];
-            /** Model Used */
-            model_used: string;
-            /** Npcs */
-            npcs?: components["schemas"]["Element"][];
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
+            /** Npcs */
+            npcs?: components["schemas"]["Element"][];
+            /** Locations */
+            locations?: components["schemas"]["Element"][];
+            /** Items */
+            items?: components["schemas"]["Element"][];
+            /** Clues */
+            clues?: components["schemas"]["Element"][];
+            /** Model Used */
+            model_used: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1131,16 +1148,29 @@ export interface components {
          *     ``status`` stays the authoritative lifecycle field.
          */
         JobOut: {
-            /** Ended At */
-            ended_at?: string | null;
-            /** Failure Reason */
-            failure_reason?: string | null;
             /**
              * Id
              * @description RQ job identifier (echoed from the queue).
              */
             id: string;
             kind: components["schemas"]["JobKind"];
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            status: components["schemas"]["JobStatus"];
+            /** Failure Reason */
+            failure_reason?: string | null;
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
             /**
              * Phase
              * @description Best-effort transcription phase. ``null`` when unknown, not started, expired, or for non-transcription jobs. ``queued`` is intentionally absent — use ``status`` for that.
@@ -1151,19 +1181,6 @@ export interface components {
              * @description Best-effort transcription progress (0..100). ``null`` when unknown/not started/expired. ``100`` is reserved for terminal success paired with ``phase="done"``.
              */
             progress_percent?: number | null;
-            /**
-             * Queued At
-             * Format: date-time
-             */
-            queued_at: string;
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /** Started At */
-            started_at?: string | null;
-            status: components["schemas"]["JobStatus"];
         };
         /**
          * JobQueuedOut
@@ -1181,11 +1198,6 @@ export interface components {
             id: string;
             kind: components["schemas"]["JobKind"];
             /**
-             * Queued At
-             * Format: date-time
-             */
-            queued_at: string;
-            /**
              * Session Id
              * Format: uuid
              */
@@ -1195,6 +1207,11 @@ export interface components {
              * @default queued
              */
             status: components["schemas"]["JobStatus"];
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
         };
         /**
          * JobStatus
@@ -1210,22 +1227,57 @@ export interface components {
          */
         LiveSessionInit: {
             /**
-             * Campaign Context
-             * @description Optional campaign-bible block (same semantics as batch mode).
-             */
-            campaign_context?: string | null;
-            /**
              * Title
              * @description Human-readable title for the live session.
              */
             title: string;
+            /**
+             * Campaign Context
+             * @description Optional campaign-bible block (same semantics as batch mode).
+             */
+            campaign_context?: string | null;
         };
+        /**
+         * LocalModelCategory
+         * @description Model validation category exposed by BD-20.
+         * @enum {string}
+         */
+        LocalModelCategory: "transcription" | "summary";
+        /** LocalModelValidationOut */
+        LocalModelValidationOut: {
+            /** Validation Id */
+            validation_id: string;
+            category: components["schemas"]["LocalModelCategory"];
+            /** Model Path */
+            model_path: string;
+            status: components["schemas"]["LocalModelValidationStatus"];
+            /** Runtime */
+            runtime: string;
+            /** Model Format */
+            model_format: string;
+            /** Message */
+            message: string;
+            /** Expires At */
+            expires_at: string;
+        };
+        /** LocalModelValidationRequest */
+        LocalModelValidationRequest: {
+            category: components["schemas"]["LocalModelCategory"];
+            /** Model Path */
+            model_path: string;
+        };
+        /**
+         * LocalModelValidationStatus
+         * @description Reusable proof status for local model validations.
+         * @enum {string}
+         */
+        LocalModelValidationStatus: "succeeded";
         /** LoginRequest */
         LoginRequest: {
-            /** Password */
-            password: string;
             /** Username */
             username: string;
+            /** Password */
+            password: string;
         };
         /**
          * MappingOut
@@ -1235,15 +1287,15 @@ export interface components {
          *     or ``None`` when the session has no mapping yet.
          */
         MappingOut: {
-            /** Mapping */
-            mapping: {
-                [key: string]: string;
-            };
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
+            /** Mapping */
+            mapping: {
+                [key: string]: string;
+            };
             /** Updated At */
             updated_at: string | null;
         };
@@ -1281,72 +1333,76 @@ export interface components {
         /** ModelSettingsOut */
         ModelSettingsOut: {
             /**
-             * Deepinfra Api Key Set
-             * @description True iff a DeepInfra API key is stored for this user. The key itself is never returned.
-             * @default false
+             * @description Provider for transcription: cloud, local, or ollama.
+             * @default cloud
              */
-            deepinfra_api_key_set: boolean;
-            /**
-             * Summary Cloud Model
-             * @description DeepInfra cloud model id used when summary_provider is cloud.
-             */
-            summary_cloud_model?: string | null;
-            /**
-             * Summary Local Path
-             * @description Custom local model path used when summary_provider is local.
-             */
-            summary_local_path?: string | null;
+            transcription_provider: components["schemas"]["ModelProvider"];
             /**
              * @description Provider for LLM summary: cloud, local, or ollama.
              * @default cloud
              */
             summary_provider: components["schemas"]["ModelProvider"];
             /**
-             * Transcription Cloud Model
-             * @description DeepInfra cloud model id used when transcription_provider is cloud.
-             */
-            transcription_cloud_model?: string | null;
-            /**
              * Transcription Local Path
              * @description Custom local model path used when transcription_provider is local.
              */
             transcription_local_path?: string | null;
             /**
-             * @description Provider for transcription: cloud, local, or ollama.
-             * @default cloud
+             * Summary Local Path
+             * @description Custom local model path used when summary_provider is local.
              */
-            transcription_provider: components["schemas"]["ModelProvider"];
+            summary_local_path?: string | null;
+            /**
+             * Transcription Cloud Model
+             * @description DeepInfra cloud model id used when transcription_provider is cloud.
+             */
+            transcription_cloud_model?: string | null;
+            /**
+             * Summary Cloud Model
+             * @description DeepInfra cloud model id used when summary_provider is cloud.
+             */
+            summary_cloud_model?: string | null;
+            /**
+             * Ollama Model
+             * @description Ollama model name used when summary_provider is ollama.
+             */
+            ollama_model?: string | null;
+            /**
+             * Deepinfra Api Key Set
+             * @description True iff a DeepInfra API key is stored for this user. The key itself is never returned.
+             * @default false
+             */
+            deepinfra_api_key_set: boolean;
         };
         /** ModelSettingsPatch */
         ModelSettingsPatch: {
+            transcription_provider?: components["schemas"]["ModelProvider"] | null;
+            summary_provider?: components["schemas"]["ModelProvider"] | null;
+            /** Transcription Local Path */
+            transcription_local_path?: string | null;
+            /** Summary Local Path */
+            summary_local_path?: string | null;
+            /** Transcription Local Validation Id */
+            transcription_local_validation_id?: string | null;
+            /** Summary Local Validation Id */
+            summary_local_validation_id?: string | null;
+            /** Transcription Cloud Model */
+            transcription_cloud_model?: string | null;
+            /** Summary Cloud Model */
+            summary_cloud_model?: string | null;
+            /** Ollama Model */
+            ollama_model?: string | null;
             /**
              * Deepinfra Api Key
              * @description Write-only. When provided non-empty, stores/replaces the user's DeepInfra API key. Never serialized back in any response.
              */
             deepinfra_api_key?: string | null;
-            /** Summary Cloud Model */
-            summary_cloud_model?: string | null;
-            /** Summary Local Path */
-            summary_local_path?: string | null;
-            summary_provider?: components["schemas"]["ModelProvider"] | null;
-            /** Transcription Cloud Model */
-            transcription_cloud_model?: string | null;
-            /** Transcription Local Path */
-            transcription_local_path?: string | null;
-            transcription_provider?: components["schemas"]["ModelProvider"] | null;
         };
         /**
          * NarrativeArtifactOut
          * @description Public projection of an ``Artifact(kind='narrative')`` row.
          */
         NarrativeArtifactOut: {
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /** Model Used */
-            model_used: string;
             /**
              * Session Id
              * Format: uuid
@@ -1357,11 +1413,20 @@ export interface components {
              * @description French narrative summary produced by the LLM.
              */
             text: string;
+            /** Model Used */
+            model_used: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
         };
         /** Page[CampaignOut] */
         Page_CampaignOut_: {
             /** Items */
             items: components["schemas"]["CampaignOut"][];
+            /** Total */
+            total: number;
             /**
              * Page
              * @default 1
@@ -1372,13 +1437,13 @@ export interface components {
              * @default 50
              */
             size: number;
-            /** Total */
-            total: number;
         };
         /** Page[PjOut] */
         Page_PjOut_: {
             /** Items */
             items: components["schemas"]["PjOut"][];
+            /** Total */
+            total: number;
             /**
              * Page
              * @default 1
@@ -1389,13 +1454,13 @@ export interface components {
              * @default 50
              */
             size: number;
-            /** Total */
-            total: number;
         };
         /** Page[SessionOut] */
         Page_SessionOut_: {
             /** Items */
             items: components["schemas"]["SessionOut"][];
+            /** Total */
+            total: number;
             /**
              * Page
              * @default 1
@@ -1406,18 +1471,16 @@ export interface components {
              * @default 50
              */
             size: number;
-            /** Total */
-            total: number;
         };
         /**
          * PjCreate
          * @description Payload accepted by ``POST /services/jdr/pjs``.
          */
         PjCreate: {
-            /** Campaign Id */
-            campaign_id?: string | null;
             /** Name */
             name: string;
+            /** Campaign Id */
+            campaign_id?: string | null;
             /** User Id */
             user_id?: string | null;
         };
@@ -1440,24 +1503,24 @@ export interface components {
          */
         PjOut: {
             /**
-             * Campaign Id
-             * Format: uuid
-             */
-            campaign_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
              * Id
              * Format: uuid
              */
             id: string;
             /** Name */
             name: string;
+            /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
             /** User Id */
             user_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * PjUpdate
@@ -1491,11 +1554,6 @@ export interface components {
          */
         PlayerOut: {
             /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
              * Id
              * Format: uuid
              */
@@ -1512,6 +1570,11 @@ export interface components {
              * @description Plaintext Bearer token. Shown only on this 201 response. Store it now — the server only keeps an Argon2 hash.
              */
             token: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * PlayerSessionItem
@@ -1519,17 +1582,17 @@ export interface components {
          */
         PlayerSessionItem: {
             /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at: string;
-            /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
             /** Title */
             title: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
         };
         /**
          * PlayerSessionListOut
@@ -1548,38 +1611,35 @@ export interface components {
          */
         PovArtifactOut: {
             /**
-             * Generated At
-             * Format: date-time
+             * Session Id
+             * Format: uuid
              */
-            generated_at: string;
-            /** Model Used */
-            model_used: string;
+            session_id: string;
             /**
              * Pj Id
              * Format: uuid
              */
             pj_id: string;
             /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
-            /**
              * Text
              * @description French POV summary scoped to this PJ.
              */
             text: string;
+            /** Model Used */
+            model_used: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
         };
         /**
          * SessionCreate
          * @description Payload accepted by ``POST /services/jdr/sessions``.
          */
         SessionCreate: {
-            /**
-             * Campaign Context
-             * @description Optional campaign-bible block prepended to every narrative / elements LLM prompt for this session. Use it to anchor the model on recurring PNJ, the campaign tone, or the current story arc. Can be updated later via PATCH.
-             */
-            campaign_context?: string | null;
+            /** Title */
+            title: string;
             /**
              * Campaign Id
              * Format: uuid
@@ -1591,10 +1651,13 @@ export interface components {
              * @description When the session actually took place (not the upload time). ISO-8601 with timezone.
              */
             recorded_at: string;
-            /** Title */
-            title: string;
             /** @description Optional. 'diarised' (default, Jalon 5 behaviour) or 'non_diarised' (chunked transcription + map-reduce LLM summary). Immutable after creation. Default applied server-side if omitted. */
             transcription_mode?: components["schemas"]["TranscriptionMode"] | null;
+            /**
+             * Campaign Context
+             * @description Optional campaign-bible block prepended to every narrative / elements LLM prompt for this session. Use it to anchor the model on recurring PNJ, the campaign tone, or the current story arc. Can be updated later via PATCH.
+             */
+            campaign_context?: string | null;
         };
         /**
          * SessionMode
@@ -1606,30 +1669,30 @@ export interface components {
          * @description Public projection of ``jdr_sessions`` rows.
          */
         SessionOut: {
-            /** Campaign Context */
-            campaign_context?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Current Job Id */
-            current_job_id?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            mode: components["schemas"]["SessionMode"];
+            /** Title */
+            title: string;
             /**
              * Recorded At
              * Format: date-time
              */
             recorded_at: string;
+            mode: components["schemas"]["SessionMode"];
             state: components["schemas"]["SessionState"];
-            /** Title */
-            title: string;
             transcription_mode: components["schemas"]["TranscriptionMode"];
+            /** Campaign Context */
+            campaign_context?: string | null;
+            /** Current Job Id */
+            current_job_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /**
              * Updated At
              * Format: date-time
@@ -1651,13 +1714,13 @@ export interface components {
          * @description Response of `POST` and `GET /sessions/{session_id}/players`.
          */
         SessionPlayersOut: {
-            /** Pj Ids */
-            pj_ids: string[];
             /**
              * Session Id
              * Format: uuid
              */
             session_id: string;
+            /** Pj Ids */
+            pj_ids: string[];
             /** Updated At */
             updated_at: string | null;
         };
@@ -1677,17 +1740,17 @@ export interface components {
          *     "unset" from "explicit null" via Pydantic's ``model_fields_set``).
          */
         SessionUpdate: {
-            /** Campaign Context */
-            campaign_context?: string | null;
             /** Title */
             title?: string | null;
+            /** Campaign Context */
+            campaign_context?: string | null;
         };
         /** SetupRequest */
         SetupRequest: {
-            /** Password */
-            password: string;
             /** Username */
             username: string;
+            /** Password */
+            password: string;
         };
         /** SetupStatusOut */
         SetupStatusOut: {
@@ -1700,13 +1763,6 @@ export interface components {
          */
         SummaryArtifactOut: {
             /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /** Model Used */
-            model_used: string;
-            /**
              * Session Id
              * Format: uuid
              */
@@ -1716,6 +1772,13 @@ export interface components {
              * @description Global session summary in French.
              */
             text: string;
+            /** Model Used */
+            model_used: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
         };
         /**
          * SystemRole
@@ -1735,6 +1798,11 @@ export interface components {
          * @description Projection returned after persisting an edited transcription.
          */
         TranscriptionEditOut: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
             /** Content Md */
             content_md: string;
             /**
@@ -1742,11 +1810,6 @@ export interface components {
              * @default true
              */
             is_edited: boolean;
-            /**
-             * Session Id
-             * Format: uuid
-             */
-            session_id: string;
             /**
              * Updated At
              * Format: date-time
@@ -1770,10 +1833,12 @@ export interface components {
          */
         TranscriptionOut: {
             /**
-             * Completed At
-             * Format: date-time
+             * Session Id
+             * Format: uuid
              */
-            completed_at: string;
+            session_id: string;
+            /** Segments */
+            segments: components["schemas"]["TranscriptionSegmentOut"][];
             /**
              * Language
              * @description BCP-47 code, e.g. 'fr'.
@@ -1786,21 +1851,17 @@ export interface components {
              * @description 'cloud' | 'local' | 'mock'.
              */
             provider: string;
-            /** Segments */
-            segments: components["schemas"]["TranscriptionSegmentOut"][];
             /**
-             * Session Id
-             * Format: uuid
+             * Completed At
+             * Format: date-time
              */
-            session_id: string;
+            completed_at: string;
         };
         /**
          * TranscriptionSegmentOut
          * @description One diarised utterance in a transcription.
          */
         TranscriptionSegmentOut: {
-            /** End Seconds */
-            end_seconds: number;
             /**
              * Speaker Label
              * @description Raw label produced by the backend ('speaker_1', 'unknown', …). The mapping to PJs is a per-session business decision exposed via /mapping (US3).
@@ -1808,17 +1869,19 @@ export interface components {
             speaker_label: string;
             /** Start Seconds */
             start_seconds: number;
+            /** End Seconds */
+            end_seconds: number;
             /** Text */
             text: string;
         };
         /** UserCreate */
         UserCreate: {
-            /** Password */
-            password: string;
-            /** @default user */
-            system_role: components["schemas"]["SystemRole"];
             /** Username */
             username: string;
+            /** @default user */
+            system_role: components["schemas"]["SystemRole"];
+            /** Password */
+            password: string;
         };
         /** UserListOut */
         UserListOut: {
@@ -1828,26 +1891,26 @@ export interface components {
         /** UserOut */
         UserOut: {
             /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string;
+            system_role: components["schemas"]["SystemRole"];
+            status: components["schemas"]["UserStatus"];
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Last Login At */
-            last_login_at?: string | null;
-            status: components["schemas"]["UserStatus"];
-            system_role: components["schemas"]["SystemRole"];
-            /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            /** Username */
-            username: string;
+            /** Last Login At */
+            last_login_at?: string | null;
         };
         /**
          * UserStatus
@@ -1856,23 +1919,23 @@ export interface components {
         UserStatus: "active" | "inactive" | "deleted";
         /** UserUpdate */
         UserUpdate: {
+            system_role?: components["schemas"]["SystemRole"] | null;
             /** Password */
             password?: string | null;
             status?: components["schemas"]["UserStatus"] | null;
-            system_role?: components["schemas"]["SystemRole"] | null;
         };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -1883,7 +1946,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    get_setup_status_services_jdr_auth_setup_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1898,51 +1961,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": components["schemas"]["SetupStatusOut"];
                 };
             };
         };
     };
-    healthz_healthz_get: {
+    post_setup_services_jdr_auth_setup_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
             };
         };
-    };
-    readyz_readyz_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2018,7 +2070,27 @@ export interface operations {
             };
         };
     };
-    post_setup_services_jdr_auth_setup_post: {
+    get_users_services_jdr_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListOut"];
+                };
+            };
+        };
+    };
+    post_user_services_jdr_users_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2027,7 +2099,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetupRequest"];
+                "application/json": components["schemas"]["UserCreate"];
             };
         };
         responses: {
@@ -2051,7 +2123,7 @@ export interface operations {
             };
         };
     };
-    get_setup_status_services_jdr_auth_setup_status_get: {
+    get_model_settings_services_jdr_settings_models_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2066,7 +2138,265 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SetupStatusOut"];
+                    "application/json": components["schemas"]["ModelSettingsOut"];
+                };
+            };
+        };
+    };
+    patch_model_settings_services_jdr_settings_models_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_local_model_validation_services_jdr_settings_models_local_validation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalModelValidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalModelValidationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_route_services_jdr_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_user_services_jdr_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audio_services_jdr_sessions__session_id__audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_audio_services_jdr_sessions__session_id__audio_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_post_audio_services_jdr_sessions__session_id__audio_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioUploadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_audio_services_jdr_sessions__session_id__audio_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_live_session_services_jdr_live_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiveSessionInit"];
+            };
+        };
+        responses: {
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Successful Response */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -2207,426 +2537,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CampaignOut"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_job_services_jdr_jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_job_events_services_jdr_jobs__job_id__events_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Server-Sent Events stream. Each frame uses `event: progress` and a JSON `data` payload with status, phase, progress_percent, and failure_reason when a failure reason is available. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example event: progress
-                     *     data: {"status":"running","phase":null,"progress_percent":null}
-                     */
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_live_session_services_jdr_live_sessions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LiveSessionInit"];
-            };
-        };
-        responses: {
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Successful Response */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_me_services_jdr_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeOut"];
-                };
-            };
-        };
-    };
-    get_my_sessions_services_jdr_me_sessions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlayerSessionListOut"];
-                };
-            };
-        };
-    };
-    get_my_narrative_services_jdr_me_sessions__session_id__narrative_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NarrativeArtifactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_narrative_md_services_jdr_me_sessions__session_id__narrative_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_pov_services_jdr_me_sessions__session_id__pov_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PovArtifactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_pov_md_services_jdr_me_sessions__session_id__pov_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_pjs_services_jdr_pjs_get: {
-        parameters: {
-            query?: {
-                campaign_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Page_PjOut_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_pj_services_jdr_pjs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PjCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PjOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_pj_services_jdr_pjs__pj_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                pj_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PjUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PjOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_player_services_jdr_players_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlayerCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlayerOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_player_services_jdr_players__player_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                player_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2812,437 +2722,6 @@ export interface operations {
             };
         };
     };
-    get_elements_services_jdr_sessions__session_id__artifacts_elements_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ElementsArtifactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_elements_services_jdr_sessions__session_id__artifacts_elements_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobQueuedOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_elements_md_services_jdr_sessions__session_id__artifacts_elements_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_narrative_services_jdr_sessions__session_id__artifacts_narrative_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NarrativeArtifactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_narrative_services_jdr_sessions__session_id__artifacts_narrative_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobQueuedOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_narrative_md_services_jdr_sessions__session_id__artifacts_narrative_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_povs_services_jdr_sessions__session_id__artifacts_povs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobQueuedOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_pov_services_jdr_sessions__session_id__artifacts_povs__pj_id_str__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-                pj_id_str: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_summary_services_jdr_sessions__session_id__artifacts_summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SummaryArtifactOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_summary_services_jdr_sessions__session_id__artifacts_summary_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobQueuedOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_summary_md_services_jdr_sessions__session_id__artifacts_summary_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_audio_services_jdr_sessions__session_id__audio_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_audio_services_jdr_sessions__session_id__audio_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_post_audio_services_jdr_sessions__session_id__audio_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AudioUploadOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_audio_services_jdr_sessions__session_id__audio_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_session_chunks_services_jdr_sessions__session_id__chunks_get: {
         parameters: {
             query?: never;
@@ -3261,6 +2740,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChunkListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pjs_services_jdr_pjs_get: {
+        parameters: {
+            query?: {
+                campaign_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_PjOut_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pj_services_jdr_pjs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PjCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PjOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pj_services_jdr_pjs__pj_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pj_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PjUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PjOut"];
                 };
             };
             /** @description Validation Error */
@@ -3472,35 +3050,6 @@ export interface operations {
             };
         };
     };
-    get_transcription_md_services_jdr_sessions__session_id__transcription_md_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     recover_stuck_transcription_services_jdr_sessions__session_id__transcription_recover_post: {
         parameters: {
             query?: never;
@@ -3546,11 +3095,42 @@ export interface operations {
             };
         };
     };
-    get_model_settings_services_jdr_settings_models_get: {
+    get_transcription_md_services_jdr_sessions__session_id__transcription_md_get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_narrative_services_jdr_sessions__session_id__artifacts_narrative_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3561,31 +3141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModelSettingsOut"];
-                };
-            };
-        };
-    };
-    patch_model_settings_services_jdr_settings_models_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelSettingsPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelSettingsOut"];
+                    "application/json": components["schemas"]["NarrativeArtifactOut"];
                 };
             };
             /** @description Validation Error */
@@ -3599,11 +3155,73 @@ export interface operations {
             };
         };
     };
-    get_users_services_jdr_users_get: {
+    post_narrative_services_jdr_sessions__session_id__artifacts_narrative_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobQueuedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_narrative_md_services_jdr_sessions__session_id__artifacts_narrative_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_elements_services_jdr_sessions__session_id__artifacts_elements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3614,12 +3232,235 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserListOut"];
+                    "application/json": components["schemas"]["ElementsArtifactOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    post_user_services_jdr_users_post: {
+    post_elements_services_jdr_sessions__session_id__artifacts_elements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobQueuedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_elements_md_services_jdr_sessions__session_id__artifacts_elements_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_summary_services_jdr_sessions__session_id__artifacts_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryArtifactOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_summary_services_jdr_sessions__session_id__artifacts_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobQueuedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_summary_md_services_jdr_sessions__session_id__artifacts_summary_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_povs_services_jdr_sessions__session_id__artifacts_povs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobQueuedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pov_services_jdr_sessions__session_id__artifacts_povs__pj_id_str__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                pj_id_str: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_player_services_jdr_players_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3628,7 +3469,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserCreate"];
+                "application/json": components["schemas"]["PlayerCreate"];
             };
         };
         responses: {
@@ -3638,7 +3479,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserOut"];
+                    "application/json": components["schemas"]["PlayerOut"];
                 };
             };
             /** @description Validation Error */
@@ -3652,12 +3493,12 @@ export interface operations {
             };
         };
     };
-    delete_user_route_services_jdr_users__user_id__delete: {
+    delete_player_services_jdr_players__player_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                user_id: string;
+                player_id: string;
             };
             cookie?: never;
         };
@@ -3681,20 +3522,14 @@ export interface operations {
             };
         };
     };
-    patch_user_services_jdr_users__user_id__patch: {
+    get_me_services_jdr_me_get: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                user_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserUpdate"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3702,7 +3537,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserOut"];
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+        };
+    };
+    get_my_sessions_services_jdr_me_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerSessionListOut"];
+                };
+            };
+        };
+    };
+    get_my_narrative_services_jdr_me_sessions__session_id__narrative_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NarrativeArtifactOut"];
                 };
             };
             /** @description Validation Error */
@@ -3712,6 +3589,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_narrative_md_services_jdr_me_sessions__session_id__narrative_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_pov_services_jdr_me_sessions__session_id__pov_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PovArtifactOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_pov_md_services_jdr_me_sessions__session_id__pov_md_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_services_jdr_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_events_services_jdr_jobs__job_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-Sent Events stream. Each frame uses `event: progress` and a JSON `data` payload with status, phase, progress_percent, and failure_reason when a failure reason is available. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example event: progress
+                     *     data: {"status":"running","phase":null,"progress_percent":null}
+                     */
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    healthz_healthz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    readyz_readyz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
