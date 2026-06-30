@@ -28,10 +28,10 @@ const CAMPAIGN_ID = "11111111-1111-1111-1111-111111111111";
 
 const elementsOut = {
   session_id: SESSION_ID,
-  npcs: [{ name: "Grom", description: "Forgeron taciturne." }],
-  locations: [{ name: "La crypte", description: "Humide et oubliée." }],
-  items: [],
-  clues: [],
+  elements: [
+    { category: "PNJ", name: "Grom", description: "Forgeron taciturne." },
+    { category: "Lieux", name: "La crypte", description: "Humide et oubliée." },
+  ],
   model_used: "claude-x",
   generated_at: "2026-06-01T10:00:00Z",
 };
@@ -147,13 +147,14 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("existing elements render the four groups, empty ones as 'Aucun', with a regenerate CTA", async () => {
+  test("existing elements render grouped by free-form category, with a regenerate CTA", async () => {
     stub({ elements: true });
     renderPanel();
     expect(await screen.findByText("Grom")).toBeInTheDocument();
     expect(screen.getByText("La crypte")).toBeInTheDocument();
-    // Objets + Indices are empty → rendered as "Aucun" (two occurrences).
-    expect(screen.getAllByText("Aucun")).toHaveLength(2);
+    // BD-26 — only the categories present are rendered as group headings.
+    expect(screen.getByRole("heading", { name: "PNJ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lieux" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Générer les Éléments" }),
     ).not.toBeInTheDocument();
@@ -200,7 +201,7 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
         if (url.includes("/artifacts/elements")) {
           const npcName = postCount > 0 ? "Vael" : "Grom";
           return new Response(
-            JSON.stringify({ ...elementsOut, npcs: [{ name: npcName, description: "PNJ." }] }),
+            JSON.stringify({ ...elementsOut, elements: [{ category: "PNJ", name: npcName, description: "PNJ." }] }),
             { status: 200, headers: { "content-type": "application/json" } },
           );
         }
@@ -275,5 +276,101 @@ describe("<ElementsArtifactPanel> (Story 4.4)", () => {
 
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
     await waitFor(() => expect(postCount).toBe(2));
+  });
+});
+
+describe("<ElementsArtifactPanel> edition (Story 8.3)", () => {
+  const present = {
+    session_id: SESSION_ID,
+    elements: [{ category: "PNJ", name: "Grom", description: "Forgeron." }],
+    model_used: "claude-x",
+    generated_at: "2026-06-01T10:00:00Z",
+  };
+
+  function stubEdit(opts: { putStatus?: number; putType?: string } = {}) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes("/artifacts/elements") && method.toUpperCase() === "PUT") {
+          if (opts.putStatus && opts.putStatus >= 400) {
+            return new Response(
+              JSON.stringify({
+                type: `https://kaeyris.local/errors/${opts.putType ?? "x"}`,
+                title: "err",
+                status: opts.putStatus,
+                detail: "x",
+              }),
+              { status: opts.putStatus, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          return new Response(
+            JSON.stringify({ ...present, elements: [{ category: "PNJ", name: "Gromsky", description: "Forgeron." }], is_edited: true }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/elements")) {
+          return new Response(JSON.stringify(present), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+  }
+
+  test("Modifier → Enregistrer PUTs the card and returns to read", async () => {
+    stubEdit();
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Modifier/ }));
+    await user.click(screen.getByRole("button", { name: /Enregistrer/ }));
+    expect(await screen.findByText("Gromsky")).toBeInTheDocument();
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(
+      fetchMock.mock.calls.some((args) => {
+        const req = args[0] as Request;
+        return req.url.includes("/artifacts/elements") && req.method === "PUT";
+      }),
+    ).toBe(true);
+  });
+
+  test("a 409 artifact-busy on save shows a message and keeps the editor open", async () => {
+    stubEdit({ putStatus: 409, putType: "artifact-busy" });
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Modifier/ }));
+    await user.click(screen.getByRole("button", { name: /Enregistrer/ }));
+    expect(await screen.findByText(/génération est en cours/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom de l'élément 1")).toBeInTheDocument();
+  });
+
+  test("clearing all rows → confirm → PUT with confirm_empty=true", async () => {
+    stubEdit();
+    renderPanel();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Modifier/ }));
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer l'élément 1" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Enregistrer/ }));
+    // Empty-clear confirm dialog appears; confirm it.
+    await user.click(await screen.findByRole("button", { name: "Vider" }));
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((args) => {
+          const req = args[0] as Request;
+          return (
+            req.method === "PUT" && req.url.includes("confirm_empty=true")
+          );
+        }),
+      ).toBe(true),
+    );
   });
 });

@@ -28,6 +28,11 @@ const {
   povArtifactQueryKey,
   povArtifactSessionKey,
   isArtifactAbsentError,
+  usePatchSummary,
+  usePutElements,
+  isArtifactEditedError,
+  isArtifactBusyError,
+  isElementsEmptyClearUnconfirmedError,
 } = await import("@/lib/jdr/sessions/artifacts");
 const { jobQueryKey } = await import("@/lib/jdr/jobs/queries");
 const { ApiError } = await import("@/lib/core/api/errors");
@@ -51,10 +56,10 @@ const narrativeOut = {
 
 const elementsOut = {
   session_id: SESSION_ID,
-  npcs: [{ name: "Grom", description: "Forgeron taciturne." }],
-  locations: [{ name: "La crypte", description: "Humide et oubliée." }],
-  items: [],
-  clues: [],
+  elements: [
+    { category: "PNJ", name: "Grom", description: "Forgeron taciturne." },
+    { category: "Lieux", name: "La crypte", description: "Humide et oubliée." },
+  ],
   model_used: "claude-x",
   generated_at: "2026-06-01T10:00:00Z",
 };
@@ -246,7 +251,7 @@ describe("useGenerateSummary", () => {
     const { result } = renderHook(() => useGenerateSummary(SESSION_ID), {
       wrapper: wrapper(queryClient),
     });
-    const job = await result.current.mutateAsync();
+    const job = await result.current.mutateAsync(undefined);
     expect(job.id).toBe("job-summary-1");
 
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
@@ -292,14 +297,14 @@ describe("useNarrativeArtifact (Story 4.4)", () => {
 });
 
 describe("useElementsArtifact (Story 4.4)", () => {
-  test("GET elements → unwraps the four lists under the scoped key", async () => {
+  test("GET elements → unwraps the flat category-tagged list under the scoped key", async () => {
     const queryClient = makeClient();
     const { result } = renderHook(() => useElementsArtifact(SESSION_ID), {
       wrapper: wrapper(queryClient),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.npcs?.[0]?.name).toBe("Grom");
-    expect(result.current.data?.items).toEqual([]);
+    expect(result.current.data?.elements?.[0]?.name).toBe("Grom");
+    expect(result.current.data?.elements?.[0]?.category).toBe("PNJ");
     expect(elementsArtifactQueryKey(SESSION_ID)).toEqual([
       "jdr",
       "artifact",
@@ -394,7 +399,7 @@ describe("derived-artifact generators seed the job cache (Story 4.4)", () => {
     async (kind, hook, jobId) => {
       const queryClient = makeClient();
       const { result } = renderHook(hook, { wrapper: wrapper(queryClient) });
-      const job = await result.current.mutateAsync();
+      const job = await result.current.mutateAsync(undefined);
       expect(job.id).toBe(jobId);
 
       const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
@@ -411,4 +416,120 @@ describe("derived-artifact generators seed the job cache (Story 4.4)", () => {
       expect(cached).toMatchObject({ id: jobId, kind });
     },
   );
+});
+
+const editedSummaryOut = {
+  ...summaryOut,
+  text: "Texte corrigé par le MJ.",
+  is_edited: true,
+  edited_at: "2026-06-02T09:00:00Z",
+  edited_by: "key-1",
+};
+
+function problemBody(type: string, status: number) {
+  return JSON.stringify({
+    type: `https://kaeyris.local/errors/${type}`,
+    title: type,
+    status,
+    detail: "x",
+  });
+}
+
+describe("artifact edit mutations (Story 8.1/8.2/8.3 — BD-23/BD-26)", () => {
+  test("usePatchSummary PATCHes the text and seeds the summary read cache", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(editedSummaryOut), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const queryClient = makeClient();
+    const { result } = renderHook(() => usePatchSummary(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    const data = await result.current.mutateAsync("Texte corrigé par le MJ.");
+    expect(data.is_edited).toBe(true);
+    expect(data.text).toBe("Texte corrigé par le MJ.");
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.method).toBe("PATCH");
+    expect(request.url).toContain("/artifacts/summary");
+    expect(
+      queryClient.getQueryData(summaryArtifactQueryKey(SESSION_ID)),
+    ).toEqual(editedSummaryOut);
+  });
+
+  test("usePutElements sends confirm_empty=true only when clearing is confirmed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ ...elementsOut, elements: [], is_edited: true }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    const queryClient = makeClient();
+    const { result } = renderHook(() => usePutElements(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    await result.current.mutateAsync({ elements: [], confirmEmpty: true });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.method).toBe("PUT");
+    expect(request.url).toContain("confirm_empty=true");
+  });
+
+  test("a 409 artifact-busy on edit is surfaced as a discriminated ApiError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(problemBody("artifact-busy", 409), {
+            status: 409,
+            headers: { "content-type": "application/problem+json" },
+          }),
+      ),
+    );
+    const queryClient = makeClient();
+    const { result } = renderHook(() => usePatchSummary(SESSION_ID), {
+      wrapper: wrapper(queryClient),
+    });
+    const err = await result.current.mutateAsync("x").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(isArtifactBusyError(err)).toBe(true);
+    expect(isArtifactEditedError(err)).toBe(false);
+  });
+
+  test("the conflict discriminators match their RFC 9457 type slug specifically", () => {
+    const edited = new ApiError({
+      type: "https://kaeyris.local/errors/artifact-edited",
+      title: "x",
+      status: 409,
+    });
+    const busy = new ApiError({
+      type: "https://kaeyris.local/errors/artifact-busy",
+      title: "x",
+      status: 409,
+    });
+    const emptyClear = new ApiError({
+      type: "https://kaeyris.local/errors/elements-empty-clear-unconfirmed",
+      title: "x",
+      status: 422,
+    });
+    expect(isArtifactEditedError(edited)).toBe(true);
+    expect(isArtifactBusyError(busy)).toBe(true);
+    expect(isElementsEmptyClearUnconfirmedError(emptyClear)).toBe(true);
+    // Each discriminator is specific to its own slug.
+    expect(isArtifactEditedError(busy)).toBe(false);
+    expect(isElementsEmptyClearUnconfirmedError(edited)).toBe(false);
+    expect(isArtifactBusyError("not an error")).toBe(false);
+  });
 });
