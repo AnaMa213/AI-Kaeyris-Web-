@@ -2,13 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
+import { ArtifactTextEditor } from "@/components/jdr/sessions/ArtifactTextEditor";
 import { NarrativeReader } from "@/components/narrative/NarrativeReader";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
+import { ApiError } from "@/lib/core/api/errors";
 import { useListCampaignPjs } from "@/lib/jdr/pjs/queries";
 import { useSessionPlayers } from "@/lib/jdr/sessions/players";
 import {
@@ -17,10 +21,24 @@ import {
 } from "@/lib/jdr/sessions/artifactJobFlow";
 import {
   isArtifactAbsentError,
+  isArtifactBusyError,
+  isArtifactEditedError,
   povArtifactSessionKey,
   useGeneratePovs,
+  usePatchPov,
   usePovArtifact,
 } from "@/lib/jdr/sessions/artifacts";
+
+/** Story 8.2 — message for a failed synchronous POV edit (busy job vs other). */
+function formatSaveError(error: unknown): string {
+  if (isArtifactBusyError(error)) {
+    return "Une génération est en cours pour cette séance. Réessaie une fois terminée.";
+  }
+  if (error instanceof ApiError && error.problem.status === 404) {
+    return "Ce POV est introuvable. Recharge la page.";
+  }
+  return "Sauvegarde impossible. Réessaie.";
+}
 
 interface PovArtifactPanelProps {
   sessionId: string;
@@ -93,6 +111,11 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
   const povMissing = !povQuery.isPending && !povPresent && !povLoadFailed;
   const shouldKeepPjNavigation = povsWereReadable || povPresent;
 
+  const patch = usePatchPov(sessionId, activePjId);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
+
   const flow = useArtifactJobFlow({
     sessionId,
     isPresent: povPresent,
@@ -101,16 +124,50 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
     artifactNoun: "des POVs",
   });
 
+  const runGenerate = (force: boolean) => {
+    generate.mutate(force ? { force: true } : undefined, {
+      onSuccess: (queued) => flow.onJobQueued(queued.id),
+      onError: (error) => {
+        if (!force && isArtifactEditedError(error)) {
+          setForceConfirmOpen(true);
+          return;
+        }
+        toast.error("Impossible de lancer la génération des POVs.");
+      },
+    });
+  };
+
   const handleGenerate = () => {
     if (generate.isPending) return;
-    generate.mutate(undefined, {
-      onSuccess: (queued) => flow.onJobQueued(queued.id),
-      onError: () => toast.error("Impossible de lancer la génération des POVs."),
+    runGenerate(false);
+  };
+
+  const handleSave = (text: string) => {
+    setSaveError(null);
+    patch.mutate(text, {
+      onSuccess: () => setIsEditing(false),
+      onError: (error) => setSaveError(formatSaveError(error)),
     });
+  };
+
+  const startEditing = () => {
+    if (flow.jobInFlight) return;
+    setSaveError(null);
+    patch.reset();
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setSaveError(null);
+    patch.reset();
+    setIsEditing(false);
   };
 
   const handleSelectPj = (pjId: string) => {
     if (!declaredInRoster.some((pj) => pj.id === pjId)) return;
+    // Switching PJ discards an in-progress edit (it targets the previous PJ).
+    setIsEditing(false);
+    setSaveError(null);
     if (povPresent) setPovsWereReadable(true);
     setSelectedPjId(pjId);
     writeSelectedPjUrl(pjId);
@@ -189,24 +246,56 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
       : null;
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="POVs de la séance">
-        {/* Story 4.23 (AC6) — régénérer dans l'en-tête (POV n'a pas d'export, cf. Story 5.7). */}
+        {/* Story 4.23 (AC6) — régénérer dans l'en-tête (POV n'a pas d'export).
+            Story 8.2 — bouton « Modifier » par PJ. Contrôles masqués en édition. */}
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-semibold">POVs</h2>
-          <ArtifactRegenerateControls
-            part="trigger"
-            artifactLabel="les POVs"
-            jobId={flow.jobId}
-            jobInFlight={flow.jobInFlight}
-            artifactSettling={flow.artifactSettling}
-            jobFailed={flow.jobFailed}
-            failureReason={flow.failureReason}
-            pending={generate.isPending}
-            onConfirm={handleGenerate}
-          />
+          {!isEditing && (
+            <div className="flex items-center gap-1">
+              {povPresent && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={startEditing}
+                  disabled={flow.jobInFlight}
+                  title={
+                    flow.jobInFlight
+                      ? "Génération en cours — modification bloquée."
+                      : undefined
+                  }
+                >
+                  <Pencil />
+                  Modifier
+                </Button>
+              )}
+              <ArtifactRegenerateControls
+                part="trigger"
+                artifactLabel="les POVs"
+                jobId={flow.jobId}
+                jobInFlight={flow.jobInFlight}
+                artifactSettling={flow.artifactSettling}
+                jobFailed={flow.jobFailed}
+                failureReason={flow.failureReason}
+                pending={generate.isPending}
+                onConfirm={handleGenerate}
+              />
+            </div>
+          )}
         </div>
         {pjTabs}
 
-        {povQuery.isPending ? (
+        {isEditing && povPresent && selectedPov ? (
+          <ArtifactTextEditor
+            idPrefix={`pov-${sessionId}-${activePjId}`}
+            initialMarkdown={selectedPov.text}
+            kind="pov"
+            onSave={handleSave}
+            onCancel={cancelEditing}
+            saving={patch.isPending}
+            saveError={saveError}
+          />
+        ) : povQuery.isPending ? (
           <p className="text-text-chrome-muted text-sm">Chargement du POV...</p>
         ) : povLoadFailed ? (
           <p className="text-state-error text-sm">
@@ -218,6 +307,7 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
             <p className="text-text-chrome-muted mt-4 text-xs">
               Généré le {generatedAt.toLocaleString("fr-FR")} ·{" "}
               {selectedPov.model_used}
+              {selectedPov.is_edited ? " · modifié par le MJ" : ""}
             </p>
           </>
         ) : (
@@ -226,16 +316,32 @@ export function PovArtifactPanel({ sessionId, campaignId }: PovArtifactPanelProp
           </p>
         )}
 
-        <ArtifactRegenerateControls
-          part="status"
-          artifactLabel="les POVs"
-          jobId={flow.jobId}
-          jobInFlight={flow.jobInFlight}
-          artifactSettling={flow.artifactSettling}
-          jobFailed={flow.jobFailed}
-          failureReason={flow.failureReason}
-          pending={generate.isPending}
-          onConfirm={handleGenerate}
+        {!isEditing && (
+          <ArtifactRegenerateControls
+            part="status"
+            artifactLabel="les POVs"
+            jobId={flow.jobId}
+            jobInFlight={flow.jobInFlight}
+            artifactSettling={flow.artifactSettling}
+            jobFailed={flow.jobFailed}
+            failureReason={flow.failureReason}
+            pending={generate.isPending}
+            onConfirm={handleGenerate}
+          />
+        )}
+
+        <ConfirmDialog
+          open={forceConfirmOpen}
+          onOpenChange={setForceConfirmOpen}
+          title="Régénérer les POVs ?"
+          description="Un POV a été modifié manuellement. Régénérer remplacera ces modifications."
+          confirmLabel="Régénérer"
+          pendingLabel="Régénération…"
+          submitting={generate.isPending}
+          onConfirm={() => {
+            setForceConfirmOpen(false);
+            runGenerate(true);
+          }}
         />
       </section>
     );

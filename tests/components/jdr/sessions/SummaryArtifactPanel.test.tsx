@@ -251,3 +251,77 @@ describe("<SummaryArtifactPanel>", () => {
     await waitFor(() => expect(postCount).toBe(2));
   });
 });
+
+describe("<SummaryArtifactPanel> edition (Story 8.2)", () => {
+  function stubEdit(opts: { patchStatus?: number; patchType?: string }) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        const method =
+          typeof input === "string" ? "GET" : (input.method ?? "GET");
+        if (url.includes(`/sessions/${SESSION_ID}/players`)) {
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, pj_ids: [], updated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/summary") && method.toUpperCase() === "PATCH") {
+          if (opts.patchStatus && opts.patchStatus >= 400) {
+            return new Response(
+              JSON.stringify({
+                type: `https://kaeyris.local/errors/${opts.patchType ?? "x"}`,
+                title: "err",
+                status: opts.patchStatus,
+                detail: "x",
+              }),
+              { status: opts.patchStatus, headers: { "content-type": "application/problem+json" } },
+            );
+          }
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, text: "Texte édité.", model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z", is_edited: true, edited_at: "2026-06-02T09:00:00Z", edited_by: "key-1" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("/artifacts/summary")) {
+          return new Response(
+            JSON.stringify({ session_id: SESSION_ID, text: "Les héros entrent dans la crypte.", model_used: "claude-x", generated_at: "2026-06-01T10:00:00Z" }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+  }
+
+  test("Modifier → Enregistrer PATCHes and returns to read with the saved text", async () => {
+    stubEdit({});
+    renderPanel();
+    const user = userEvent.setup();
+    await screen.findByText("Les héros entrent dans la crypte.");
+    await user.click(screen.getByRole("button", { name: /Modifier/ }));
+    await user.click(screen.getByRole("button", { name: /Enregistrer/ }));
+    expect(await screen.findByText("Texte édité.")).toBeInTheDocument();
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const patched = fetchMock.mock.calls.some((args) => {
+      const req = args[0] as Request;
+      return req.url.includes("/artifacts/summary") && req.method === "PATCH";
+    });
+    expect(patched).toBe(true);
+  });
+
+  test("a 409 artifact-busy on save shows a message and keeps the editor open", async () => {
+    stubEdit({ patchStatus: 409, patchType: "artifact-busy" });
+    renderPanel();
+    const user = userEvent.setup();
+    await screen.findByText("Les héros entrent dans la crypte.");
+    await user.click(screen.getByRole("button", { name: /Modifier/ }));
+    await user.click(screen.getByRole("button", { name: /Enregistrer/ }));
+    expect(
+      await screen.findByText(/génération est en cours/i),
+    ).toBeInTheDocument();
+    // Editor stays open (textarea still mounted) so the MJ keeps their text.
+    expect(screen.getByLabelText("Éditeur Markdown")).toBeInTheDocument();
+  });
+});

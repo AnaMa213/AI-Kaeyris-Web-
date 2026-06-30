@@ -12,6 +12,7 @@ type NarrativeArtifactOut = components["schemas"]["NarrativeArtifactOut"];
 type ElementsArtifactOut = components["schemas"]["ElementsArtifactOut"];
 type PovArtifactOut = components["schemas"]["PovArtifactOut"];
 type JobQueuedOut = components["schemas"]["JobQueuedOut"];
+type Element = components["schemas"]["Element"];
 
 function problemFromUnknown(error: unknown) {
   if (error instanceof ApiError) throw error;
@@ -50,6 +51,33 @@ export function isArtifactAbsentError(error: unknown): boolean {
   );
 }
 
+/**
+ * Story 8.x (BD-24 / #28) — discriminate the edit/regeneration conflict
+ * responses (RFC 9457 `type` = `…/errors/<slug>`) so the UI can react precisely:
+ * - `artifact-edited` (409): regenerating would overwrite a hand-edited artifact
+ *   → confirm, then retry the generate with `{ force: true }`.
+ * - `artifact-busy` (409): an edit was refused because a generation job is
+ *   running → ask the MJ to wait for it to finish.
+ * - `elements-empty-clear-unconfirmed` (422): a `PUT elements` with an empty
+ *   list would wipe the card → confirm, then retry with `{ confirmEmpty: true }`.
+ */
+function isApiProblemType(error: unknown, slug: string): boolean {
+  return (
+    error instanceof ApiError &&
+    typeof error.problem.type === "string" &&
+    error.problem.type.endsWith(`/${slug}`)
+  );
+}
+
+export const isArtifactEditedError = (error: unknown): boolean =>
+  isApiProblemType(error, "artifact-edited");
+
+export const isArtifactBusyError = (error: unknown): boolean =>
+  isApiProblemType(error, "artifact-busy");
+
+export const isElementsEmptyClearUnconfirmedError = (error: unknown): boolean =>
+  isApiProblemType(error, "elements-empty-clear-unconfirmed");
+
 export const summaryArtifactQueryKey = (sessionId: string) =>
   ["jdr", "artifact", "summary", sessionId] as const;
 
@@ -87,10 +115,15 @@ export function useGenerateSummary(sessionId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: { force?: boolean }) => {
       const result = await apiClient.POST(
         "/services/jdr/sessions/{session_id}/artifacts/summary",
-        { params: { path: { session_id: sessionId } } },
+        {
+          params: {
+            path: { session_id: sessionId },
+            query: vars?.force ? { force: true } : {},
+          },
+        },
       );
       return unwrap<JobQueuedOut>(result);
     },
@@ -200,10 +233,15 @@ export function useGenerateNarrative(sessionId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: { force?: boolean }) => {
       const result = await apiClient.POST(
         "/services/jdr/sessions/{session_id}/artifacts/narrative",
-        { params: { path: { session_id: sessionId } } },
+        {
+          params: {
+            path: { session_id: sessionId },
+            query: vars?.force ? { force: true } : {},
+          },
+        },
       );
       return unwrap<JobQueuedOut>(result);
     },
@@ -220,10 +258,15 @@ export function useGenerateElements(sessionId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: { force?: boolean }) => {
       const result = await apiClient.POST(
         "/services/jdr/sessions/{session_id}/artifacts/elements",
-        { params: { path: { session_id: sessionId } } },
+        {
+          params: {
+            path: { session_id: sessionId },
+            query: vars?.force ? { force: true } : {},
+          },
+        },
       );
       return unwrap<JobQueuedOut>(result);
     },
@@ -243,10 +286,15 @@ export function useGeneratePovs(sessionId: string) {
   const apiClient = useMemo(() => createApiClient(), []);
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: { force?: boolean }) => {
       const result = await apiClient.POST(
         "/services/jdr/sessions/{session_id}/artifacts/povs",
-        { params: { path: { session_id: sessionId } } },
+        {
+          params: {
+            path: { session_id: sessionId },
+            query: vars?.force ? { force: true } : {},
+          },
+        },
       );
       return unwrap<JobQueuedOut>(result);
     },
@@ -256,10 +304,99 @@ export function useGeneratePovs(sessionId: string) {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Story 8.1/8.2/8.3 (BD-23/BD-26) — MJ artifact edits (synchronous writes).    */
+/*                                                                            */
+/* Résumé/Récit/POV: PATCH `{ text }` (Markdown). Éléments: PUT the whole card */
+/* `{ elements: [{category,name,description}] }`. Each returns the updated      */
+/* *ArtifactOut, which we seed into the matching read cache so the view         */
+/* re-renders without a refetch. Conflicts (`artifact-edited`/`artifact-busy`/  */
+/* `elements-empty-clear-unconfirmed`) surface via the discriminators above —   */
+/* the calling panel decides whether to confirm + retry (force / confirmEmpty). */
+/* -------------------------------------------------------------------------- */
+
+export function usePatchSummary(sessionId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      const result = await apiClient.PATCH(
+        "/services/jdr/sessions/{session_id}/artifacts/summary",
+        { params: { path: { session_id: sessionId } }, body: { text } },
+      );
+      return unwrap<SummaryArtifactOut>(result);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(summaryArtifactQueryKey(sessionId), data);
+    },
+  });
+}
+
+export function usePatchNarrative(sessionId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      const result = await apiClient.PATCH(
+        "/services/jdr/sessions/{session_id}/artifacts/narrative",
+        { params: { path: { session_id: sessionId } }, body: { text } },
+      );
+      return unwrap<NarrativeArtifactOut>(result);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(narrativeArtifactQueryKey(sessionId), data);
+    },
+  });
+}
+
+export function usePatchPov(sessionId: string, pjId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      const result = await apiClient.PATCH(
+        "/services/jdr/sessions/{session_id}/artifacts/povs/{pj_id}",
+        {
+          params: { path: { session_id: sessionId, pj_id: pjId } },
+          body: { text },
+        },
+      );
+      return unwrap<PovArtifactOut>(result);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(povArtifactQueryKey(sessionId, pjId), data);
+    },
+  });
+}
+
+export function usePutElements(sessionId: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { elements: Element[]; confirmEmpty?: boolean }) => {
+      const result = await apiClient.PUT(
+        "/services/jdr/sessions/{session_id}/artifacts/elements",
+        {
+          params: {
+            path: { session_id: sessionId },
+            query: vars.confirmEmpty ? { confirm_empty: true } : {},
+          },
+          body: { elements: vars.elements },
+        },
+      );
+      return unwrap<ElementsArtifactOut>(result);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(elementsArtifactQueryKey(sessionId), data);
+    },
+  });
+}
+
 export type {
   SummaryArtifactOut,
   NarrativeArtifactOut,
   ElementsArtifactOut,
   PovArtifactOut,
+  Element,
   JobQueuedOut,
 };

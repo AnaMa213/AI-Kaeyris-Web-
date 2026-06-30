@@ -40,3 +40,18 @@ export function isCampaignMember(
   if (campaignId && camp.id !== campaignId) return false;
   return true;
 }
+
+/**
+ * True iff the current user is authenticated and a *player* (role `pj`) of the
+ * active campaign — gates the read-only player area (Story 8.4 / FR-29).
+ */
+export function isCampaignPlayer(
+  user: CurrentUser,
+  campaignId?: string | null,
+): boolean {
+  if (user.status !== "authenticated") return false;
+  const camp = user.activeCampaign;
+  if (!camp) return false;
+  if (campaignId && camp.id !== campaignId) return false;
+  return camp.role === "pj";
+}

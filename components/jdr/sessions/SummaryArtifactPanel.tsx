@@ -1,21 +1,29 @@
 "use client";
 
+import { useState } from "react";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { JobStateBadge } from "@/components/jdr/jobs/JobStateBadge";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { parseBackendDate } from "@/lib/core/api/parseBackendDate";
+import { ApiError } from "@/lib/core/api/errors";
 import { useSessionPlayers } from "@/lib/jdr/sessions/players";
 import {
   ARTIFACT_JOB_LABELS,
   useArtifactJobFlow,
 } from "@/lib/jdr/sessions/artifactJobFlow";
 import {
+  isArtifactBusyError,
+  isArtifactEditedError,
   summaryArtifactQueryKey,
   useGenerateSummary,
+  usePatchSummary,
   useSummaryArtifact,
 } from "@/lib/jdr/sessions/artifacts";
 import { ArtifactRegenerateControls } from "@/components/jdr/sessions/ArtifactRegenerateControls";
 import { ArtifactExportButton } from "@/components/jdr/sessions/ArtifactExportButton";
+import { ArtifactTextEditor } from "@/components/jdr/sessions/ArtifactTextEditor";
 import { NarrativeReader } from "@/components/narrative/NarrativeReader";
 
 interface SummaryArtifactPanelProps {
@@ -27,10 +35,21 @@ interface SummaryArtifactPanelProps {
 const SECTION_CARD_CLASSES =
   "bg-surface-card border-border-card rounded-[10px] border p-6 shadow-(--shadow-card-inset)";
 
+/** Story 8.2 — message for a failed synchronous edit (busy job vs other). */
+function formatSaveError(error: unknown): string {
+  if (isArtifactBusyError(error)) {
+    return "Une génération est en cours pour cette séance. Réessaie une fois terminée.";
+  }
+  if (error instanceof ApiError && error.problem.status === 404) {
+    return "Cette séance est introuvable. Recharge la page.";
+  }
+  return "Sauvegarde impossible. Réessaie.";
+}
+
 /**
- * Story 4.3 — génère et affiche le Résumé. Story 4.5 — branché sur le flux
- * partagé `useArtifactJobFlow` (qui pilote aussi la régénération) et expose un
- * CTA « Régénérer le Résumé » une fois le résumé présent.
+ * Story 4.3 — génère et affiche le Résumé. Story 4.5 — régénération via le flux
+ * partagé. Story 8.2 — édition rich-text Markdown (mode lecture ↔ édition) ;
+ * la régénération d'un résumé édité passe par une confirmation (force).
  */
 export function SummaryArtifactPanel({
   sessionId,
@@ -39,7 +58,11 @@ export function SummaryArtifactPanel({
   const summaryQuery = useSummaryArtifact(sessionId);
   const playersQuery = useSessionPlayers(sessionId);
   const generate = useGenerateSummary(sessionId);
+  const patch = usePatchSummary(sessionId);
   const summary = summaryQuery.data;
+  const [isEditing, setIsEditing] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false);
   const flow = useArtifactJobFlow({
     sessionId,
     isPresent: Boolean(summary),
@@ -50,31 +73,112 @@ export function SummaryArtifactPanel({
 
   const hasPjDeclared = (playersQuery.data?.pj_ids.length ?? 0) > 0;
 
+  const runGenerate = (force: boolean) => {
+    generate.mutate(
+      force ? { force: true } : undefined,
+      {
+        onSuccess: (queued) => flow.onJobQueued(queued.id),
+        onError: (error) => {
+          if (!force && isArtifactEditedError(error)) {
+            setForceConfirmOpen(true);
+            return;
+          }
+          toast.error("Impossible de lancer la génération du résumé.");
+        },
+      },
+    );
+  };
+
   const handleGenerate = () => {
     if (generate.isPending) return;
-    generate.mutate(undefined, {
-      onSuccess: (queued) => flow.onJobQueued(queued.id),
-      onError: () =>
-        toast.error("Impossible de lancer la génération du résumé."),
+    runGenerate(false);
+  };
+
+  const handleSave = (text: string) => {
+    setSaveError(null);
+    patch.mutate(text, {
+      onSuccess: () => setIsEditing(false),
+      onError: (error) => setSaveError(formatSaveError(error)),
     });
+  };
+
+  const startEditing = () => {
+    if (flow.jobInFlight) return;
+    setSaveError(null);
+    patch.reset();
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setSaveError(null);
+    patch.reset();
+    setIsEditing(false);
   };
 
   if (summary) {
     const generatedAt = parseBackendDate(summary.generated_at);
     return (
       <section className={SECTION_CARD_CLASSES} aria-label="Résumé de la séance">
-        {/* Story 4.23 (AC6) — export (icône) + régénérer dans l'en-tête. */}
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-semibold">Résumé</h2>
-          <div className="flex items-center gap-1">
-            <ArtifactExportButton
-              sessionId={sessionId}
-              sessionTitle={sessionTitle}
-              kind="summary"
-              variant="icon"
-            />
+          {!isEditing && (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={startEditing}
+                disabled={flow.jobInFlight}
+                title={
+                  flow.jobInFlight
+                    ? "Génération en cours — modification bloquée."
+                    : undefined
+                }
+              >
+                <Pencil />
+                Modifier
+              </Button>
+              <ArtifactExportButton
+                sessionId={sessionId}
+                sessionTitle={sessionTitle}
+                kind="summary"
+                variant="icon"
+              />
+              <ArtifactRegenerateControls
+                part="trigger"
+                artifactLabel="le Résumé"
+                jobId={flow.jobId}
+                jobInFlight={flow.jobInFlight}
+                artifactSettling={flow.artifactSettling}
+                jobFailed={flow.jobFailed}
+                failureReason={flow.failureReason}
+                pending={generate.isPending}
+                onConfirm={handleGenerate}
+              />
+            </div>
+          )}
+        </div>
+
+        {isEditing ? (
+          <ArtifactTextEditor
+            idPrefix={`summary-${sessionId}`}
+            initialMarkdown={summary.text}
+            kind="summary"
+            onSave={handleSave}
+            onCancel={cancelEditing}
+            saving={patch.isPending}
+            saveError={saveError}
+          />
+        ) : (
+          <>
+            <NarrativeReader markdown={summary.text} kind="summary" />
+            <p className="text-text-chrome-muted mt-4 text-xs">
+              Généré le {generatedAt.toLocaleString("fr-FR")} ·{" "}
+              {summary.model_used}
+              {summary.is_edited ? " · modifié par le MJ" : ""}
+            </p>
             <ArtifactRegenerateControls
-              part="trigger"
+              part="status"
               artifactLabel="le Résumé"
               jobId={flow.jobId}
               jobInFlight={flow.jobInFlight}
@@ -84,25 +188,21 @@ export function SummaryArtifactPanel({
               pending={generate.isPending}
               onConfirm={handleGenerate}
             />
-          </div>
-        </div>
-        {/* Story 5.1 — rendu long-form Markdown sur parchemin (drop-cap, ornement,
-            pull-quote). Story 5.2 — NarrativeReader ajoute le sommaire/scrollspy.
-            Le composant ne fetch rien : il reçoit le markdown brut. */}
-        <NarrativeReader markdown={summary.text} kind="summary" />
-        <p className="text-text-chrome-muted mt-4 text-xs">
-          Généré le {generatedAt.toLocaleString("fr-FR")} · {summary.model_used}
-        </p>
-        <ArtifactRegenerateControls
-          part="status"
-          artifactLabel="le Résumé"
-          jobId={flow.jobId}
-          jobInFlight={flow.jobInFlight}
-          artifactSettling={flow.artifactSettling}
-          jobFailed={flow.jobFailed}
-          failureReason={flow.failureReason}
-          pending={generate.isPending}
-          onConfirm={handleGenerate}
+          </>
+        )}
+
+        <ConfirmDialog
+          open={forceConfirmOpen}
+          onOpenChange={setForceConfirmOpen}
+          title="Régénérer le Résumé ?"
+          description="Ce résumé a été modifié manuellement. Le régénérer remplacera vos modifications."
+          confirmLabel="Régénérer"
+          pendingLabel="Régénération…"
+          submitting={generate.isPending}
+          onConfirm={() => {
+            setForceConfirmOpen(false);
+            runGenerate(true);
+          }}
         />
       </section>
     );
