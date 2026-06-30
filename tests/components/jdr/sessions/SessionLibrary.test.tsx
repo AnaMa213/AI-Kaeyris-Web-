@@ -180,6 +180,42 @@ describe("<SessionLibrary>", () => {
     );
   });
 
+  test("Story 7.3 — the empty-state box itself offers a 'Créer une session' CTA (GM)", async () => {
+    const user = userEvent.setup();
+    render(<SessionLibrary sessions={[]} campId={campId} canCreateSession />);
+    const emptyStateCard = screen
+      .getByRole("heading", {
+        level: 2,
+        name: "Aucune session dans cette campagne.",
+      })
+      .closest("[role='status']");
+    expect(emptyStateCard).not.toBeNull();
+    const inBoxCta = within(emptyStateCard as HTMLElement).getByRole("button", {
+      name: "Créer une session",
+    });
+    await user.click(inBoxCta);
+    expect(pushMock).toHaveBeenCalledWith(
+      `/jdr/campaigns/${campId}/sessions/new`,
+    );
+  });
+
+  test("Story 7.3 — the empty-state box CTA is hidden for a player role", () => {
+    render(
+      <SessionLibrary sessions={[]} campId={campId} canCreateSession={false} />,
+    );
+    const emptyStateCard = screen
+      .getByRole("heading", {
+        level: 2,
+        name: "Aucune session dans cette campagne.",
+      })
+      .closest("[role='status']");
+    expect(
+      within(emptyStateCard as HTMLElement).queryByRole("button", {
+        name: "Créer une session",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   test("hides the create CTA in the empty state for a player role", () => {
     render(
       <SessionLibrary

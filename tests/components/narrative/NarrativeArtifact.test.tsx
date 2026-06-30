@@ -35,8 +35,9 @@ describe("<NarrativeArtifact> (Story 5.1)", () => {
     const article = container.querySelector("article");
     expect(article).not.toBeNull();
     expect(article).toHaveClass("narrative-body");
-    // Le corps long-form passe sur parchemin (séparation chrome/parchemin).
-    expect(article).toHaveClass("bg-surface-narrative");
+    // Le corps long-form passe sur parchemin sépia (Story 7.3 #5 — surface de
+    // lecture des artefacts en oklch(0.62 0.05 80) ; séparation chrome/parchemin).
+    expect(article).toHaveClass("bg-surface-narrative-warm");
     expect(article).toHaveClass("font-serif");
     // Le parchemin remplit son bloc (Résumé/Récit/Éléments/POVs) avec un padding.
     expect(article).toHaveClass("w-full");

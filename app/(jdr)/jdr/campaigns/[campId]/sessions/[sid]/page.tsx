@@ -10,10 +10,18 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Ellipsis, Eye, Pencil, RotateCcw, Replace, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { IconButton } from "@/components/common/IconButton";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CampaignBreadcrumb } from "@/components/jdr/campaigns/CampaignBreadcrumb";
 import { SessionStateChip } from "@/components/jdr/sessions/SessionStateChip";
@@ -57,6 +65,7 @@ import {
   useDeleteSession,
   useGetSession,
   useRecoverTranscription,
+  useRetryTranscription,
 } from "@/lib/jdr/sessions/queries";
 import { useSummaryArtifact } from "@/lib/jdr/sessions/artifacts";
 
@@ -206,8 +215,12 @@ export default function SessionDetailPage() {
   const campaignQuery = useGetCampaign(campId);
   const deleteMutation = useDeleteSession(sid, campId);
   const recoverMutation = useRecoverTranscription(sid, campId);
+  const retryMutation = useRetryTranscription(sid, campId);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Story 7.1 — re-running transcription on an already-transcribed session
+  // overwrites the transcript (and stales its artifacts), so it is confirmed.
+  const [confirmRetryTranscribed, setConfirmRetryTranscribed] = useState(false);
   const [urlRevision, setUrlRevision] = useState(0);
   // Story 4.21 : pop-up transcription RAW (ouverte via l'icône Eye header).
   const [transcriptionOpen, setTranscriptionOpen] = useState(false);
@@ -376,11 +389,16 @@ export default function SessionDetailPage() {
   // Story 4.21 — gate « Ouvrir le récit » : MJ, acte transcribed atteint, récit
   // jamais ouvert. Réutilise l'acte transcribed du RitualProgress (sceau + CTA).
   const showStoryGate =
-    canEdit && session.state === "transcribed" && !storyOpened;
+    !showReplaceCard &&
+    canEdit &&
+    session.state === "transcribed" &&
+    !storyOpened;
   // Story 4.21 — vue artefacts (sous-onglets) : séance transcrite ET (lecteur OU
   // récit déjà ouvert). Les panneaux conservent leur garde interne sur l'état.
   const showArtifacts =
-    session.state === "transcribed" && (!canEdit || storyOpened);
+    !showReplaceCard &&
+    session.state === "transcribed" &&
+    (!canEdit || storyOpened);
   // Story 4.15 (T2) : un job actif (acte « transcribing » + current_job_id)
   // verrouille le remplacement → pas de seconde transcription concurrente.
   // L'acte terminal `failed` n'est jamais bloqué (current_job_id nul → la
@@ -473,6 +491,23 @@ export default function SessionDetailPage() {
     });
   }
 
+  // Story 7.1 / BD-21 — re-run transcription on the existing audio (no re-upload).
+  // `transcription_failed`: direct (nothing valuable to lose). `transcribed`:
+  // confirmed first (overwrites the current transcript), then runs.
+  function runRetryTranscription() {
+    retryMutation.mutate(undefined, {
+      onSuccess: () =>
+        toast.success("Transcription relancée — le rituel reprend."),
+      onError: () =>
+        toast.error("Impossible de relancer la transcription pour l'instant."),
+    });
+  }
+
+  function handleConfirmRetryTranscribed() {
+    setConfirmRetryTranscribed(false);
+    runRetryTranscription();
+  }
+
   return (
     <section className="bg-background text-foreground min-h-full px-6 py-8 lg:px-12">
       <div className="mb-4">
@@ -528,6 +563,38 @@ export default function SessionDetailPage() {
                 icon={<Pencil aria-hidden="true" />}
                 onClick={() => setEditing(true)}
               />
+            )}
+            {/* Story 7.1 — rare "redo from scratch" recovery actions for a
+                transcribed séance (e.g. after a failed artifact), grouped in an
+                overflow menu so they stay discoverable without crowding the
+                reading flow. */}
+            {canEdit && session.state === "transcribed" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Plus d'actions sur la séance"
+                    />
+                  }
+                >
+                  <Ellipsis aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuItem
+                    onClick={() => setConfirmRetryTranscribed(true)}
+                  >
+                    <RotateCcw aria-hidden="true" />
+                    Relancer la transcription
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setReplacing(true)}>
+                    <Replace aria-hidden="true" />
+                    Remplacer l&apos;enregistrement
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {canEdit && (
               <IconButton
@@ -597,6 +664,11 @@ export default function SessionDetailPage() {
             }
             replaceDisabledHint={
               replaceBlocked ? TRANSCRIPTION_ACTIVE_REPLACE_HINT : undefined
+            }
+            // Story 7.1 — re-run transcription from the existing audio on the
+            // failure card (no re-upload). Only on the `failed` act.
+            onRetry={
+              ritualState === "failed" ? runRetryTranscription : undefined
             }
           />
         )}
@@ -728,6 +800,19 @@ export default function SessionDetailPage() {
         onConfirm={handleConfirmDelete}
         submitting={deleteMutation.isPending}
         error={deleteMutation.error}
+      />
+
+      {/* Story 7.1 — re-running transcription on a transcribed séance overwrites
+          the current transcript (and stales its artifacts), so it is confirmed. */}
+      <ConfirmDialog
+        open={confirmRetryTranscribed}
+        onOpenChange={setConfirmRetryTranscribed}
+        title="Relancer la transcription ?"
+        description="La transcription actuelle sera écrasée et devra être régénérée. Les artefacts déjà produits resteront mais pourront être désynchronisés du nouveau texte."
+        confirmLabel="Relancer"
+        pendingLabel="Relancement…"
+        onConfirm={handleConfirmRetryTranscribed}
+        submitting={retryMutation.isPending}
       />
 
       {/* Story 4.21 — pop-up transcription RAW (lecture + édition + export

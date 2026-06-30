@@ -1,27 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BackLink } from "@/components/common/BackLink";
 import { FantasyLoader } from "@/components/common/FantasyLoader";
 import { AccountSettingsCard } from "@/components/jdr/settings/AccountSettingsCard";
-import { ModelPricingCard } from "@/components/jdr/settings/ModelPricingCard";
+import {
+  ModelPricingCard,
+  type ModelPricing,
+} from "@/components/jdr/settings/ModelPricingCard";
 import { ModelSettingsCard } from "@/components/jdr/settings/ModelSettingsCard";
 import { ApiError } from "@/lib/core/api/errors";
 import { useCurrentUser } from "@/lib/core/session/useCurrentUser";
 import {
   DEFAULT_MODEL_SETTINGS,
+  MODEL_TIER_LABELS,
   type LocalModelCategory,
   type LocalModelValidationProofs,
   type ModelSettings,
   type ModelSettingsPatchInput,
 } from "@/lib/jdr/schemas/modelSettings";
 import {
+  useModelCatalog,
   useModelSettings,
   useUpdateModelSettings,
   useValidateLocalModel,
+  type CloudModel,
 } from "@/lib/jdr/settings/queries";
 import { useUpdateUser } from "@/lib/jdr/users/queries";
+
+// The backend serialises pricing as { unit, … }; the pricing card uses the
+// front's { type, … } shape. Convert at the boundary so the catalog stays the
+// single source of truth without leaking its wire shape into the card.
+function toModelPricing(pricing: CloudModel["pricing"]): ModelPricing {
+  if (pricing.unit === "per_minute") {
+    return { type: "per-minute", pricePerMinute: pricing.price_per_minute };
+  }
+  return {
+    type: "per-million-tokens",
+    inputPer1M: pricing.input_per_1m,
+    outputPer1M: pricing.output_per_1m,
+  };
+}
+
+function tieredOptionLabel(model: CloudModel): string {
+  const tier = MODEL_TIER_LABELS[model.tier] ?? model.tier;
+  return `${model.label} · ${tier}`;
+}
 
 export default function SettingsPage() {
   const user = useCurrentUser();
@@ -29,8 +54,44 @@ export default function SettingsPage() {
   const modelSettingsQuery = useModelSettings({
     enabled: user.status === "authenticated",
   });
+  const modelCatalogQuery = useModelCatalog({
+    enabled: user.status === "authenticated",
+  });
   const updateModelSettingsMutation = useUpdateModelSettings();
   const validateLocalModelMutation = useValidateLocalModel();
+
+  // Derive the selector options + pricing/label maps from the backend catalog
+  // (single source of truth). Undefined while loading → the cards fall back to
+  // their static lists so the UI is never empty.
+  const catalog = modelCatalogQuery.data;
+  const transcriptionCloudModelOptions = useMemo(
+    () =>
+      catalog?.transcription.map((model) => ({
+        value: model.id,
+        label: tieredOptionLabel(model),
+      })),
+    [catalog],
+  );
+  const summaryCloudModelOptions = useMemo(
+    () =>
+      catalog?.summary.map((model) => ({
+        value: model.id,
+        label: tieredOptionLabel(model),
+      })),
+    [catalog],
+  );
+  const { pricingByModel, labelByModel } = useMemo(() => {
+    if (!catalog) {
+      return { pricingByModel: undefined, labelByModel: undefined };
+    }
+    const pricing: Record<string, ModelPricing> = {};
+    const labels: Record<string, string> = {};
+    for (const model of [...catalog.transcription, ...catalog.summary]) {
+      pricing[model.id] = toModelPricing(model.pricing);
+      labels[model.id] = model.label;
+    }
+    return { pricingByModel: pricing, labelByModel: labels };
+  }, [catalog]);
   // Bumping this key remounts AccountSettingsCard on success, clearing the
   // password fields (AC 6) without reaching into the form's internals.
   const [formKey, setFormKey] = useState(0);
@@ -56,6 +117,11 @@ export default function SettingsPage() {
     const error = updateModelSettingsMutation.error ?? modelSettingsQuery.error;
     if (!error) return null;
     if (error instanceof ApiError) {
+      // Story 7.4 / B — the save-time DeepInfra key rejection carries an
+      // actionable French detail; prefer it over the generic title.
+      if (error.problem.type?.endsWith("/cloud-api-key-invalid")) {
+        return error.problem.detail ?? error.problem.title;
+      }
       return error.problem.title;
     }
     return error.message;
@@ -212,11 +278,15 @@ export default function SettingsPage() {
           errorMessage={modelSettingsErrorMessage}
           onSubmit={handleModelSettingsSubmit}
           onValidate={handleValidateLocalModel}
+          transcriptionCloudModelOptions={transcriptionCloudModelOptions}
+          summaryCloudModelOptions={summaryCloudModelOptions}
         />
         {showPricingCard && (
           <ModelPricingCard
             transcriptionCloudModel={pricingTranscriptionModel}
             summaryCloudModel={pricingSummaryModel}
+            pricingByModel={pricingByModel}
+            labelByModel={labelByModel}
           />
         )}
       </div>

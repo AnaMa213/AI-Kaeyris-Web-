@@ -16,14 +16,20 @@ export function canEditCampaignSession(
 }
 
 /**
- * Story 3.5 — The "Replace audio" affordance is offered only on states where an
- * audio exists and is not locked by transcription: `audio_uploaded` (job queued,
- * not yet running) and `transcription_failed` (recovery). It is hidden on
- * `transcribing`/`transcribed` (locked) and on `created` (no prior audio — the
- * plain upload dropzone applies). Gated on raw `session.state`, NOT the FSM
- * `uiState` (which collapses `audio_uploaded` into the `transcribing` act).
- * Compose with `canEditCampaignSession` (gm role) at the call site.
+ * Story 3.5 / 7.1 — The "Replace audio" affordance is offered on states where an
+ * audio exists and is not actively locked by a running transcription:
+ * `audio_uploaded` (job queued, not yet running), `transcription_failed`
+ * (recovery), and `transcribed` (Story 7.1 — redo the audio even after a
+ * successful transcription, e.g. to recover from a failed artifact). It is
+ * hidden on `transcribing` (locked) and on `created` (no prior audio — the plain
+ * upload dropzone applies). Gated on raw `session.state`, NOT the FSM `uiState`
+ * (which collapses `audio_uploaded` into the `transcribing` act). Compose with
+ * `canEditCampaignSession` (gm role) at the call site.
  */
 export function canReplaceAudio(state: SessionState): boolean {
-  return state === "audio_uploaded" || state === "transcription_failed";
+  return (
+    state === "audio_uploaded" ||
+    state === "transcription_failed" ||
+    state === "transcribed"
+  );
 }

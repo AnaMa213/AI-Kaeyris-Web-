@@ -52,6 +52,16 @@ export const DEFAULT_TRANSCRIPTION_CLOUD_MODEL =
   TRANSCRIPTION_CLOUD_MODEL_OPTIONS[0].value;
 export const DEFAULT_SUMMARY_CLOUD_MODEL = SUMMARY_CLOUD_MODEL_OPTIONS[0].value;
 
+// Human labels for the backend cloud-model tiers (the "free" tier is Ollama,
+// chosen via the provider selector, so it is not a cloud tier here). Used to
+// annotate each option served by the backend catalog. Falls back to the raw
+// tier id for any future tier the backend adds before the front knows it.
+export const MODEL_TIER_LABELS: Record<string, string> = {
+  economy: "Éco",
+  standard: "Standard",
+  premium: "Premium",
+};
+
 export const modelSettingsSchema = z.object({
   transcriptionProvider: aiModelProviderSchema,
   summaryProvider: aiModelProviderSchema,

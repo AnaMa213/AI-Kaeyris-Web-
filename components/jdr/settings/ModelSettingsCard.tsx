@@ -24,9 +24,7 @@ import {
 import { ApiError } from "@/lib/core/api/errors";
 import {
   modelSettingsSchema,
-  SUMMARY_CLOUD_MODEL_LABELS,
   SUMMARY_CLOUD_MODEL_OPTIONS,
-  TRANSCRIPTION_CLOUD_MODEL_LABELS,
   TRANSCRIPTION_CLOUD_MODEL_OPTIONS,
   type AiModelProvider,
   type LocalModelCategory,
@@ -79,6 +77,8 @@ const IDLE_VALIDATION: {
   summary: { status: "idle" },
 };
 
+type CloudModelOption = { value: string; label: string };
+
 interface ModelSettingsCardProps {
   values: ModelSettings;
   loading: boolean;
@@ -91,6 +91,11 @@ interface ModelSettingsCardProps {
     category: LocalModelCategory,
     modelPath: string,
   ) => Promise<LocalModelValidationResult>;
+  // Cloud model options served by the backend catalog (single source of truth).
+  // When omitted (e.g. while the catalog is still loading) the static lists are
+  // used as a fallback so the selectors are never empty.
+  transcriptionCloudModelOptions?: ReadonlyArray<CloudModelOption>;
+  summaryCloudModelOptions?: ReadonlyArray<CloudModelOption>;
 }
 
 export function ModelSettingsCard({
@@ -100,8 +105,21 @@ export function ModelSettingsCard({
   errorMessage,
   onSubmit,
   onValidate,
+  transcriptionCloudModelOptions,
+  summaryCloudModelOptions,
 }: ModelSettingsCardProps) {
   const disabled = loading || submitting;
+
+  const transcriptionCloudOptions =
+    transcriptionCloudModelOptions ?? TRANSCRIPTION_CLOUD_MODEL_OPTIONS;
+  const summaryCloudOptions =
+    summaryCloudModelOptions ?? SUMMARY_CLOUD_MODEL_OPTIONS;
+  const transcriptionCloudLabels: Record<string, string> = Object.fromEntries(
+    transcriptionCloudOptions.map((option) => [option.value, option.label]),
+  );
+  const summaryCloudLabels: Record<string, string> = Object.fromEntries(
+    summaryCloudOptions.map((option) => [option.value, option.label]),
+  );
   const form = useForm<ModelSettings>({
     resolver: zodResolver(modelSettingsSchema),
     defaultValues: values,
@@ -435,7 +453,7 @@ export function ModelSettingsCard({
                     name="transcriptionCloudModel"
                     render={({ field }) => (
                       <Select
-                        items={TRANSCRIPTION_CLOUD_MODEL_LABELS}
+                        items={transcriptionCloudLabels}
                         value={field.value}
                         onValueChange={(value) => field.onChange(value)}
                         disabled={disabled}
@@ -447,7 +465,7 @@ export function ModelSettingsCard({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {TRANSCRIPTION_CLOUD_MODEL_OPTIONS.map((option) => (
+                          {transcriptionCloudOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -528,7 +546,7 @@ export function ModelSettingsCard({
                     name="summaryCloudModel"
                     render={({ field }) => (
                       <Select
-                        items={SUMMARY_CLOUD_MODEL_LABELS}
+                        items={summaryCloudLabels}
                         value={field.value}
                         onValueChange={(value) => field.onChange(value)}
                         disabled={disabled}
@@ -540,7 +558,7 @@ export function ModelSettingsCard({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {SUMMARY_CLOUD_MODEL_OPTIONS.map((option) => (
+                          {summaryCloudOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>

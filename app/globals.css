@@ -49,6 +49,7 @@
   --color-accent-action-fg: var(--accent-action-fg);
   --color-accent-info: var(--accent-info);
   --color-accent-gold: var(--accent-gold);
+  --color-accent-gold-fg: var(--accent-gold-fg);
   --color-state-success: var(--state-success);
   --color-state-warning: var(--state-warning);
   --color-state-error: var(--state-error);
@@ -111,6 +112,9 @@
   --accent-action-fg: oklch(0.95 0.01 80);
   --accent-info: oklch(0.45 0.10 260);
   --accent-gold: oklch(0.78 0.12 85);
+  /* Dark warm foreground for text/icons on the gold accent (primary/creation
+   * buttons — Story 7.3). Reserves red strictly for destructive/error. */
+  --accent-gold-fg: oklch(0.22 0.03 80);
 
   /* Semantic */
   --state-success: oklch(0.55 0.10 150);
@@ -153,6 +157,7 @@
   --accent-action-fg: oklch(0.95 0.01 80);
   --accent-info: oklch(0.45 0.10 260);
   --accent-gold: oklch(0.78 0.12 85);
+  --accent-gold-fg: oklch(0.22 0.03 80);
   --state-success: oklch(0.55 0.10 150);
   --state-warning: oklch(0.70 0.13 75);
   --state-error: var(--accent-action);

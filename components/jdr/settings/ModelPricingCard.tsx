@@ -15,6 +15,14 @@ import {
   TRANSCRIPTION_CLOUD_MODEL_LABELS,
 } from "@/lib/jdr/schemas/modelSettings";
 
+// Static labels/prices below are the loading fallback; in production the page
+// passes `pricingByModel`/`labelByModel` derived from the backend catalog
+// (single source of truth), so the two never drift.
+const STATIC_MODEL_LABELS: Record<string, string> = {
+  ...TRANSCRIPTION_CLOUD_MODEL_LABELS,
+  ...SUMMARY_CLOUD_MODEL_LABELS,
+};
+
 // Story 6.7 / FR-25 / UX-DR23 (Pricing block). Official DeepInfra prices for the
 // catalog cloud models, verified on deepinfra.com (2026-06). Keyed by the exact
 // model ids used in TRANSCRIPTION_CLOUD_MODEL_OPTIONS / SUMMARY_CLOUD_MODEL_OPTIONS.
@@ -104,42 +112,48 @@ interface ModelPricingCardProps {
   // null when the corresponding category is not on the Cloud provider.
   transcriptionCloudModel: string | null;
   summaryCloudModel: string | null;
+  // Catalog-derived overrides (single source of truth). Omitted while the
+  // catalog is still loading, in which case the static fallbacks are used.
+  pricingByModel?: Record<string, ModelPricing>;
+  labelByModel?: Record<string, string>;
 }
 
 export function ModelPricingCard({
   transcriptionCloudModel,
   summaryCloudModel,
+  pricingByModel,
+  labelByModel,
 }: ModelPricingCardProps) {
   const [sessionHours, setSessionHours] = useState(DEFAULT_SESSION_HOURS);
+
+  const pricingMap = pricingByModel ?? CLOUD_MODEL_PRICING;
+  const labelMap = labelByModel ?? STATIC_MODEL_LABELS;
 
   const rows: PricingRow[] = [];
   if (transcriptionCloudModel) {
     rows.push({
       category: "Transcription",
       modelId: transcriptionCloudModel,
-      modelLabel:
-        TRANSCRIPTION_CLOUD_MODEL_LABELS[transcriptionCloudModel] ??
-        transcriptionCloudModel,
-      pricing: CLOUD_MODEL_PRICING[transcriptionCloudModel],
+      modelLabel: labelMap[transcriptionCloudModel] ?? transcriptionCloudModel,
+      pricing: pricingMap[transcriptionCloudModel],
     });
   }
   if (summaryCloudModel) {
     rows.push({
       category: "LLM Resume",
       modelId: summaryCloudModel,
-      modelLabel:
-        SUMMARY_CLOUD_MODEL_LABELS[summaryCloudModel] ?? summaryCloudModel,
-      pricing: CLOUD_MODEL_PRICING[summaryCloudModel],
+      modelLabel: labelMap[summaryCloudModel] ?? summaryCloudModel,
+      pricing: pricingMap[summaryCloudModel],
     });
   }
 
   // Cost estimate per category. "—" when the category is not Cloud or the model
   // has no known price.
   const transcriptionPricing = transcriptionCloudModel
-    ? CLOUD_MODEL_PRICING[transcriptionCloudModel]
+    ? pricingMap[transcriptionCloudModel]
     : undefined;
   const summaryPricing = summaryCloudModel
-    ? CLOUD_MODEL_PRICING[summaryCloudModel]
+    ? pricingMap[summaryCloudModel]
     : undefined;
 
   const transcriptionEstimate =
@@ -234,4 +248,4 @@ export function ModelPricingCard({
   );
 }
 
-export type { ModelPricingCardProps };
+export type { ModelPricingCardProps, ModelPricing };

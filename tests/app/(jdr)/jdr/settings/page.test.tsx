@@ -97,6 +97,8 @@ function mockSettingsPageFetch({
   settings = {},
   settingsPatchStatus = 200,
   settingsPatchTitle = "Provider update failed",
+  settingsPatchType = "about:blank",
+  settingsPatchDetail,
   userPatchStatus = 200,
   userPatchTitle = "Forbidden",
   validationStatus = 200,
@@ -107,6 +109,8 @@ function mockSettingsPageFetch({
   settings?: Partial<ApiModelSettings>;
   settingsPatchStatus?: number;
   settingsPatchTitle?: string;
+  settingsPatchType?: string;
+  settingsPatchDetail?: string;
   userPatchStatus?: number;
   userPatchTitle?: string;
   validationStatus?: number;
@@ -178,9 +182,10 @@ function mockSettingsPageFetch({
       if (settingsPatchStatus >= 400) {
         return jsonResponse(
           {
-            type: "about:blank",
+            type: settingsPatchType,
             title: settingsPatchTitle,
             status: settingsPatchStatus,
+            ...(settingsPatchDetail ? { detail: settingsPatchDetail } : {}),
           },
           settingsPatchStatus,
         );
@@ -563,6 +568,33 @@ describe("<SettingsPage>", () => {
       await screen.findByText("Provider indisponible"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("LLM Resume")).toHaveTextContent("Ollama");
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  test("Story 7.4 — une cle cloud rejetee (400 cloud-api-key-invalid) affiche le detail FR", async () => {
+    mockSettingsPageFetch({
+      settingsPatchStatus: 400,
+      settingsPatchType: "https://kaeyris/errors/cloud-api-key-invalid",
+      settingsPatchTitle: "Cloud API key invalid",
+      settingsPatchDetail:
+        "La clé DeepInfra a été refusée (non autorisée pour ce modèle).",
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("LLM Resume")).toHaveTextContent("Cloud"),
+    );
+    await user.click(screen.getByLabelText("LLM Resume"));
+    await user.click(await screen.findByRole("option", { name: "Ollama" }));
+    await user.click(screen.getAllByRole("button", { name: "Enregistrer" })[1]);
+
+    // The actionable French detail is shown, not the generic English title.
+    expect(
+      await screen.findByText(
+        "La clé DeepInfra a été refusée (non autorisée pour ce modèle).",
+      ),
+    ).toBeInTheDocument();
     expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 

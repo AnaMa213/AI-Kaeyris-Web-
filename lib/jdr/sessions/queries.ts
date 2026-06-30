@@ -181,6 +181,35 @@ export function useRecoverTranscription(
   });
 }
 
+/**
+ * Story 7.1 / BD-21 — re-run transcription on the session's existing audio
+ * without re-uploading. `POST /transcription/restart` re-enqueues the job and
+ * resets the session to `audio_uploaded` with a fresh `current_job_id`; seeding
+ * + invalidating the session cache re-arms the live polling (Story 3.4).
+ */
+export function useRetryTranscription(sessionId: string, campaignId?: string) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await apiClient.POST(
+        "/services/jdr/sessions/{session_id}/transcription/restart",
+        { params: { path: { session_id: sessionId } } },
+      );
+      return unwrap<SessionOut>(result);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(sessionQueryKey(sessionId), updated);
+      queryClient.invalidateQueries({ queryKey: sessionQueryKey(sessionId) });
+      if (campaignId) {
+        queryClient.invalidateQueries({
+          queryKey: sessionsListQueryKey(campaignId),
+        });
+      }
+    },
+  });
+}
+
 // openapi-fetch types the multipart body as { audio: string }, which does not
 // match a FormData payload — the audio POST/DELETE use plain fetch and re-parse
 // problem+json themselves (same shape as the openapi-fetch error middleware).
