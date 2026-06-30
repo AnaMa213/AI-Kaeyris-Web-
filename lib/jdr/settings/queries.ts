@@ -20,8 +20,15 @@ type ModelSettingsOut = components["schemas"]["ModelSettingsOut"];
 type ModelSettingsPatch = components["schemas"]["ModelSettingsPatch"];
 type LocalModelValidationOut =
   components["schemas"]["LocalModelValidationOut"];
+export type CloudModel = components["schemas"]["CloudModel"];
+export type ModelCatalog = components["schemas"]["ModelCatalogOut"];
 
 export const modelSettingsQueryKey = ["jdr", "settings", "models"] as const;
+export const modelCatalogQueryKey = [
+  "jdr",
+  "settings",
+  "model-catalog",
+] as const;
 
 function unwrap<T>(result: { data?: T; error?: unknown }): T {
   if (result.error !== undefined) {
@@ -137,6 +144,26 @@ export function useModelSettings({
       return fromApi(unwrap(result));
     },
     enabled,
+  });
+}
+
+// The cloud-model catalog is the backend's single source of truth (ids, tiers,
+// prices). The front renders its selectors and pricing from this instead of
+// hardcoding the list, so the two never drift. It is effectively static, so we
+// never refetch it within a session.
+export function useModelCatalog({ enabled = true }: UseModelSettingsOptions = {}) {
+  const apiClient = useMemo(() => createApiClient(), []);
+  return useQuery({
+    queryKey: modelCatalogQueryKey,
+    queryFn: async () => {
+      const result = await apiClient.GET(
+        "/services/jdr/settings/model-catalog",
+      );
+      return unwrap(result) as ModelCatalog;
+    },
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }
 

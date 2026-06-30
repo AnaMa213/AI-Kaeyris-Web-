@@ -728,6 +728,90 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
     });
   });
 
+  describe("Story 7.1 / BD-21 — re-transcription recovery", () => {
+    function jsonResponse(body: unknown, status = 200): Response {
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    function stubRestart(
+      sessionState: "transcription_failed" | "transcribed",
+      restartCalls: string[],
+    ) {
+      const session = {
+        ...baseSession,
+        state: sessionState,
+        current_job_id: null,
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: Request | string, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.url;
+          const method =
+            typeof input === "string"
+              ? (init?.method ?? "GET")
+              : (input.method ?? "GET");
+          if (url.includes(`/services/jdr/campaigns/${campId}`)) {
+            return jsonResponse(baseCampaign);
+          }
+          if (
+            url.includes(
+              `/services/jdr/sessions/${sessionIdFixture}/transcription/restart`,
+            ) &&
+            method.toUpperCase() === "POST"
+          ) {
+            restartCalls.push("called");
+            return jsonResponse({
+              ...session,
+              state: "audio_uploaded",
+              current_job_id: "job-restart",
+            });
+          }
+          if (url.includes(`/services/jdr/sessions/${sessionIdFixture}`)) {
+            return jsonResponse(session);
+          }
+          return new Response(null, { status: 200 });
+        }),
+      );
+    }
+
+    test("'Relancer la transcription' on a failed session POSTs to the restart endpoint", async () => {
+      const restartCalls: string[] = [];
+      stubRestart("transcription_failed", restartCalls);
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText("Le grimoire est resté muet");
+      await user.click(
+        screen.getByRole("button", { name: "Relancer la transcription" }),
+      );
+      await waitFor(() => expect(restartCalls).toHaveLength(1));
+    });
+
+    test("transcribed overflow menu offers retry + replace; retry confirms then POSTs", async () => {
+      const restartCalls: string[] = [];
+      stubRestart("transcribed", restartCalls);
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByRole("heading", { level: 1 });
+      await user.click(
+        screen.getByRole("button", { name: "Plus d'actions sur la séance" }),
+      );
+      expect(
+        await screen.findByRole("menuitem", {
+          name: "Remplacer l'enregistrement",
+        }),
+      ).toBeInTheDocument();
+      await user.click(
+        screen.getByRole("menuitem", { name: "Relancer la transcription" }),
+      );
+      // The transcribed retry overwrites the transcript → confirmation first.
+      await user.click(await screen.findByRole("button", { name: "Relancer" }));
+      await waitFor(() => expect(restartCalls).toHaveLength(1));
+    });
+  });
+
   test("clicking Modifier opens the SessionEditDialog (Story 2.8)", async () => {
     stubFetch({});
     const user = userEvent.setup();
@@ -762,10 +846,11 @@ describe("/jdr/campaigns/[campId]/sessions/[sid] page", () => {
         name: "Remplacer l'enregistrement",
       });
       expect(replace).toBeEnabled();
-      // The retry button stays inert (no re-transcribe endpoint in V1).
+      // Story 7.1 / BD-21 — the re-transcribe endpoint now exists, so the retry
+      // button is enabled on the failure card.
       expect(
         screen.getByRole("button", { name: "Relancer la transcription" }),
-      ).toBeDisabled();
+      ).toBeEnabled();
     });
 
     test("hides the replace affordance while transcribing (locked)", async () => {

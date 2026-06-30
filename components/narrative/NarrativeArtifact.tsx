@@ -62,7 +62,9 @@ export function NarrativeArtifact({ markdown, kind }: NarrativeArtifactProps) {
       data-kind={kind}
       className={cn(
         // AC2 — budget typo parchemin (tokens existants de globals.css).
-        "narrative-body bg-surface-narrative text-text-narrative font-serif",
+        // Story 7.3 (#5) — surface de lecture en sépia clair (oklch(0.62 0.05 80)),
+        // demandée pour le CONTENU des artefacts (résumé/récit/pov), pas la carte.
+        "narrative-body bg-surface-narrative-warm text-text-narrative font-serif",
         "w-full rounded-[8px] px-6 py-6 text-[18px] leading-[1.65] sm:px-8 sm:py-7",
         // AC3 — lettrine conditionnée au kind.
         DROPCAP_KINDS.has(kind) && "narrative-body--dropcap",

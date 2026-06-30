@@ -131,6 +131,33 @@ describe("<ModelSettingsCard>", () => {
     );
   });
 
+  test("rend les modeles cloud servis par le catalogue backend", async () => {
+    const user = userEvent.setup();
+    renderCard({
+      summaryCloudModelOptions: [
+        { value: "meta-llama/Meta-Llama-3.1-8B-Instruct", label: "Llama 8B · Éco" },
+        {
+          value: "meta-llama/Meta-Llama-3.1-70B-Instruct",
+          label: "Llama 70B · Premium",
+        },
+      ],
+    });
+
+    // The summary cloud selector is visible (summaryProvider === "cloud") and
+    // renders the catalog-provided labels, not the hardcoded fallback list.
+    await user.click(screen.getByLabelText("Modele cloud (LLM Resume)"));
+    expect(
+      await screen.findByRole("option", { name: "Llama 70B · Premium" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Llama 8B · Éco" }),
+    ).toBeInTheDocument();
+    // A model absent from the served catalog must not appear.
+    expect(
+      screen.queryByRole("option", { name: /Qwen/ }),
+    ).not.toBeInTheDocument();
+  });
+
   test("desactive la soumission et les selecteurs pendant un envoi", () => {
     renderCard({ submitting: true });
 
